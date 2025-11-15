@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>まいちゃん通知ダッシュボード</title>
+    <link rel="stylesheet" href="/pushweb/style.css" />
+</head>
+<body id="app-body">
+    <header>
+        <div class="header-left">
+            <a href="https://elza.poitou-mora.ts.net/pushweb/" rel="noopener noreferrer" style="text-decoration: none; color: inherit;"><h2>通知ダッシュボード</h2></a>
+        </div>
+        
+        <div class="hamburger-icon" id="hamburger-toggle" aria-controls="nav-menu" aria-expanded="false">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        
+        <nav id="nav-menu" aria-label="メインメニュー">
+            <ul class="nav-list">
+                <li><button id="btn-send-test">テスト通知を送信</button></li>
+                
+                <li class="menu-notification-toggle">
+                    <span style="padding-left: 20px;">通知を受信する</span>
+                    <label class="toggle-notify" style="padding:0 20px 0 0;">
+                        <input id="toggle-notify" type="checkbox" />
+                        <span class="slider" aria-hidden="true"></span>
+                    </label>
+                </li>
+                
+                <li class="nav-setting-item">
+                    <div id="platform-settings">
+                        <ul class="platform-settings-list">
+                            <li>
+                                <button id="toggle-twitcasting" class="platform-setting-button is-on">
+                                    TwitCasting: ON
+                                </button>
+                            </li>
+                            <li>
+                                <button id="toggle-youtube" class="platform-setting-button is-on">
+                                    YouTube: ON
+                                </button>
+                            </li>
+                            <li>
+                                <button id="toggle-youtube-community" class="platform-setting-button is-on">
+                                    YouTube Community: ON
+                                </button>
+                            </li>
+                            <li>
+                                <button id="toggle-fanbox" class="platform-setting-button is-on">
+                                    Pixiv Fanbox: ON
+                                </button>
+                            </li>
+                            <li>
+                                <button id="toggle-twitter-main" class="platform-setting-button is-on">
+                                    Twitter(@koinoya_mai): ON
+                                </button>
+                            </li>
+                            <li>
+                                <button id="toggle-twitter-sub" class="platform-setting-button is-on">
+                                    Twitter(@koinoyamai17): ON
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </li>
+                
+                <li><a href="https://github.com/your/repo" target="_blank" rel="noopener noreferrer">GitHubページ</a></li>
+                <li><a href="https://elza.poitou-mora.ts.net/pushweb/info/" rel="noopener noreferrer">このサービスについて</a></li>
+            </ul>
+        </nav>
+        
+        <div id="menu-overlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; display: none;"></div>
+    </header>
+
+    <main>
+        <div class="stats-card">
+            <h2 style="margin-top: 0; font-size: 1.5rem;">カウント</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="label">デビューから</div>
+                    <div class="value" id="days-since-debut">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="label">お誕生日まで</div>
+                    <div class="value" id="days-to-birthday">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="label">周年記念まで</div>
+                    <div class="value" id="days-to-anniversary">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="log-section">
+            <h2>通知履歴</h2>
+            
+            <div class="controls">
+                <button id="btn-refresh">手動更新</button>
+                <label>
+                    自動更新
+                    <input id="auto-refresh" class="plain-checkbox" type="checkbox" />
+                </label>
+                <select id="limit" style="display:none;">
+                    <option value="5">初期表示</option>
+                    <option value="50">追加読み込み</option>
+                </select>
+            </div>
+            
+            <div id="logs" class="log-container"></div>
+            
+            <button id="more-logs-button" style="display:none;">もっと見る</button>
+            <div id="status" class="muted"></div>
+        </div>
+    </main>
+
+    <footer>
+        <p>Mai's Platform</p>
+        <div class="footer-links">
+            <a href="https://www.youtube.com/@koinoyamaich" target="_blank" rel="noopener noreferrer">YouTube(main)</a> |
+            <a href="https://www.youtube.com/@koinoyamaich" target="_blank" rel="noopener noreferrer">YouTube(sub)</a> |
+            <a href="https://x.com/koinoya_mai" target="_blank" rel="noopener noreferrer">X (Twitter)</a> |
+            <a href="https://www.fanbox.cc/@koinoya-mai" target="_blank" rel="noopener noreferrer">Pixiv Fanbox</a> |
+            <a href="https://twitcasting.tv/c:koinoya_mai" target="_blank" rel="noopener noreferrer">TwitCasting</a>
+        </div>
+    </footer>
+
+    <script src="/pushweb/main.js"></script>
+    <script>
+(() => {
+    const DEBUT_DATE = new Date(2021, 2, 21);
+    const BIRTHDAY = { month: 12, day: 7 };
+    const ANNIVERSARY = { month: 2, day: 21 };
+    const UPDATE_INTERVAL = 60 * 1000;
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+    function nextOccurrence(monthZeroBased, day) {
+        const now = new Date();
+        const year = now.getFullYear();
+        let candidate = new Date(year, monthZeroBased, day, 0, 0, 0, 0);
+        if (stripTime(candidate) < stripTime(now)) {
+            candidate = new Date(year + 1, monthZeroBased, day, 0, 0, 0, 0);
+        }
+        return candidate;
+    }
+
+    function stripTime(d) {
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    }
+
+    function daysDiff(target, now = new Date()) {
+        const t = stripTime(target).getTime();
+        const n = stripTime(now).getTime();
+        return Math.floor((t - n) / MS_PER_DAY);
+    }
+
+    function daysSince(date) {
+        const n = stripTime(new Date()).getTime();
+        const d = stripTime(date).getTime();
+        return Math.floor((n - d) / MS_PER_DAY);
+    }
+
+    function setValue(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(value) + ` 日`;
+    }
+
+    function updateAll() {
+        const now = new Date();
+        const since = Math.max(0, daysSince(DEBUT_DATE));
+        setValue('days-since-debut', since);
+
+        const nextBday = nextOccurrence(BIRTHDAY.month, BIRTHDAY.day);
+        const daysToBday = daysDiff(nextBday, now);
+        setValue('days-to-birthday', daysToBday);
+
+        const nextAnn = nextOccurrence(ANNIVERSARY.month, ANNIVERSARY.day);
+        const daysToAnn = daysDiff(nextAnn, now);
+        setValue('days-to-anniversary', daysToAnn);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            updateAll();
+            setInterval(updateAll, UPDATE_INTERVAL);
+        });
+    } else {
+        updateAll();
+        setInterval(updateAll, UPDATE_INTERVAL);
+    }
+})();
+</script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/pushweb/service-worker.js')
+                .then(reg => console.log('Service Worker 登録成功', reg))
+                .catch(err => console.error('Service Worker 登録失敗', err));
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const body = document.getElementById('app-body');
+            const toggle = document.getElementById('hamburger-toggle');
+            const overlay = document.getElementById('menu-overlay');
+
+            function toggleMenu(isOpen) {
+                if (isOpen) {
+                    body.classList.add('menu-open');
+                    toggle.setAttribute('aria-expanded', 'true');
+                    overlay.style.display = 'block';
+                } else {
+                    body.classList.remove('menu-open');
+                    toggle.setAttribute('aria-expanded', 'false');
+                    overlay.style.display = 'none';
+                }
+            }
+
+            toggle.addEventListener('click', () => {
+                const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+                toggleMenu(!isExpanded);
+            });
+            overlay.addEventListener('click', () => toggleMenu(false));
+        });
+    </script>
+</body>
+</html>
