@@ -1,0 +1,564 @@
+/* /pushweb/style.css */
+
+/* --- カラーパレット --- */
+:root {
+    --color-primary: #B11E7C; /* メインアクセントカラー (濃いマゼンタ) */
+    --color-secondary: #7F2534; /* メニュー背景などの濃い紫 */
+    --color-background: #f0f0f4;
+    --color-text: #2c2c3e;
+    --color-light-text: #f7f7fa;
+    --color-highlight-bg: #f7e0ef; /* 薄いハイライト */
+    --bg-image: url('/pushweb/bg.webp');
+    --main-blur: 10px; /* 推奨: 6-14px の間で調整 */
+    --main-bg-rgba: #ABABAB33;
+}
+
+/* --- 全体/背景/聖杯レイアウト --- */
+body {
+    font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+    background-color: var(--color-background); 
+    margin: 0;
+    padding: 0;
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* 聖杯レイアウト */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+/* 背景画像は body::before に置いてコンテンツレイヤに影響させない */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2; /* コンテンツより下 */
+  background-image: var(--bg-image);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  transform: translateZ(0); /* 合成レイヤのヒント */
+  will-change: transform;
+}
+/* optional: 暗めのオーバーレイで文字の可読性を確保 */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: rgba(0,0,0,0.18);
+  pointer-events: none;
+}
+/* main を「半透明 + 背景ぼかし」にする */
+main {
+  /* width: 1200px; を削除し、max-width と width: 100% を設定 */
+  width: 100%; /* スマホ版で画面いっぱいの幅にする */
+  max-width: 1200px; /* PC版では最大幅を1200pxに制限（これ以上は広がらない） */
+
+  background-color: var(--main-bg-rgba);
+  backdrop-filter: blur(var(--main-blur));
+  -webkit-backdrop-filter: blur(var(--main-blur)); /* Safari 用 */
+  padding: 1.5rem 1rem;
+  box-shadow: 0 8px 30px rgba(12, 12, 20, 0.5);
+  margin: 0 auto; /* 中央寄せ */
+  transition: background-color .18s ease, box-shadow .18s ease;
+}
+
+/* --- ヘッダー --- */
+header {
+    /* メインカラーを背景に設定 */
+    background-color: var(--color-primary); 
+    background-size: 800px;
+    background-position: center;
+    background-repeat: no-repeat;
+    color: var(--color-light-text);
+    padding: 1rem;
+    /* ヘッダーとメインの境目に影 */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+header h1, .hamburger-icon, .header-left {
+    z-index: 2; 
+}
+header h1 {
+    margin: 0;
+    font-size: 1.4rem;
+    line-height: 1.2;
+    font-weight: 600;
+}
+.header-left {
+    display: flex;
+    align-items: center;
+}
+.header-logo {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    margin-right: 15px;
+    background-color: #fff;
+    background-size: cover;
+    border: 2px solid var(--color-light-text);
+    flex-shrink: 0;
+    z-index: 2;
+}
+
+/* --- ハンバーガーメニュー --- */
+.hamburger-toggle {
+    color: #B11E7C;
+}
+.hamburger-icon {
+    cursor: pointer;
+    width: 30px;
+    height: 24px;
+    position: relative;
+    transition: 0.3s;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    z-index: 1001; 
+}
+.hamburger-icon span {
+    display: block;
+    height: 3px;
+    background-color: var(--color-light-text);
+    border-radius: 3px;
+    transition: 0.3s;
+}
+.menu-open .hamburger-icon span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+.menu-open .hamburger-icon span:nth-child(2) { opacity: 0; }
+.menu-open .hamburger-icon span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
+
+#nav-menu {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 300px;
+    max-width: 80vw;
+    height: 100%;
+    /* メインカラーに統一 */
+    background-color: var(--color-primary); 
+    box-shadow: -4px 0 10px rgba(0, 0, 0, 0.3);
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
+    padding-top: 60px;
+    z-index: 1000;
+}
+.menu-open #nav-menu {
+    transform: translateX(0);
+}
+.nav-list {
+    list-style: none;
+    padding: 20px 0;
+    margin: 0;
+}
+.nav-list li {
+    padding: 0;
+    margin: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+.nav-list a, .nav-list button, .nav-list span {
+    display: block;
+    width: 100%;
+    padding: 12px 20px;
+    color: var(--color-light-text);
+    text-decoration: none;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+}
+.nav-list a:hover, .nav-list button:hover {
+    background-color: #921768; /* primaryの少し濃い色 */
+}
+
+/* 全体通知トグル */
+.menu-notification-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* プラットフォーム別設定エリアの開閉 */
+#platform-settings {
+    background-color: #921768; /* primaryより濃い色で区別 */
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-in-out;
+}
+.settings-on #platform-settings {
+    max-height: 300px; 
+    padding: 10px 0;
+}
+.platform-settings-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+/* プラットフォーム別トグル */
+.platform-toggle {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 20px;
+    font-size: 0.9rem;
+    color: var(--color-light-text);
+}
+
+
+/* --- トグルスイッチの共通スタイル --- */
+.toggle-notify {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+    user-select: none;
+    color: var(--color-light-text);
+    font-size: 0.95rem;
+}
+
+.toggle-notify input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    cursor: pointer;
+}
+
+.toggle-notify .slider {
+    display: inline-block;
+    position: relative;
+    width: 9px;
+    height: 2px;
+    background-color: #9b88b7; /* OFF状態の背景色 */
+    border-radius: 20px;
+    transition: background-color .18s ease;
+    flex-shrink: 0;
+    z-index: 1;
+}
+
+.toggle-notify .slider::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .18s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.toggle-notify input[type="checkbox"]:checked + .slider {
+    background-color: var(--color-secondary); /* ON状態の背景色 */
+}
+.toggle-notify input[type="checkbox"]:checked + .slider::before {
+    transform: translateX(20px);
+}
+
+
+/* --- 標準ボタン/コントロール --- */
+.controls{
+  margin-bottom: 20px;
+}
+.controls button {
+    background: #fff;
+    color: var(--color-primary); 
+    border: 1px solid var(--color-primary);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+.controls button:hover { 
+    background: var(--color-highlight-bg); 
+}
+
+/* メインの強調ボタン */
+#more-logs-button {
+
+    border: none !important;
+    padding: 0.75rem;
+    border-radius: 8px;
+    font-weight: 600;
+    width: 100%;
+    margin: 1.5rem 0 0;
+}
+#more-logs-button:hover {
+    background-color: #EEE !important;
+}
+
+
+/* --- メインコンテンツ：日数表示 --- */
+.stats-card {
+    background-color: rgba(255,255,255,0.7); /* カード背景はやや不透明にして可読性確保 */
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    text-align: center;
+}
+.stats-grid {
+  /* PC版のデフォルトスタイル */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+/* 💻 画面幅が670px以下の場合に適用されるスタイル（スマホ版） */
+@media (max-width: 670px) {
+  .stats-grid {
+    /* 縦並び（1列）にするために、列の指定を上書き */
+    grid-template-columns: 1fr;
+    /* もしスマホでgapを小さくしたい場合はここで調整 */
+    /* gap: 1rem; */
+  }
+}
+.stat-item {
+    background-color: #f0f0f4;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+.stat-item .value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--color-primary); /* アクセントカラー */
+    line-height: 1.2;
+}
+.stat-item .label {
+    font-size: 0.9rem;
+    color: var(--color-text);
+    margin-top: 0.25rem;
+    font-weight: 500;
+}
+
+/* --- 通知ログ --- */
+.log-section h2 {
+    font-size: 1.4rem;
+    color: var(--color-text);
+    border-bottom: 2px solid var(--color-highlight-bg);
+    padding-bottom: 5px;
+    margin-bottom: 1.5rem;
+}
+/* ログカードのダミースタイル */
+.card {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    margin-bottom: 10px;
+    background-color: rgba(255,255,255,0.8);
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    border-left: 5px solid var(--color-primary); /* アクセントライン */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card .body{
+  margin: 0;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+.card .title a {
+    color: var(--color-primary);
+}
+.card.hidden-log {
+    display: none;
+}
+.icon{
+    width: 64px;
+    height: 100%;
+    border-radius: 10px;
+}
+
+/* --- フッター --- */
+footer {
+    padding: 1rem;
+    /* メインカラーに統一 */
+    background-color: var(--color-primary); 
+    color: var(--color-light-text);
+    text-align: center;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+    z-index: 1;
+    margin-top: auto;
+}
+.footer-links {
+  display: flex;
+  flex-wrap: wrap; /* 横幅を超えたら自動で改行 */
+  gap: 0.5rem;     /* 各リンクの間隔 */
+  justify-content: center; /* 中央寄せ（任意） */
+}
+.footer-links a {
+    color: var(--color-light-text);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+}
+.footer-links a:hover {
+    color: var(--color-highlight-bg);
+}
+@supports not (backdrop-filter: blur(1px)) and not (-webkit-backdrop-filter: blur(1px)) {
+  main {
+    position: relative;
+    overflow: hidden;
+    background-color: rgba(255,255,255,0.85); /* blur が効かない分、背景を少し濃く */
+  }
+
+  main::before {
+    content: "";
+    position: absolute;
+    inset: -20%;
+    z-index: -1;
+    background-image: var(--bg-image);
+    background-size: cover;
+    background-position: center;
+    filter: blur(10px) saturate(0.95);
+    transform: scale(1.06); /* 端のぼけを防ぐ */
+    pointer-events: none;
+  }
+}
+
+/* ==========================
+   Mobile: hamburger + toggle stabilization
+   ========================== */
+
+/* サイズ計算差を抑える */
+*, *::before, *::after { box-sizing: border-box; }
+
+/* --- ハンバーガー安定化 --- */
+/* ここはモバイル用なので少し大きめに固定 */
+.hamburger-icon {
+  width: 40px;
+  height: 40px;
+  position: relative;
+  display: inline-block;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* span を中央に絶対配置して回転ズレを防ぐ */
+.hamburger-icon span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;               /* px 固定でブラウザ差を抑える */
+  height: 3px;
+  margin-left: -11px;        /* width/2 の負マージンで中央寄せ */
+  margin-top: -1.5px;        /* height/2 の負マージンで中央寄せ */
+  background-color: var(--color-light-text);
+  border-radius: 3px;
+  transform-origin: center center; /* 明示的に回転の原点を中央に */
+  transition: transform .22s cubic-bezier(.2,.9,.3,1), opacity .18s;
+  will-change: transform, opacity;
+}
+
+/* 1つ目を上寄せ、3つ目を下寄せ（見た目の行間） */
+.hamburger-icon span:nth-child(1) { transform: translateY(-8px); }
+.hamburger-icon span:nth-child(2) { transform: translateY(0); }
+.hamburger-icon span:nth-child(3) { transform: translateY(8px); }
+
+/* メニュー開いたときの確実な変形（pxベース） */
+.menu-open .hamburger-icon span:nth-child(1) {
+  transform: translateY(0) rotate(45deg);
+}
+.menu-open .hamburger-icon span:nth-child(2) {
+  opacity: 0;
+  transform: translateY(0) scaleX(0.2);
+}
+.menu-open .hamburger-icon span:nth-child(3) {
+  transform: translateY(0) rotate(-45deg);
+}
+
+/* focus 用の明示スタイル（ブラウザ差のoutline対策） */
+.hamburger-icon:focus { outline: none; }
+.hamburger-icon:focus-visible { box-shadow: 0 0 0 6px rgba(177,30,124,0.12); border-radius: 6px; }
+
+/* --- トグル（スマホ）安定化 --- */
+/* 既定の appearance を無効化してブラウザ差を消す */
+.toggle-notify input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  z-index: 4;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* スライダー背景（固定サイズ） */
+.toggle-notify .slider {
+  display: inline-block;
+  width: 46px;        /* 固定で安定させる */
+  height: 26px;
+  border-radius: 999px;
+  background: #9b88b7;
+  position: relative;
+  transition: background-color .18s ease, box-shadow .12s;
+  vertical-align: middle;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.03);
+}
+
+/* ノブ（fixed） */
+.toggle-notify .slider::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .18s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  will-change: transform;
+}
+
+/* checked state の確実なトランスフォーム */
+.toggle-notify input[type="checkbox"]:checked + .slider::before {
+  transform: translateX(20px);
+}
+.toggle-notify input[type="checkbox"]:checked + .slider {
+  background-color: var(--color-secondary);
+}
+
+/* フォーカス可視化（キーボード操作やa11y用） */
+.toggle-notify input[type="checkbox"]:focus + .slider {
+  box-shadow: 0 0 0 4px rgba(74,47,111,0.12);
+}
+
+/* トグル全体のタッチ領域を確保（見た目と分離） */
+.toggle-notify {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 8px;
+  position: relative;
+}
+
+/* iOS Safari の既定レンダリング差に対する追加指定 */
+@supports (-webkit-touch-callout: none) {
+  .toggle-notify .slider { -webkit-appearance: none; }
+  .toggle-notify input[type="checkbox"] { -webkit-appearance: none; }
+}
+
+@media (min-resolution: 2dppx) {
+  body::before { background-size: cover; } /* そのまま */
+}
+
