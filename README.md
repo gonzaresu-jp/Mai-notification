@@ -74,19 +74,23 @@ MacOS / iOS の動作は公式仕様に依存します。
 
 ### Android（Chrome 推奨）
 
-![Android 設定1](./img/Screenshot_20251116-231344.png)
 
 手順:
-1. Chrome → 右上メニュー → **設定** → **通知**  
-   ![Android 設定2](./img/Screenshot_20251116-231405.png)
-2. `elza.poitou-mora.net` を選択して通知権限を設定  
-   ![Android 設定3](./img/Screenshot_20251116-231437.png)
+1. Chrome → 右上メニュー → **設定** → **通知**
+
+<img src="./img/Screenshot_20251116-231344.png" width="300">
+
+2. `elza.poitou-mora.net` を選択して通知権限を設定
+
+<img src="./img/Screenshot_20251116-231405.png" width="300">
 
 推奨設定:
 - ポップアップ通知: ON  
 - 音: 任意  
 - 通知ドット: ON  
-- 重要な通知: ON  
+- 重要な通知: ON
+- 
+<img src="./img/Screenshot_20251116-231437.png" width="300">
 
 これで Android では遅延なく通知が届きます。
 
