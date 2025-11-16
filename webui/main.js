@@ -400,6 +400,7 @@ function getPlatformSettings() {
         fanbox: document.getElementById('toggle-fanbox')?.classList.contains('is-on') || false,
         twitterMain: document.getElementById('toggle-twitter-main')?.classList.contains('is-on') || false,
         twitterSub: document.getElementById('toggle-twitter-sub')?.classList.contains('is-on') || false,
+        milestone: document.getElementById('toggle-milestone')?.classList.contains('is-on') || false,
     };
 }
 
@@ -445,7 +446,8 @@ async function loadPlatformSettingsUIFromServer() {
         youtubeCommunity: 'toggle-youtube-community',
         fanbox: 'toggle-fanbox',
         twitterMain: 'toggle-twitter-main',
-        twitterSub: 'toggle-twitter-sub'
+        twitterSub: 'toggle-twitter-sub',
+        milestone: 'toggle-milestone'
     };
     
     for (const [key, value] of Object.entries(settings)) {
@@ -504,7 +506,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             youtubeCommunity: 'toggle-youtube-community',
             fanbox: 'toggle-fanbox',
             twitterMain: 'toggle-twitter-main',
-            twitterSub: 'toggle-twitter-sub'
+            twitterSub: 'toggle-twitter-sub',
+            milestone: 'toggle-milestone'
         };
         
         for (const [key, value] of Object.entries(settings)) {
@@ -548,6 +551,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         $toggleNotify.checked = enabled;
         updatePlatformSettingsVisibility(enabled);
+
+        // 画像切り替えの初期化関数
+function updateToggleImage() {
+    const body = document.body;
+    if ($toggleNotify.checked) {
+        body.classList.add('notifications-enabled');
+    } else {
+        body.classList.remove('notifications-enabled');
+    }
+}
+
+// 初期状態を反映（チェック状態を設定した直後）
+updateToggleImage();
 
         $toggleNotify.addEventListener('change', async () => {
             if ($toggleNotify.checked) {
