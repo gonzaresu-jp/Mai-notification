@@ -191,7 +191,7 @@ header h1 {
     transition: max-height 0.3s ease-in-out;
 }
 .settings-on #platform-settings {
-    max-height: 300px; 
+    max-height: 800px; 
     padding: 10px 0;
 }
 .platform-settings-list {
@@ -233,7 +233,7 @@ header h1 {
 .toggle-notify .slider {
     display: inline-block;
     position: relative;
-    width: 9px;
+    width: 100px;
     height: 2px;
     background-color: #9b88b7; /* OFF状態の背景色 */
     border-radius: 20px;
@@ -262,6 +262,93 @@ header h1 {
     transform: translateX(20px);
 }
 
+        /* 通知トグル用の画像切り替えスタイル */
+        .menu-notification-toggle {
+            position: relative;
+            display: flex !important;
+            flex-direction: column;
+            align-items: flex-end; /* 右寄せ */
+            justify-content: flex-start;
+            padding: 10px 20px !important;
+            min-height: 120px;
+        }
+        
+        /* 画像コンテナ */
+        .toggle-image-container {
+            position: relative;
+            width: 88px;
+            height: 88px;
+            margin-bottom: -14px;
+            margin-right: 6px; /* トグルスイッチとの位置調整 */
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .toggle-image {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        
+        .toggle-image.off {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        .toggle-image.on {
+            opacity: 0;
+            transform: scale(0.8);
+        }
+        
+        /* ONの時の画像表示 */
+        body.notifications-enabled .toggle-image.off {
+            opacity: 0;
+            transform: scale(0.8);
+        }
+        
+        body.notifications-enabled .toggle-image.on {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        /* テキストとトグルのラッパー */
+        .toggle-controls-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        
+        .menu-notification-toggle > span {
+            padding-left: 0 !important;
+            flex: 1;
+        }
+        
+        .menu-notification-toggle > label {
+            padding: 0 !important;
+        }
+        
+        /* トグルスイッチのサイズ（元のCSSに合わせる） */
+        .menu-notification-toggle .toggle-notify .slider {
+            width: 90px;
+            height: 26px;
+        }
+        
+        .menu-notification-toggle .toggle-notify .slider::before {
+            width: 20px;
+            height: 20px;
+            left: 3px;
+            top: 3px;
+        }
+        
+        .menu-notification-toggle .toggle-notify input[type="checkbox"]:checked + .slider::before {
+            transform: translateX(64px);
+        }
 
 /* --- 標準ボタン/コントロール --- */
 .controls{

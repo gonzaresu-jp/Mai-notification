@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>まいちゃん通知ダッシュボード</title>
+    <link rel="icon" href="/pushweb/icon.ico">
     <link rel="stylesheet" href="/pushweb/style.css" />
 </head>
 <body id="app-body">
@@ -23,11 +24,19 @@
                 <li><button id="btn-send-test">テスト通知を送信</button></li>
                 
                 <li class="menu-notification-toggle">
-                    <span style="padding-left: 20px;">通知を受信する</span>
-                    <label class="toggle-notify" style="padding:0 20px 0 0;">
-                        <input id="toggle-notify" type="checkbox" />
-                        <span class="slider" aria-hidden="true"></span>
-                    </label>
+                    <!-- 画像切り替えコンテナ -->
+                    <div class="toggle-image-container">
+                        <img src="/pushweb/off.webp" alt="" class="toggle-image off" />
+                        <img src="/pushweb/on.webp" alt="" class="toggle-image on" />
+                    </div>
+                    
+                    <div class="toggle-controls-wrapper">
+                        <span>通知を受信する</span>
+                        <label class="toggle-notify">
+                            <input id="toggle-notify" type="checkbox" />
+                            <span class="slider" aria-hidden="true"></span>
+                        </label>
+                    </div>
                 </li>
                 
                 <li class="nav-setting-item">
@@ -63,12 +72,18 @@
                                     Twitter(@koinoyamai17): ON
                                 </button>
                             </li>
+                            <li>
+                                <button id="toggle-milestone" class="platform-setting-button is-on">
+                                    記念日通知: ON
+                                </button>
+                            </li>
                         </ul>
                     </div>
                 </li>
                 
                 <li><a href="https://github.com/gonzaresu-jp/Mai-notification" target="_blank" rel="noopener noreferrer">GitHubページ</a></li>
                 <li><a href="https://elza.poitou-mora.ts.net/pushweb/info/" rel="noopener noreferrer">このサービスについて</a></li>
+                <li><a href="https://form.jotform.com/253191048959063" target="_blank" rel="noopener noreferrer">不具合報告</a></li>
             </ul>
         </nav>
         
@@ -204,6 +219,7 @@
             const body = document.getElementById('app-body');
             const toggle = document.getElementById('hamburger-toggle');
             const overlay = document.getElementById('menu-overlay');
+            const notifyToggle = document.getElementById('toggle-notify');
 
             function toggleMenu(isOpen) {
                 if (isOpen) {
@@ -222,6 +238,23 @@
                 toggleMenu(!isExpanded);
             });
             overlay.addEventListener('click', () => toggleMenu(false));
+
+            // 通知トグルの画像切り替え
+            if (notifyToggle) {
+                function updateToggleImage() {
+                    if (notifyToggle.checked) {
+                        body.classList.add('notifications-enabled');
+                    } else {
+                        body.classList.remove('notifications-enabled');
+                    }
+                }
+
+                // 初期状態を反映
+                updateToggleImage();
+
+                // トグル変更時に画像を切り替え
+                notifyToggle.addEventListener('change', updateToggleImage);
+            }
         });
     </script>
 </body>

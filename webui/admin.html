@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>管理者通知パネル</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            margin: 0 0 30px 0;
+            color: #333;
+            font-size: 28px;
+            text-align: center;
+        }
+        
+        .form-group {
+            margin-bottom: 24px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        input[type="text"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+            font-family: inherit;
+        }
+        
+        input[type="text"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-send {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-send:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-send:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-clear {
+            background: #f5f5f5;
+            color: #666;
+        }
+        
+        .btn-clear:hover {
+            background: #e0e0e0;
+        }
+        
+        .status-message {
+            margin-top: 20px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .status-message.show {
+            display: block;
+        }
+        
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .preview {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px dashed #dee2e6;
+        }
+        
+        .preview h3 {
+            margin: 0 0 12px 0;
+            font-size: 16px;
+            color: #666;
+        }
+        
+        .preview-card {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .preview-title {
+            font-weight: 600;
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .preview-body {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .helper-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📢 管理者通知パネル</h1>
+        
+        <form id="notification-form">
+            <div class="form-group">
+                <label for="title">タイトル *</label>
+                <input type="text" id="title" placeholder="例: 【管理者】重要なお知らせ" required />
+                <div class="helper-text">通知のタイトル（必須）</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="body">メッセージ *</label>
+                <textarea id="body" placeholder="例: 2月12日午前2時にサーバーのメンテナンスを行います！" required></textarea>
+                <div class="helper-text">通知の本文（必須）</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="url">リンク先URL</label>
+                <input type="text" id="url" placeholder="例: https://example.com" />
+                <div class="helper-text">通知をクリックした際の遷移先（省略可）</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="icon">アイコンURL</label>
+                <input type="text" id="icon" value="https://elza.poitou-mora.ts.net/pushweb/ad.ico" />
+                <div class="helper-text">通知のアイコン画像URL</div>
+            </div>
+            
+            <div class="button-group">
+                <button type="button" class="btn-clear" id="btn-clear">クリア</button>
+                <button type="submit" class="btn-send" id="btn-send">📤 全員に送信</button>
+            </div>
+        </form>
+        
+        <div class="status-message" id="status-message"></div>
+        
+        <div class="preview">
+            <h3>📱 プレビュー</h3>
+            <div class="preview-card">
+                <div class="preview-title" id="preview-title">タイトルがここに表示されます</div>
+                <div class="preview-body" id="preview-body">メッセージがここに表示されます</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 認証チェック
+        (async () => {
+            const token = localStorage.getItem('adminToken');
+            
+            if (!token) {
+                window.location.href = '/pushweb/login';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/verify', {
+                    headers: { 'X-Admin-Token': token }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('認証失敗');
+                }
+            } catch (error) {
+                localStorage.removeItem('adminToken');
+                window.location.href = '/pushweb/login';
+                return;
+            }
+        })();
+        
+        const form = document.getElementById('notification-form');
+        const titleInput = document.getElementById('title');
+        const bodyInput = document.getElementById('body');
+        const urlInput = document.getElementById('url');
+        const iconInput = document.getElementById('icon');
+        const btnSend = document.getElementById('btn-send');
+        const btnClear = document.getElementById('btn-clear');
+        const statusMessage = document.getElementById('status-message');
+        const previewTitle = document.getElementById('preview-title');
+        const previewBody = document.getElementById('preview-body');
+        
+        // プレビュー更新
+        function updatePreview() {
+            previewTitle.textContent = titleInput.value || 'タイトルがここに表示されます';
+            previewBody.textContent = bodyInput.value || 'メッセージがここに表示されます';
+        }
+        
+        titleInput.addEventListener('input', updatePreview);
+        bodyInput.addEventListener('input', updatePreview);
+        
+        // クリアボタン
+        btnClear.addEventListener('click', () => {
+            form.reset();
+            iconInput.value = 'https://elza.poitou-mora.ts.net/pushweb/ad.ico';
+            updatePreview();
+            statusMessage.classList.remove('show');
+        });
+        
+        // 送信処理
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const title = titleInput.value.trim();
+            const body = bodyInput.value.trim();
+            const url = urlInput.value.trim();
+            const icon = iconInput.value.trim();
+            
+            if (!title || !body) {
+                showStatus('タイトルとメッセージは必須です', 'error');
+                return;
+            }
+            
+            btnSend.disabled = true;
+            btnSend.textContent = '送信中...';
+            
+            try {
+                const token = localStorage.getItem('adminToken');
+                
+                const response = await fetch('/api/admin/notify', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Admin-Token': token
+                    },
+                    body: JSON.stringify({
+                        type: 'admin',
+                        settingKey: 'admin',
+                        data: {
+                            title: title,
+                            body: body,
+                            url: url || 'https://elza.poitou-mora.ts.net/pushweb/',
+                            icon: icon || 'https://elza.poitou-mora.ts.net/pushweb/icon.ico'
+                        }
+                    })
+                });
+                
+                if (response.status === 401) {
+                    localStorage.removeItem('adminToken');
+                    window.location.href = '/pushweb/login';
+                    return;
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`送信失敗: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                showStatus(`✅ 送信成功！（${result.message || '完了'}）`, 'success');
+                
+                // フォームをクリア
+                setTimeout(() => {
+                    form.reset();
+                    iconInput.value = 'https://elza.poitou-mora.ts.net/pushweb/icon.ico';
+                    updatePreview();
+                }, 2000);
+                
+            } catch (error) {
+                showStatus(`❌ 送信エラー: ${error.message}`, 'error');
+            } finally {
+                btnSend.disabled = false;
+                btnSend.textContent = '📤 全員に送信';
+            }
+        });
+        
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message show ${type}`;
+            
+            setTimeout(() => {
+                statusMessage.classList.remove('show');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
