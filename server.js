@@ -5,6 +5,8 @@ const path = require('path');
 const webpush = require('web-push');
 const fs = require('fs');
 const twitcasting = require('./twitcasting');
+const MilestoneScheduler = require('./milestone');
+const adminAuth = require('./admin/admin');
 
 const app = express();
 const dbPath = path.join(__dirname, 'data.db');
@@ -13,6 +15,8 @@ const db = new sqlite3.Database(dbPath);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/pushweb', express.static(path.join(__dirname, 'pushweb')));
+app.use('/admin', express.static(path.join(__dirname, 'admin')));
+
 
 // --- VAPID設定 ---
 let vapidConfig = {};
@@ -29,6 +33,9 @@ try {
   vapidConfig = { vapidPublicKey: 'test-key', vapidPrivateKey: 'test-key' };
   webpush.setVapidDetails('mailto:admin@honna-yuzuki.com', vapidConfig.vapidPublicKey, vapidConfig.vapidPrivateKey);
 }
+
+
+let milestoneScheduler;
 
 // DB初期化
 db.serialize(() => {
@@ -520,6 +527,102 @@ app.get(twitcasting.CALLBACK_PATH, async (req, res) => {
     return res.status(500).send('Auth failed');
   }
 });
+
+
+// マイルストーン通知スケジューラー起動
+if (vapidConfig.vapidPublicKey !== 'test-key') {
+  milestoneScheduler = new MilestoneScheduler(dbPath, vapidConfig);
+  milestoneScheduler.start();
+} else {
+  console.log('⚠️  VAPID未設定のためマイルストーン通知は無効');
+}
+
+// 管理者ログイン
+app.post('/api/admin/login', adminAuth.login);
+
+// 管理者ログアウト
+app.post('/api/admin/logout', adminAuth.logout);
+
+// トークン検証
+app.get('/api/admin/verify', adminAuth.requireAuth, (req, res) => {
+  res.json({ success: true, user: req.adminUser });
+});
+
+// 管理者通知送信（認証必須）
+app.post('/api/admin/notify', adminAuth.requireAuth, async (req, res) => {
+  const { data, type, settingKey } = req.body;
+  if (!data || !type) return res.status(400).json({ error: 'Missing data or type' });
+
+  console.log(`[Admin Notification] ${req.adminUser} から通知送信:`, data.title);
+
+  // 重複チェック
+  const notificationHash = getNotificationHash(data, settingKey);
+  const now = Date.now();
+  const lastSent = recentNotifications.get(notificationHash);
+
+  if (lastSent && (now - lastSent) < DUPLICATE_WINDOW_MS) {
+    const timeSinceLastSent = Math.round((now - lastSent) / 1000);
+    console.log(`[Admin Notification] ⚠️  重複通知を検出: ${notificationHash} (${timeSinceLastSent}秒前に送信済み)`);
+    return res.json({ success: true, message: 'Duplicate notification ignored', duplicate: true });
+  }
+
+  // 重複キャッシュに追加
+  recentNotifications.set(notificationHash, now);
+  console.log(`[Admin Notification] ✅ 新規通知として処理: ${notificationHash}`);
+
+  // 履歴に保存
+  db.run(
+    'INSERT INTO notifications (title, body, url, icon, platform, status) VALUES (?, ?, ?, ?, ?, ?)',
+    [data.title, data.body, data.url, data.icon, 'admin', 'success'],
+    function(insertErr) {
+      if (insertErr) {
+        console.error('[Admin Notification] 履歴保存エラー:', insertErr.message);
+      } else {
+        console.log('[Admin Notification] 履歴保存成功 (ID:', this.lastID, ')');
+      }
+    }
+  );
+
+  // 全購読者に送信
+  db.all('SELECT client_id, subscription_json, settings_json FROM subscriptions', [], async (err, rows) => {
+    if (err) {
+      console.error('[Admin Notification] SELECT err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+
+    console.log(`[Admin Notification] 購読者数: ${rows.length}人`);
+
+    let sentCount = 0;
+    for (const row of rows) {
+      try {
+        const subscription = JSON.parse(row.subscription_json);
+        const sent = await sendPushNotification(subscription, data, db, false);
+        if (sent) {
+          sentCount++;
+          console.log(`[Admin Notification] ✅ ${row.client_id}: 送信成功`);
+        } else {
+          console.log(`[Admin Notification] ❌ ${row.client_id}: 送信失敗`);
+        }
+      } catch (e) {
+        console.error(`[Admin Notification] row error (client: ${row.client_id}):`, e.message);
+      }
+    }
+
+    console.log(`[Admin Notification] 完了: ${sentCount}/${rows.length}人に送信`);
+    return res.json({ success: true, message: `Notification sent to ${sentCount} clients` });
+  });
+});
+
+// パスワードハッシュ生成ツール（開発用 - 本番では削除推奨）
+app.get('/api/admin/generate-hash', (req, res) => {
+  const password = req.query.password;
+  if (!password) {
+    return res.status(400).json({ error: 'password query parameter required' });
+  }
+  const hash = adminAuth.generatePasswordHash(password);
+  res.json({ password, hash });
+});
+
 
 // --- 起動 ---
 const PORT = process.env.PORT || 8080;
