@@ -6,6 +6,7 @@ const bilibiliDynamic = require('./bilibiliDynamic');
 const twitcasting = require('./twitcasting');
 const twitter = require('./twitter');
 const fanbox = require('./fanbox');
+const MilestoneScheduler = require('./milestone');
 const axios = require('axios');
 // const express = require('express'); // 削除
 // const bodyParser = require('body-parser'); // 削除
@@ -90,6 +91,19 @@ async function main() {
   } catch (e) {
     console.error('bilibiliDynamic watcher 起動エラー:', e && e.message ? e.message : e);
   }
+// 👇 マイルストーン通知スケジューラー起動
+  try {
+    if (vapidConfig.vapidPublicKey !== 'test-key') {
+      const dbPath = path.join(__dirname, 'data.db');
+      const milestoneScheduler = new MilestoneScheduler(dbPath, vapidConfig);
+      milestoneScheduler.start();
+      console.log('✅ マイルストーン通知スケジューラー起動');
+    } else {
+      console.log('⚠️  VAPID未設定のためマイルストーン通知は無効');
+    }
+  } catch (e) {
+    console.error('マイルストーン通知スケジューラー起動エラー:', e.message);
+  }
 }
 
 // fanbox
