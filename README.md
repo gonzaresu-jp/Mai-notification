@@ -31,7 +31,7 @@
 ## Web UI の使い方
 
 Web UI（公開 URL）:  
-`https://elza.poitou-mora.ts.net/pushweb/`
+https://elza.poitou-mora.ts.net/pushweb/
 
 ![メイン画面](./img/image.png)
 
