@@ -89,7 +89,7 @@ MacOS / iOS の動作は公式仕様に依存します。
 - 音: 任意  
 - 通知ドット: ON  
 - 重要な通知: ON
-- 
+
 <img src="./img/Screenshot_20251116-231437.png" width="300">
 
 これで Android では遅延なく通知が届きます。
