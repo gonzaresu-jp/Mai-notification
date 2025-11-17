@@ -3,6 +3,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const xml2js = require('xml2js');
 const axios = require('axios');
+const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
 
 // xml2jsのPromise対応バージョンを取得
 const { parseStringPromise } = require('xml2js'); 
@@ -52,37 +53,46 @@ function startWebhook(port = 3001) {
                     continue;
                 }
 
-                let publishedDate = publishedStr ? new Date(publishedStr) : null;
-                let updatedDate = updatedStr ? new Date(updatedStr) : null;
+let publishedDate = publishedStr ? new Date(publishedStr) : null;
+                let updatedDate = updatedStr ? new Date(updatedStr) : null;
 
-                // --- 過去動画の再通知対策: フィルター処理 ---
-                if (publishedDate && publishedDate < now) {
-                    let targetDate = updatedDate || publishedDate;
-                    if (now.getTime() - targetDate.getTime() > RECENT_VIDEO_THRESHOLD_MS) {
-                        console.log(`[YouTube Filter] Skip old video: ${videoId} (Updated: ${updatedStr})`);
-                        continue; // 通知をスキップ
-                    }
-                }
-                // --- フィルター処理 終了 ---
+                // --- 過去動画の再通知対策: フィルター処理 ---
+// 更新通知(配信開始など)は常に通す
+if (updatedDate && updatedDate > publishedDate) {
+    console.log(`[YouTube] Video updated recently: ${videoId} - allowing notification`);
+} else if (publishedDate && publishedDate < now) {
+    // 新規公開のみフィルター
+    if (now.getTime() - publishedDate.getTime() > RECENT_VIDEO_THRESHOLD_MS) {
+        console.log(`[YouTube Filter] Skip old video: ${videoId}`);
+        continue;
+    }
+}
+                // --- フィルター処理 終了 ---
 
-                const url = `https://www.youtube.com/watch?v=${videoId}`;
-                title = title || 'YouTube新着'; // タイトルが空の場合のフォールバック
+                const url = `https://www.youtube.com/watch?v=${videoId}`;
+                title = title || 'YouTube新着'; // タイトルが空の場合のフォールバック
 
-                // ライブ/プレミア公開の判定は困難なので、シンプルに通知
-                const payload = {
-                    type: 'youtube',
-                    data: {
-                        title: String(title),
-                        url,
-                        icon: ICON_URL,
-                        published: publishedStr || null
-                    }
-                };
+                // ライブ/プレミア公開の判定は困難なので、シンプルに通知
+                const payload = {
+                    type: 'youtube',
+                    settingKey: 'youtube',
+                    data: {
+                        title: String(title),
+                        url,
+                        icon: ICON_URL,
+                        published: publishedStr || null
+                    }
+                };
 
-                axios.post(LOCAL_API_URL, payload)
-                    .then(() => console.log('YouTube -> /api/notify sent:', videoId))
-                    .catch(e => console.error('YouTube notify post failed:', e.message || e));
-            }
+                axios.post(LOCAL_API_URL, payload, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Notify-Token': NOTIFY_TOKEN
+                    }
+                })
+                    .then(() => console.log('YouTube -> /api/notify sent:', videoId))
+                    .catch(e => console.error('YouTube notify post failed:', e.message || e));
+            }
         } catch (err) {
             console.error('XML parse or processing error:', err);
             // エラー時もHubに200を返すことで、リトライの頻度が高くなるのを防ぐ場合もある

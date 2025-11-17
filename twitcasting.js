@@ -138,40 +138,63 @@ async function getTwitCastingUserId() {
 
 
 // Webhookを登録/購読する
+// --- subscribeToWebhook の差し替え ---
 async function subscribeToWebhook() {
-    if (!accessToken) return false;
-    
-    // ユーザーIDを取得 (Webhook購読はユーザーIDで行う必要があるため)
-    const userId = await getTwitCastingUserId();
-    if (!userId) {
-        console.error('TwitCasting: Webhook購読に失敗。ターゲットUser IDが不明です。');
-        return false;
+  // NOTE: subscribe requires Application-level auth (Basic auth using CLIENT_ID:CLIENT_SECRET).
+  // Ensure CLIENT_ID and CLIENT_SECRET are available (app credentials).
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    console.error('TwitCasting: CLIENT_ID/CLIENT_SECRET missing for webhook registration.');
+    return false;
+  }
+
+  // ユーザーIDを取得（GET /users/:screen_id はユーザトークンでも動くが、publicでも行ける）
+  const userId = await getTwitCastingUserId();
+  if (!userId) {
+    console.error('TwitCasting: Webhook購読に失敗。ターゲットUser IDが不明です。');
+    return false;
+  }
+
+  const basic = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
+
+  // 正しいイベント名に変更（livestart, liveend）
+  const body = {
+    user_id: String(userId),
+    events: ['livestart', 'liveend']
+  };
+
+  try {
+    // Application-level registration requires Basic auth per API docs
+    const res = await axios.post(
+      `${API_BASE_URL}/webhooks`,
+      body,
+      {
+        headers: {
+          'Authorization': `Basic ${basic}`,
+          'X-Api-Version': '2.0',
+          'Content-Type': 'application/json'
+        },
+        validateStatus: () => true // レスポンスのステータスを自分で判定してログする
+      }
+    );
+
+    if (res.status === 201 || res.status === 200) {
+      console.log(`TwitCasting: Webhook subscription successful for user ${TARGET_USER_SCREEN_ID} (${userId}). Response:`, res.data);
+      return true;
+    }
+    if (res.status === 409) {
+      console.log(`TwitCasting: Webhook already subscribed for user ${TARGET_USER_SCREEN_ID}. Response:`, res.data);
+      return true;
     }
 
-    try {
-        await axios.post(
-            `${API_BASE_URL}/webhooks`,
-            {
-                user_id: userId,
-                // 🚨 修正: live_start を購読する場合、live_end も必須
-                events: ['live_start', 'live_end'], 
-                url: WEBHOOK_URL
-            },
-            {
-                headers: { 'Authorization': `Bearer ${accessToken}`, 'X-Api-Version': '2.0', 'Content-Type': 'application/json' }
-            }
-        );
-        console.log(`TwitCasting: Webhook subscription successful for user ${TARGET_USER_SCREEN_ID} (${userId}).`);
-        return true;
-    } catch (e) {
-        if (e.response && e.response.status === 409) {
-            console.log(`TwitCasting: Webhook already subscribed for user ${TARGET_USER_SCREEN_ID}.`);
-            return true;
-        }
-        console.error('TwitCasting: Failed to subscribe to webhook:', e.response ? e.response.data : e.message);
-        return false;
-    }
+    console.error('TwitCasting: Failed to subscribe to webhook:', res.status, res.data);
+    return false;
+
+  } catch (e) {
+    console.error('TwitCasting: subscribe request failed:', e && (e.response ? e.response.data : e.message));
+    return false;
+  }
 }
+
 
 // 起動時にトークンを読み込み、Webhookを購読する
 async function initTwitcastingApi() {

@@ -6,16 +6,25 @@ const webpush = require('web-push');
 const fs = require('fs');
 const twitcasting = require('./twitcasting');
 const MilestoneScheduler = require('./milestone');
+require('dotenv').config();
 const adminAuth = require('./admin/admin');
+
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const dbPath = path.join(__dirname, 'data.db');
 const db = new sqlite3.Database(dbPath);
 
+const ADMIN_NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
+const NOTIFY_HMAC_SECRET = process.env.NOTIFY_HMAC_SECRET || null;
+
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/pushweb', express.static(path.join(__dirname, 'pushweb')));
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
+app.set('trust proxy', true);
 
 
 // --- VAPID設定 ---
@@ -121,6 +130,8 @@ db.serialize(() => {
   });
 });
 
+console.log('ADMIN_NOTIFY_TOKEN:', process.env.ADMIN_NOTIFY_TOKEN);
+
 // --- 通知送信共通 ---
 async function sendPushNotification(subscription, payload, dbRef, isTest = false) {
   const options = isTest ? { TTL: 60 } : {};
@@ -147,26 +158,60 @@ async function sendPushNotification(subscription, payload, dbRef, isTest = false
 // ----------------------------------------------------
 
 // --- 購読保存・更新（統合版） ---
+// server.js の /api/save-platform-settings を詳細ログ付きに修正
+
 app.post('/api/save-platform-settings', (req, res) => {
+  console.log('\n========== /api/save-platform-settings START ==========');
+  console.log('1. Request Body:', JSON.stringify(req.body, null, 2));
+  
   const { clientId, subscription, settings } = req.body;
-  if (!clientId) return res.status(400).json({ error: 'clientId required' });
+  
+  console.log('2. Parsed Values:');
+  console.log('   - clientId:', clientId);
+  console.log('   - subscription:', subscription);
+  console.log('   - settings:', settings);
+  
+  if (!clientId) {
+    console.error('❌ clientId が空です');
+    return res.status(400).json({ error: 'clientId required' });
+  }
 
   const endpoint = subscription?.endpoint || null;
   const subscriptionJson = subscription ? JSON.stringify(subscription) : null;
   const settingsJson = settings ? JSON.stringify(settings) : null;
 
+  console.log('3. Processed Values:');
+  console.log('   - endpoint:', endpoint);
+  console.log('   - subscriptionJson length:', subscriptionJson?.length || 0);
+  console.log('   - settingsJson:', settingsJson);
+
   // clientId に紐づくレコードを探す
+  console.log('4. Searching for existing record with clientId:', clientId);
+  
   db.get('SELECT * FROM subscriptions WHERE client_id = ?', [clientId], (err, rowByClient) => {
     if (err) {
-      console.error('/api/save-platform-settings SELECT err:', err.message);
+      console.error('❌ SELECT error:', err.message);
       return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+
+    console.log('5. Existing record:', rowByClient ? 'FOUND' : 'NOT FOUND');
+    if (rowByClient) {
+      console.log('   Existing data:', {
+        id: rowByClient.id,
+        client_id: rowByClient.client_id,
+        endpoint: rowByClient.endpoint?.substring(0, 50) + '...'
+      });
     }
 
     // Upsert処理
     const doUpsert = () => {
+      console.log('6. Executing UPSERT...');
+      
       if (!subscriptionJson || !endpoint) {
+        console.error('❌ subscription or endpoint missing');
         return res.status(400).json({ error: 'subscription and endpoint required' });
       }
+      
       const sql = `
         INSERT INTO subscriptions (client_id, endpoint, subscription_json, settings_json)
         VALUES (?, ?, ?, ?)
@@ -175,17 +220,28 @@ app.post('/api/save-platform-settings', (req, res) => {
           subscription_json = excluded.subscription_json,
           settings_json = excluded.settings_json
       `;
+      
+      console.log('7. SQL:', sql);
+      console.log('8. Parameters:', [clientId, endpoint?.substring(0, 50) + '...', 'subscription_json', settingsJson || '{}']);
+      
       db.run(sql, [clientId, endpoint, subscriptionJson, settingsJson || '{}'], function(insertErr) {
         if (insertErr) {
-          console.error('/api/save-platform-settings UPSERT err:', insertErr.message);
+          console.error('❌ UPSERT error:', insertErr.message);
+          console.error('   Code:', insertErr.code);
+          console.error('   Stack:', insertErr.stack);
           return res.status(500).json({ error: 'DB upsert error', detail: insertErr.message });
         }
+        
+        console.log('✅ UPSERT success! lastID:', this.lastID, 'changes:', this.changes);
+        console.log('========== /api/save-platform-settings END ==========\n');
         return res.json({ success: true, message: 'Subscription saved' });
       });
     };
 
     // 更新処理
     if (rowByClient) {
+      console.log('6. Existing record found, preparing UPDATE...');
+      
       const updates = [];
       const params = [];
 
@@ -199,23 +255,31 @@ app.post('/api/save-platform-settings', (req, res) => {
       }
 
       if (updates.length === 0) {
+        console.log('⚠️ Nothing to update');
         return res.json({ success: true, message: 'Nothing to update' });
       }
 
       params.push(clientId);
       const sql = `UPDATE subscriptions SET ${updates.join(', ')} WHERE client_id = ?`;
+      
+      console.log('7. UPDATE SQL:', sql);
+      console.log('8. UPDATE params count:', params.length);
+      
       db.run(sql, params, function(updateErr) {
         if (updateErr && updateErr.message.includes('UNIQUE constraint')) {
-          console.warn('UPDATE UNIQUE constraint — falling back to upsert');
+          console.warn('⚠️ UNIQUE constraint violated, falling back to upsert');
           return doUpsert();
         } else if (updateErr) {
-          console.error('/api/save-platform-settings UPDATE err:', updateErr.message);
+          console.error('❌ UPDATE error:', updateErr.message);
           return res.status(500).json({ error: 'DB update error', detail: updateErr.message });
         }
+        
+        console.log('✅ UPDATE success! changes:', this.changes);
+        console.log('========== /api/save-platform-settings END ==========\n');
         return res.json({ success: true, message: 'Settings updated' });
       });
     } else {
-      // 新規作成
+      console.log('6. No existing record, creating new...');
       return doUpsert();
     }
   });
@@ -376,7 +440,7 @@ app.post('/api/send-test', (req, res) => {
       const subscription = JSON.parse(row.subscription_json);
       const payload = {
         title: 'テスト通知',
-        body: '通知の設定が正しく機能しています！',
+        body: 'この通知をタップしてURLに飛べるか確認！',
         url: 'https://elza.poitou-mora.ts.net/pushweb/test/',
         icon: `${req.protocol}://${req.get('host')}/pushweb/icon.ico`
       };
@@ -406,14 +470,77 @@ function getNotificationHash(data, settingKey) {
   return `${settingKey || 'unknown'}:${data.url || ''}:${data.title || ''}`;
 }
 
+// レートリミット: 同一IP/トークンあたり 1分に10回（調整可）
+const notifyLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  // express-rate-limit の公式 ipKeyGenerator を使用して IPv6 対応にする
+  keyGenerator: rateLimit.ipKeyGenerator || ((req) => req.ip || req.socket?.remoteAddress || 'unknown'),
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// 認証ミドルウェア: ヘッダ X-Notify-Token または Authorization: Bearer <token>
+function requireNotifyToken(req, res, next) {
+  if (!ADMIN_NOTIFY_TOKEN) {
+    return res.status(500).json({ error: 'Server misconfiguration: ADMIN_NOTIFY_TOKEN not set' });
+  }
+  
+  const authHeader = req.get('Authorization');
+  const token = req.get('X-Notify-Token') || (authHeader && authHeader.split(' ')[1]);
+
+  // ✅ デバッグログ追加
+  console.log('[AUTH DEBUG] Received headers:', {
+    'X-Notify-Token': req.get('X-Notify-Token'),
+    'Authorization': authHeader,
+    'X-Local-API-Token': req.get('X-Local-API-Token')  // 念のため確認
+  });
+  console.log('[AUTH DEBUG] Extracted token (first 10):', token?.substring(0, 10));
+  console.log('[AUTH DEBUG] Expected token (first 10):', ADMIN_NOTIFY_TOKEN?.substring(0, 10));
+
+  if (!token || token !== ADMIN_NOTIFY_TOKEN) {
+    console.log('[AUTH DEBUG] Token mismatch or missing!');
+    return res.status(401).json({ error: 'Unauthorized: invalid notify token' });
+  }
+  next();
+}
+
+// 任意: HMAC 検証ミドルウェア（NOTIFY_HMAC_SECRET が設定されていれば検証）
+function verifyNotifyHmac(req, res, next) {
+  if (!NOTIFY_HMAC_SECRET) return next(); // 無効ならスキップ
+
+  const signatureHeader = req.get('X-Signature') || ''; // 期待形式: sha256=<hex>
+  if (!signatureHeader.startsWith('sha256=')) {
+    return res.status(401).json({ error: 'Unauthorized: missing signature' });
+  }
+  const recvSig = signatureHeader.slice(7);
+
+  // JSON ボディを安定して HMAC するために stringify を使う（クライアント側も同じ方式で署名すること）
+  let bodyString;
+  try {
+    bodyString = JSON.stringify(req.body || {});
+  } catch (e) {
+    return res.status(400).json({ error: 'Bad request body' });
+  }
+
+  const hmac = crypto.createHmac('sha256', NOTIFY_HMAC_SECRET);
+  hmac.update(bodyString);
+  const expected = hmac.digest('hex');
+
+  if (!crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(recvSig, 'hex'))) {
+    return res.status(401).json({ error: 'Unauthorized: invalid signature' });
+  }
+  next();
+}
+
 // --- 通知受信（外部サービスから） ---
-app.post('/api/notify', (req, res) => {
+app.post('/api/notify', notifyLimiter, requireNotifyToken, verifyNotifyHmac, (req, res) => {
   const { data, type, settingKey } = req.body;
   if (!data || !type) return res.status(400).json({ error: 'Missing data or type' });
 
   console.log('[/api/notify] 通知リクエスト受信:', { title: data.title, settingKey });
 
-  // 重複チェック
+  // 以下は既存の処理をそのままコピペ
   const notificationHash = getNotificationHash(data, settingKey);
   const now = Date.now();
   const lastSent = recentNotifications.get(notificationHash);
@@ -424,7 +551,6 @@ app.post('/api/notify', (req, res) => {
     return res.json({ success: true, message: 'Duplicate notification ignored', duplicate: true });
   }
 
-  // 重複キャッシュに追加
   recentNotifications.set(notificationHash, now);
   console.log(`[/api/notify] ✅ 新規通知として処理: ${notificationHash}`);
 
@@ -550,6 +676,8 @@ app.get('/api/admin/verify', adminAuth.requireAuth, (req, res) => {
 
 // 管理者通知送信（認証必須）
 app.post('/api/admin/notify', adminAuth.requireAuth, async (req, res) => {
+    console.log('[DEBUG] X-Admin-Token header:', req.headers['x-admin-token']);
+  console.log('[DEBUG] Request body:', req.body)
   const { data, type, settingKey } = req.body;
   if (!data || !type) return res.status(400).json({ error: 'Missing data or type' });
 
@@ -612,7 +740,7 @@ app.post('/api/admin/notify', adminAuth.requireAuth, async (req, res) => {
     return res.json({ success: true, message: `Notification sent to ${sentCount} clients` });
   });
 });
-
+/*
 // パスワードハッシュ生成ツール（開発用 - 本番では削除推奨）
 app.get('/api/admin/generate-hash', (req, res) => {
   const password = req.query.password;
@@ -622,8 +750,7 @@ app.get('/api/admin/generate-hash', (req, res) => {
   const hash = adminAuth.generatePasswordHash(password);
   res.json({ password, hash });
 });
-
-
+*/
 // --- 起動 ---
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

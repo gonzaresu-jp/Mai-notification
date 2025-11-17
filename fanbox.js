@@ -11,8 +11,8 @@ const ICON_URL = 'https://elza.poitou-mora.ts.net/pushweb/icon.ico';
 const PUBLIC_URL = `https://www.fanbox.cc/@${FANBOX_USER}`;
 const POLL_INTERVAL = 3 * 60 * 1000;
 const STATE_FILE = path.resolve(__dirname, 'fanbox-state.json');
+const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
 
-// 状態: 過去の最大投稿IDを保持する
 let lastMaxId = loadState().lastMaxId || 0;
 
 function loadState() {
@@ -51,7 +51,6 @@ async function checkFanboxPosts() {
 
   const $ = cheerio.load(html);
 
-  // --- 全URL抽出 ---
   const postMatches = html.match(/\/posts\/(\d+)/g) || [];
   if (postMatches.length === 0) {
     console.warn('Fanbox: 投稿URLを抽出できませんでした');
@@ -59,7 +58,6 @@ async function checkFanboxPosts() {
     return;
   }
 
-  // 数字部分を比較して最大のものを選ぶ
   let maxId = 0;
   postMatches.forEach(match => {
     const num = parseInt(match.replace('/posts/', ''), 10);
@@ -75,7 +73,6 @@ async function checkFanboxPosts() {
   const newPostPath = `/posts/${maxId}`;
   const newPostUrl = `https://www.fanbox.cc/@${FANBOX_USER}${newPostPath}`;
 
-  // タイトル生成
   let newPostTitle = 'FANBOX新着投稿';
   const descriptionMeta = $('meta[name="description"]').attr('content') || '';
   const cleanedDescription = descriptionMeta
@@ -83,14 +80,13 @@ async function checkFanboxPosts() {
       .replace(/\r?\n|\r/g, ' ')
       .trim();
   if (cleanedDescription.length > 0) newPostTitle = cleanedDescription.substring(0, 50).trim() + '...';
-  const pageTitle = $('title').text().replace('｜pixivFANBOX', '').trim();
+  const pageTitle = $('title').text().replace('|pixivFANBOX', '').trim();
   if (pageTitle.length > 0) newPostTitle = '【Fanbox】'+ pageTitle;
 
   console.log(`✅ 最新投稿判定: ${newPostPath} (maxId=${maxId})`);
   console.log(`推定タイトル: ${newPostTitle}`);
   console.log(`過去最大ID: ${lastMaxId}`);
 
-  // 初回起動: 記録のみ（通知しない）
   if (!lastMaxId || lastMaxId === 0) {
     lastMaxId = maxId;
     saveState();
@@ -99,17 +95,16 @@ async function checkFanboxPosts() {
     return;
   }
 
-  // 通知条件: 今回の maxId が過去の最大値を上回る場合のみ
   if (maxId <= lastMaxId) {
-    console.log('Fanbox: 新しい投稿はありません（maxId <= 過去最大）');
+    console.log('Fanbox: 新しい投稿はありません(maxId <= 過去最大)');
     await browser.close();
     return;
   }
 
-  // 新着通知（maxId > lastMaxId のときだけここに来る）
   console.log('Fanbox: 新しい投稿発見:', newPostTitle, newPostUrl);
   const payload = {
     type: 'fanbox',
+    settingKey: 'fanbox',
     data: {
       title: newPostTitle,
       url: newPostUrl,
@@ -119,10 +114,15 @@ async function checkFanboxPosts() {
   };
 
   try {
-    await axios.post(LOCAL_API_URL, payload, { timeout: 10000 });
+    await axios.post(LOCAL_API_URL, payload, { 
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Notify-Token': NOTIFY_TOKEN
+      }
+    });
     console.log('Fanbox -> /api/notify sent:', newPostUrl);
 
-    // 状態更新
     lastMaxId = maxId;
     saveState();
   } catch (e) {
