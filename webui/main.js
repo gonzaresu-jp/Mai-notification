@@ -1,4 +1,4 @@
-// main.js (client side) - clientId + test-send + "もっと見る" 対応版
+// main.js (client side) - iOS対応版
 const API_HISTORY = '/api/history';
 const API_VAPID = '/api/vapidPublicKey';
 const API_SUBSCRIBE = '/api/save-platform-settings';
@@ -9,6 +9,11 @@ let autoTimer = null;
 
 // --- UI制御ユーティリティ ---
 const $body = document.getElementById('app-body');
+
+// iOS Helper チェック
+if (typeof iosHelper === 'undefined') {
+    console.warn('iOS Helper not loaded - iOS features disabled');
+}
 
 function updatePlatformSettingsVisibility(isChecked) {
     if (!$body) return; 
@@ -36,6 +41,28 @@ function getClientId() {
   }
   return cid;
 }
+
+async function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+        console.warn('Service Worker 未対応ブラウザです');
+        return null;
+    }
+
+    try {
+        // 登録
+        const registration = await navigator.serviceWorker.register('/pushweb/service-worker.js');
+        console.log('Service Worker 登録成功:', registration);
+
+        // 登録後 ready を待つ
+        const sw = await navigator.serviceWorker.ready;
+        console.log('Service Worker ready:', sw);
+        return sw;
+    } catch (e) {
+        console.error('Service Worker 登録失敗:', e);
+        return null;
+    }
+}
+
 
 // プラットフォーム別設定の保存
 async function savePlatformSettings() {
@@ -70,9 +97,23 @@ async function savePlatformSettings() {
     }
 }
 
-// --- Push Notification ---
+// --- Push Notification ---（iOS対応版）
 async function initPush() {
     console.log('--- Push Initialization START ---');
+    
+    // iOS対応: PWA必須チェック
+    if (typeof iosHelper !== 'undefined' && !iosHelper.isPushAvailable()) {
+        if (iosHelper.isIOS && !iosHelper.isPWA) {
+            console.warn('iOS: PWAモードが必要です');
+            // ガイドを表示
+            if (iosHelper.shouldShowInstallGuide()) {
+                iosHelper.showInstallGuide();
+            }
+            throw new Error('iOS_PWA_REQUIRED: ホーム画面に追加してください');
+        }
+        throw new Error('Push Notificationに対応していません');
+    }
+
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         console.error('Push Notificationに対応していません。');
         throw new Error('Push Notificationに対応していません。');
@@ -81,10 +122,8 @@ async function initPush() {
     let sw;
     try {
         console.log('1. Service Workerを取得中...');
-        // 既に登録されているService Workerを使用（index.htmlで登録済み）
         sw = await navigator.serviceWorker.ready;
         console.log('1. Service Workerの取得が完了しました。', sw);
-
     } catch (e) {
         console.error('1. Service Workerの取得に失敗しました。', e);
         throw new Error(`Service Worker取得失敗: ${e.message}`);
@@ -123,36 +162,70 @@ async function initPush() {
     }
 }
 
+// main.js の sendSubscriptionToServer 関数を詳細ログ付きに修正
+
 async function sendSubscriptionToServer(sub) {
     const clientId = getClientId();
+    
+    console.log('========== 購読情報送信デバッグ START ==========');
+    console.log('1. Client ID:', clientId);
+    console.log('2. Subscription:', sub);
+    console.log('3. Endpoint:', sub?.endpoint);
+    
     if (!clientId) {
-        console.error('Client IDが取得できません。購読情報を送信できません。');
+        console.error('❌ Client IDが取得できません。購読情報を送信できません。');
         return;
     }
     
-    console.log('購読情報をサーバーAPIにPOST...', { endpoint: sub.endpoint, clientId: clientId });
+    const requestBody = {
+        clientId: clientId,
+        subscription: sub
+    };
+    
+    console.log('4. Request Body:', JSON.stringify(requestBody, null, 2));
+    
     try {
+        console.log('5. Sending POST to:', API_SUBSCRIBE);
+        
         const response = await fetch(API_SUBSCRIBE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                clientId: clientId,
-                subscription: sub
-            })
+            body: JSON.stringify(requestBody)
         });
 
+        console.log('6. Response Status:', response.status);
+        console.log('7. Response OK:', response.ok);
+
+        const responseText = await response.text();
+        console.log('8. Response Text:', responseText);
+
         if (!response.ok) {
-            console.error('購読情報のサーバー送信に失敗しました。', response.status, await response.text());
-            throw new Error('サーバーエラー: 購読情報の保存に失敗');
+            console.error('❌ 購読情報のサーバー送信に失敗しました。');
+            console.error('Status:', response.status);
+            console.error('Response:', responseText);
+            throw new Error(`サーバーエラー: 購読情報の保存に失敗 (${response.status})`);
         }
 
-        console.log('購読情報のサーバー送信が完了しました。');
+        let responseData;
+        try {
+            responseData = JSON.parse(responseText);
+            console.log('9. Response Data:', responseData);
+        } catch (e) {
+            console.warn('⚠️ JSON parse failed, response was:', responseText);
+        }
+
+        console.log('✅ 購読情報のサーバー送信が完了しました。');
+        console.log('========== 購読情報送信デバッグ END ==========');
+        
     } catch (e) {
-        console.error('購読情報サーバー送信時のネットワークエラー:', e);
+        console.error('========== エラー発生 ==========');
+        console.error('Error Type:', e.name);
+        console.error('Error Message:', e.message);
+        console.error('Error Stack:', e.stack);
+        console.error('========== エラー終了 ==========');
         throw e;
     }
 }
-
 async function unsubscribePush() {
     console.log('--- Push Unsubscribe START ---');
     try {
@@ -218,16 +291,11 @@ async function sendTestToMe() {
 // --- History Fetching ---
 const _paging = {
   offset: 0,
-  limit: 5, // 初期表示は5件
+  limit: 5,
   loading: false,
   hasMore: true,
 };
 
-/**
- * ログをHTMLリストアイテムとして作成
- * @param {object} log
- * @returns {string}
- */
 function createLogItem(log) {
     const date = new Date(log.timestamp * 1000);
     const dateStr = date.toLocaleString('ja-JP', {
@@ -265,12 +333,6 @@ function createLogItem(log) {
     `;
 }
 
-/**
- * 通知履歴を取得して表示する
- * @param {HTMLElement} $logsEl - ログリストのコンテナ要素
- * @param {HTMLElement} $statusEl - ステータスメッセージのP要素
- * @param {object} options
- */
 async function fetchHistory($logsEl, $statusEl, { append = false } = {}) {
     if (_paging.loading) {
         console.log('既にロード中です。');
@@ -284,7 +346,7 @@ async function fetchHistory($logsEl, $statusEl, { append = false } = {}) {
         $statusEl.className = 'status-message info-message';
     }
 
-    const limit = 5; // 常に5件ずつ取得
+    const limit = 5;
     const offset = append ? _paging.offset : 0;
     const clientId = getClientId();
 
@@ -404,7 +466,6 @@ function getPlatformSettings() {
     };
 }
 
-// --- サーバーからプラットフォーム設定取得 ---
 async function fetchPlatformSettingsFromServer() {
     const clientId = getClientId();
     if (!clientId) {
@@ -431,7 +492,6 @@ async function fetchPlatformSettingsFromServer() {
     }
 }
 
-// --- DOMロード時の設定初期化 ---
 async function loadPlatformSettingsUIFromServer() {
     const settings = await fetchPlatformSettingsFromServer();
     if (!settings) {
@@ -439,7 +499,6 @@ async function loadPlatformSettingsUIFromServer() {
         return;
     }
     
-    // キー名マッピング（サーバー側 → HTML ID）
     const keyMap = {
         twitcasting: 'toggle-twitcasting',
         youtube: 'toggle-youtube',
@@ -483,7 +542,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const targetUrl = event.data.url;
                 console.log('[Client] Navigating to:', targetUrl);
                 
-                // ページ遷移を実行
                 if (targetUrl) {
                     window.location.href = targetUrl;
                 }
@@ -493,13 +551,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('[Client] Service Worker message listener registered');
     }
 
-    // --- プラットフォーム設定UI初期化 ---
+    // iOS対応: 初期化処理（最初に実行）
+    if (typeof iosHelper !== 'undefined') {
+        console.log('[iOS] デバッグ情報:', iosHelper.getDebugInfo());
+        
+        // インストールガイド表示（遅延実行）
+        if (iosHelper.shouldShowInstallGuide()) {
+            setTimeout(() => {
+                iosHelper.showInstallGuide();
+            }, 2000);
+        }
+
+        // 通知ブロック警告
+        setTimeout(() => {
+            iosHelper.showNotificationBlockedWarning();
+        }, 1000);
+    }
+
+    // プラットフォーム設定UI初期化
     async function loadPlatformSettingsUI() {
         const subRaw = localStorage.getItem('platformSettings');
         if (!subRaw) return;
         const settings = JSON.parse(subRaw);
         
-        // キー名マッピング（サーバー側 → HTML ID）
         const keyMap = {
             twitcasting: 'toggle-twitcasting',
             youtube: 'toggle-youtube',
@@ -525,9 +599,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initPlatformSettingsUI($toggleNotify);
     loadPlatformSettingsUI();
-    await loadPlatformSettingsUIFromServer(); // サーバーから設定取得して反映
+    await loadPlatformSettingsUIFromServer();
 
-    // --- 全体通知トグル初期化 ---
+    // 全体通知トグル初期化
     (async () => {
         if (!$toggleNotify) return;
 
@@ -553,17 +627,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         updatePlatformSettingsVisibility(enabled);
 
         // 画像切り替えの初期化関数
-function updateToggleImage() {
-    const body = document.body;
-    if ($toggleNotify.checked) {
-        body.classList.add('notifications-enabled');
-    } else {
-        body.classList.remove('notifications-enabled');
-    }
-}
+        function updateToggleImage() {
+            const body = document.body;
+            if ($toggleNotify.checked) {
+                body.classList.add('notifications-enabled');
+            } else {
+                body.classList.remove('notifications-enabled');
+            }
+        }
 
-// 初期状態を反映（チェック状態を設定した直後）
-updateToggleImage();
+        // 初期状態を反映
+        updateToggleImage();
 
         $toggleNotify.addEventListener('change', async () => {
             if ($toggleNotify.checked) {
@@ -580,10 +654,13 @@ updateToggleImage();
                 await unsubscribePush();
                 updatePlatformSettingsVisibility(false);
             }
+            
+            // トグル変更時にも画像を更新
+            updateToggleImage();
         });
     })();
 
-    // --- テスト通知 ---
+    // テスト通知
     if ($btnSendTest) {
         $btnSendTest.addEventListener('click', async () => {
             $btnSendTest.disabled = true;
@@ -592,7 +669,7 @@ updateToggleImage();
         });
     }
 
-    // --- 履歴取得・"もっと見る" ---
+    // 履歴取得・"もっと見る"
     const $btnMoreLogs = document.getElementById('more-logs-button');
     if ($btnMoreLogs && $logs && $status) {
         $btnMoreLogs.addEventListener('click', () => fetchHistoryMore($logs, $status));
@@ -608,7 +685,7 @@ updateToggleImage();
         });
     }
 
-    // --- 自動更新 ---
+    // 自動更新
     if ($autoRefreshCheckbox && $logs && $status) {
         $autoRefreshCheckbox.addEventListener('change', (e) => {
             if (e.target.checked) {
@@ -625,6 +702,6 @@ updateToggleImage();
         if ($autoRefreshCheckbox.checked) $autoRefreshCheckbox.dispatchEvent(new Event('change'));
     }
 
-    // --- 初回履歴取得 ---
+    // 初回履歴取得
     if ($logs && $status) fetchHistory($logs, $status, { append: false });
 });
