@@ -151,10 +151,34 @@ https://tech.gamewith.co.jp/entry/2023/07/05/150509
 
 ## 開発者メモ
 
-#pm2
+# pm2
 
 - log
-'''
+```
 pm2 logs mai-push-api --lines 100
 pm2 logs mai-push-worker --lines100
-'''
+```
+- start restart
+```
+pm2 start server.js --name mai-push-api
+pm2 start main.js --name mai-push-worker
+
+pm2 restart all --env production
+```
+- info
+```
+pm2 describe mai-push
+```
+
+# DB
+
+```
+sqlite3 data.db
+
+.tables
+.headers on
+.modecolumn
+.mode csv
+SELECT * FROM subscription;
+
+```
