@@ -1,4 +1,3 @@
-// youtubeCommunity.js
 const { google } = require('googleapis');
 const axios = require('axios');
 require('dotenv').config();
@@ -6,12 +5,12 @@ require('dotenv').config();
 const API_KEY = process.env.YOUTUBE_API_KEY;
 const LOCAL_API_URL = 'http://localhost:8080/api/notify';
 const ICON_URL = 'https://elza.poitou-mora.ts.net/pushweb/icon.ico';
-const POLL_INTERVAL = 3 * 60 * 1000; // 3分
+const POLL_INTERVAL = 3 * 60 * 1000;
+const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
 
-// 監視するチャンネルIDリスト
 const CHANNEL_IDS = [
-  'UCgttI8QfdWhvd3SRtCYcJzw', // 1つ目
-  'UCElHA6-5CBmgWODVWNxS8VA'  // 2つ目
+  'UCgttI8QfdWhvd3SRtCYcJzw',
+  'UCElHA6-5CBmgWODVWNxS8VA'
 ];
 
 const youtube = google.youtube({
@@ -19,18 +18,14 @@ const youtube = google.youtube({
   auth: API_KEY
 });
 
-// 前回通知済みIDを保持
 const lastPostIds = {};
 
-// チャンネルのコミュニティ投稿をチェック
 async function checkCommunityPosts(channelId) {
   try {
     const res = await youtube.activities.list({
       part: ['snippet'],
       channelId,
       maxResults: 5,
-      // コミュニティ投稿のみ
-      // NOTE: type='community' は正式には activities.list では明示できないため後でfilter
     });
 
     const items = res.data.items || [];
@@ -47,6 +42,7 @@ async function checkCommunityPosts(channelId) {
 
       const payload = {
         type: 'youtubeCommunity',
+        settingKey: 'youtubeCommunity',
         data: {
           title,
           url,
@@ -55,7 +51,12 @@ async function checkCommunityPosts(channelId) {
         }
       };
 
-      await axios.post(LOCAL_API_URL, payload)
+      await axios.post(LOCAL_API_URL, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Notify-Token': NOTIFY_TOKEN
+        }
+      })
         .then(() => console.log(`Community post sent for ${channelId}: ${postId}`))
         .catch(e => console.error('Community notify failed:', e.message || e));
     }
@@ -65,10 +66,8 @@ async function checkCommunityPosts(channelId) {
   }
 }
 
-// 定期実行
 function startPolling() {
   console.log(`Community polling started for channels: ${CHANNEL_IDS.join(', ')}`);
-  // 最初に即実行
   CHANNEL_IDS.forEach(chId => checkCommunityPosts(chId));
 
   setInterval(() => {
@@ -76,6 +75,4 @@ function startPolling() {
   }, POLL_INTERVAL);
 }
 
-// エクスポート
 module.exports = { startPolling };
-
