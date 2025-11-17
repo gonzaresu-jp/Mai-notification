@@ -12,36 +12,28 @@
         <div class="header-left">
             <h2>テスト完了！</h2>
         </div>
-        
-        
-        <nav id="nav-menu" aria-label="メインメニュー">
-        </nav>
-        
+        <nav id="nav-menu" aria-label="メインメニュー"></nav>
         <div id="menu-overlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; display: none;"></div>
     </header>
 
     <main style="padding-right: 0; padding-left: 0;">
-        <div style="display: flex;     justify-content: flex-end; align-items: flex-start;">
-            <video id="v" src="showmai.webm"  autoplay muted playsinline></video>
+        <div id="animation-container" style="display: flex; justify-content: flex-end; align-items: flex-start;">
+            <!-- ここに Lottie または Video が入ります -->
         </div>
-<a href="https://elza.poitou-mora.ts.net/pushweb/" 
-   style="text-decoration:none; color:inherit; display:block;">
-    <div style="
-        background-color:#FFF;
-        margin:40px;
-        min-height:60px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        padding:10px 20px; /* ←クリック範囲を広げる */
-    ">
-        <h3 style="margin:0;">通知ダッシュボードに戻る</h3>
-    </div>
-</a>
 
-
-
-
+        <a href="https://elza.poitou-mora.ts.net/pushweb/" 
+           style="text-decoration:none; color:inherit; display:block;">
+            <div style="
+                background-color:#FFF;
+                margin:40px;
+                min-height:60px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                padding:10px 20px;">
+                <h3 style="margin:0;">通知ダッシュボードに戻る</h3>
+            </div>
+        </a>
     </main>
 
     <footer>
@@ -56,11 +48,60 @@
     </footer>
 
     <script src="/pushweb/main.js"></script>
-    <script>
-const v = document.getElementById('v');
-v.addEventListener('ended', () => {
-    v.currentTime = 0;
-    v.play();
+
+    <!-- Lottie Web Component -->
+<script type="module">
+import 'https://unpkg.com/@lottiefiles/dotlottie-wc@0.8.5/dist/dotlottie-wc.js';
+
+window.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('animation-container');
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if(isIOS){
+        const c = 186/403;
+
+function setLottieSize() {
+    const h_monitor = window.innerHeight;
+    const w_monitor = window.innerWidth;
+
+    let h_mov = h_monitor * 0.9;
+    let w_mov = h_mov * c;
+
+    let mv;
+    if(w_monitor >= 1200){
+        mv = (1200 - w_mov) / 2; // 右詰め余白計算
+    } else {
+        mv = (w_monitor - w_mov) / 2;
+    }
+
+    lottieEl.style.width = 'auto';
+    lottieEl.style.height = `${h_mov}px`;
+    lottieEl.style.left = `${mv}px`;
+    lottieEl.style.top = `${(h_monitor - h_mov)/2}px`; // 縦中央寄せ
+}
+
+
+        const lottieEl = document.createElement('dotlottie-wc');
+        lottieEl.src = "/pushweb/maishow.json";
+        lottieEl.autoplay = true;
+        lottieEl.loop = true;
+        container.appendChild(lottieEl);
+
+        setLottieSize();
+        window.addEventListener('resize', setLottieSize);
+    } else {
+        const videoEl = document.createElement('video');
+        videoEl.src = "showmai.webm";
+        videoEl.autoplay = true;
+        videoEl.muted = true;
+        videoEl.playsInline = true;
+        videoEl.loop = true;
+        videoEl.style.width = "auto";
+        videoEl.style.height = "90vh";
+        container.appendChild(videoEl);
+    }
 });
 </script>
 </body>

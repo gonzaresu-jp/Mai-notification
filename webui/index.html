@@ -2,9 +2,23 @@
 <html lang="ja">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>まいちゃん通知ダッシュボード</title>
+    
+    <!-- iOS対応のmeta情報 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="まいちゃん通知" />
+    
+    <!-- アイコン -->
     <link rel="icon" href="/pushweb/icon.ico">
+    <link rel="apple-touch-icon" href="/pushweb/icon-192.webp" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/pushweb/icon-192.webp" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/pushweb/icon-512.webp" />
+    
+    <!-- manifest -->
+    <link rel="manifest" href="/pushweb/manifest.json" />
+    
     <link rel="stylesheet" href="/pushweb/style.css" />
 </head>
 <body id="app-body">
@@ -142,7 +156,10 @@
         </div>
     </footer>
 
+    <!-- iOS Helper を main.js より先に読み込む -->
+    <script src="/pushweb/ios-helper.js"></script>
     <script src="/pushweb/main.js"></script>
+    
     <script>
 (() => {
     const DEBUT_DATE = new Date(2021, 2, 21);
@@ -249,11 +266,13 @@
                     }
                 }
 
-                // 初期状態を反映
-                updateToggleImage();
-
                 // トグル変更時に画像を切り替え
                 notifyToggle.addEventListener('change', updateToggleImage);
+                
+                // 少し遅延させて初期状態を反映（DOMが完全に準備されるのを待つ）
+                setTimeout(() => {
+                    updateToggleImage();
+                }, 100);
             }
         });
     </script>
