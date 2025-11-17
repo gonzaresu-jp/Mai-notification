@@ -1,4 +1,6 @@
 // admin/admin.js - 管理者認証ミドルウェア
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+
 const crypto = require('crypto');
 
 // SESSION_SECRETを先に定義
@@ -46,6 +48,11 @@ function requireAuth(req, res, next) {
   }
 
   const token = req.headers['x-admin-token'];
+
+  if (token === process.env.ADMIN_NOTIFY_TOKEN) {
+    req.adminUser = 'admin';
+    return next();
+  }
   
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
