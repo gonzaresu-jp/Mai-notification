@@ -177,8 +177,13 @@ sqlite3 data.db
 
 .tables
 .headers on
-.modecolumn
+.mode column
 .mode csv
 SELECT * FROM subscription;
+
+#delete
+DELETE FROM notifications
+WHERE id IN (32, 35, 36, 37, 38);
+
 
 ```
