@@ -203,16 +203,21 @@
             </div>
             
             <div class="form-group">
-                <label for="icon">アイコンURL</label>
-                <input type="text" id="icon" value="https://elza.poitou-mora.ts.net/pushweb/ad.ico" />
-                <div class="helper-text">通知のアイコン画像URL</div>
-            </div>
-            
-            <div class="button-group">
-                <button type="button" class="btn-clear" id="btn-clear">クリア</button>
-                <button type="submit" class="btn-send" id="btn-send">📤 全員に送信</button>
-            </div>
-        </form>
+                 <label for="icon">アイコンURL</label>
+                 <input type="text" id="icon" value="https://elza.poitou-mora.ts.net/pushweb/ad.ico" />
+                 <div class="helper-text">通知のアイコン画像URL</div>
+             </div>
+
+             <div class="form-group">
+                 <label for="clientId">特定クライアントID (デバッグ用)</label>
+                 <input type="text" id="clientId" placeholder="特定の client_id を入力 (空欄で全員に送信)" />
+                 <div class="helper-text">特定のデバイスにのみ送る場合は client_id を入力。空欄の場合は全員に送信されます。</div>
+             </div>
+             <div class="button-group">
+                 <button type="button" class="btn-clear" id="btn-clear">クリア</button>
+                 <button type="submit" class="btn-send" id="btn-send">📤 全員に送信</button>
+             </div>
+         </form>
         
         <div class="status-message" id="status-message"></div>
         
@@ -255,6 +260,7 @@
         const bodyInput = document.getElementById('body');
         const urlInput = document.getElementById('url');
         const iconInput = document.getElementById('icon');
+        const clientIdInput = document.getElementById('clientId');
         const btnSend = document.getElementById('btn-send');
         const btnClear = document.getElementById('btn-clear');
         const statusMessage = document.getElementById('status-message');
@@ -286,6 +292,7 @@
             const body = bodyInput.value.trim();
             const url = urlInput.value.trim();
             const icon = iconInput.value.trim();
+            const clientId = clientIdInput.value.trim();
             
             if (!title || !body) {
                 showStatus('タイトルとメッセージは必須です', 'error');
@@ -307,6 +314,8 @@
                     body: JSON.stringify({
                         type: 'admin',
                         settingKey: 'admin',
+                        // 🌟 clientId を API に渡す 🌟
+                        clientId: clientId || undefined,
                         data: {
                             title: title,
                             body: body,
@@ -332,7 +341,7 @@
                 // フォームをクリア
                 setTimeout(() => {
                     form.reset();
-                    iconInput.value = 'https://elza.poitou-mora.ts.net/pushweb/icon.ico';
+                    iconInput.value = 'https://elza.poitou-mora.ts.net/pushweb/ad.ico';
                     updatePreview();
                 }, 2000);
                 
@@ -343,6 +352,20 @@
                 btnSend.textContent = '📤 全員に送信';
             }
         });
+
+        function updateSendButton() {
+            if (clientIdInput.value.trim()) {
+                btnSend.textContent = '📤 特定デバイスに送信';
+            } else {
+                btnSend.textContent = '📤 全員に送信';
+            }
+        }
+
+        // リスナーに追加
+        clientIdInput.addEventListener('input', updateSendButton);
+
+        // フォームロード時にも実行
+        updateSendButton();
         
         function showStatus(message, type) {
             statusMessage.textContent = message;
