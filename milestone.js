@@ -14,7 +14,7 @@ class MilestoneScheduler {
     
     // 記念日の定義
     this.DEBUT_DATE = new Date(2021, 2, 21); // 2021年3月21日
-    this.BIRTHDAY = { month: 11, day: 7 }; // 12月7日（月は0-indexなので11）
+    this.BIRTHDAY = { month: 12, day: 7 }; // 1月7日（月は0-indexなので11）
     this.ANNIVERSARY = { month: 2, day: 21 }; // 3月21日
     
     // 通知済みマイルストーンを記録（重複防止）
@@ -84,7 +84,7 @@ class MilestoneScheduler {
     const milestones = [];
     
     // 1000日ごと
-    if (days > 0 && days % 1000 === 0) {
+    if (days > 0 && (days % 1000 === 0 || days === 1717)) {
       milestones.push({
         type: 'debut_days',
         days: days,
