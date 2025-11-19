@@ -1,5 +1,5 @@
-// service-worker.js (iOS対応版 v3.1)
-const VERSION = 'v3.1-ios';
+// service-worker.js (iOS対応版 v3.2.1)
+const VERSION = 'v3.2.1';
 const ALWAYS_OPEN_NEW_TAB = false;
 
 // iOS対応: キャッシュ設定
@@ -11,8 +11,8 @@ const urlsToCache = [
   '/pushweb/main.js',
   '/pushweb/ios-helper.js',
   '/pushweb/icon.ico',
-  '/pushweb/icon-192.png',
-  '/pushweb/icon-512.png'
+  '/pushweb/icon-192.webp',
+  '/pushweb/icon-512.webp'
 ];
 
 console.log(`[SW ${VERSION}] ========== Service Worker loaded ==========`);
@@ -132,8 +132,7 @@ self.addEventListener('push', event => {
   // iOS対応: 通知オプションを最適化
   const options = { 
     body, 
-    icon: icon || '/pushweb/icon-192.png', // iOS用にPNG優先
-    badge: '/pushweb/icon-192.png', // iOS対応
+    icon: icon || '/pushweb/icon-192.webp', // iOS用にPNG優先
     data: { url, timestamp: now, notificationId: uniqueTag },
     requireInteraction: false,
     tag: uniqueTag,
@@ -159,8 +158,85 @@ self.addEventListener('notificationclick', event => {
   console.log(`[SW ${VERSION}] 🖱️ Notification clicked`);
   event.notification.close();
 
-  let targetUrl = (event.notification.data && event.notification.data.url) || '/pushweb/';
+  // service-worker.js の 'notificationclick' イベント内
+let notificationData = event.notification.data || {};
+// 'url'プロパティか、または'data.url'プロパティからURLを探す
+let targetUrl = notificationData.url || (notificationData.data && notificationData.data.url) || '/pushweb/';
+  const ua = self.navigator.userAgent;
+  const isAndroid = /Android/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  
+  // 🌟 デバッグログ 1: 変換前のURLとデバイス判定の確認 🌟
+  console.log(`[SW ${VERSION}] Debug 1: Target URL (Pre-conversion): ${targetUrl}`);
+  console.log(`[SW ${VERSION}] Debug 1: Is Android: ${isAndroid}, Is iOS: ${isIOS}`);
+
+
+  // --- 1. Androidの場合 (Intentを使って完璧にハンドリング) ---
+  if (isAndroid) {
+    // Twitter
+    if (targetUrl.includes('twitter.com') || targetUrl.includes('x.com')) {
+      const match = targetUrl.match(/\/status\/(\d+)/);
+      if (match) {
+        // Intent構文: アプリがあれば開き、なければ元のhttps URLをブラウザで開く
+        targetUrl = `x://x.com/i/status/${match[1]}#Intent;scheme=x;package=com.twitter.android;S.browser_fallback_url=${encodeURIComponent(targetUrl)};end`;
+        // 🌟 デバッグログ 2-X: XのIntent URL生成の確認 🌟
+        console.log(`[SW ${VERSION}] Debug 2-X: Intent URL Generated: ${targetUrl}`);
+      }
+    }
+    // YouTube
+    else if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
+      let vId = null;
+      // 🚨 潜在的なエラー箇所: new URL() の呼び出しを try-catch で保護することを強く推奨します
+      try {
+        if (targetUrl.includes('v=')) vId = new URL(targetUrl).searchParams.get('v');
+        else if (targetUrl.includes('youtu.be/')) vId = targetUrl.split('youtu.be/')[1]?.split('?')[0];
+      } catch(e) {
+          console.error(`[SW ${VERSION}] ❌ YouTube URL解析エラー: ${e.message}`, targetUrl);
+      }
+      
+      if (vId) {
+        targetUrl = `intent://www.youtube.com/watch?v=${vId}#Intent;scheme=youtube;package=com.google.android.youtube;S.browser_fallback_url=${encodeURIComponent(targetUrl)};end`;
+        // 🌟 デバッグログ 2-Y: YouTubeのIntent URL生成の確認 🌟
+        console.log(`[SW ${VERSION}] Debug 2-Y: Intent URL Generated: ${targetUrl}`);
+      }
+    }
+  }
+  // 🌟 Debug 2 が出力されなかった場合、targetUrl は https:// のままです
+
+
+  // --- 2. iOSの場合 (アプリ起動スキームへ変換) ---
+  else if (isIOS) {
+     if (targetUrl.includes('twitter.com') || targetUrl.includes('x.com')) {
+        const match = targetUrl.match(/\/status\/(\d+)/);
+        if (match) targetUrl = `x://status?id=${match[1]}`;
+     }
+     else if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
+        let vId = null;
+        if (targetUrl.includes('v=')) vId = new URL(targetUrl).searchParams.get('v');
+        else if (targetUrl.includes('youtu.be/')) vId = targetUrl.split('youtu.be/')[1]?.split('?')[0];
+        
+        if (vId) targetUrl = `youtube://${vId}`;
+     }
+  }
+
+  // --- 3. 開く処理 ---
+  
+  // Intent(Android) や アプリスキーム(iOS) の場合
+  if (targetUrl.startsWith('intent://') || targetUrl.startsWith('x://') || targetUrl.startsWith('youtube://')) {
+    // 🌟 デバッグログ 3: Intent/Schemeで開くロジックに進んだ 🌟
+    console.log(`[SW ${VERSION}] Debug 3: Opening Intent/Scheme URL: ${targetUrl}`);
+    event.waitUntil(clients.openWindow(targetUrl));
+    return;
+  }
+
+  // PCや通常のWebリンクの場合
   const fullUrl = new URL(targetUrl, self.location.origin).href;
+  // 🌟 デバッグログ 4: 通常のWeb URLで開くロジックに進んだ 🌟
+  console.log(`[SW ${VERSION}] Debug 4: Opening Full Web URL: ${fullUrl}`);
+  if (ALWAYS_OPEN_NEW_TAB) {
+      event.waitUntil(clients.openWindow(fullUrl));
+      return;
+  }
 
   if (ALWAYS_OPEN_NEW_TAB) {
     event.waitUntil(clients.openWindow(fullUrl));

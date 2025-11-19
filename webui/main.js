@@ -639,26 +639,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 初期状態を反映
         updateToggleImage();
 
-        $toggleNotify.addEventListener('change', async () => {
-            if ($toggleNotify.checked) {
-                try {
-                    const sub = await initPush();
-                    if (sub) await savePlatformSettings();
-                    updatePlatformSettingsVisibility(true);
-                } catch (e) {
-                    console.error('Push初期化失敗:', e);
-                    $toggleNotify.checked = false;
-                    updatePlatformSettingsVisibility(false);
-                }
-            } else {
-                await unsubscribePush();
-                updatePlatformSettingsVisibility(false);
-            }
-            
-            // トグル変更時にも画像を更新
-            updateToggleImage();
-        });
-    })();
+let pushProcessing = false;
+
+$toggleNotify.addEventListener('change', async () => {
+    if (pushProcessing) return; // 処理中なら無視
+    pushProcessing = true;
+
+    try {
+        if ($toggleNotify.checked) {
+            const sub = await initPush(); // subscribe + server send
+            if (sub) await savePlatformSettings();
+        } else {
+            await unsubscribePush();
+        }
+    } catch (e) {
+        console.error('Push操作失敗:', e);
+    } finally {
+        pushProcessing = false;
+    }
+});
+
 
     // テスト通知
     if ($btnSendTest) {

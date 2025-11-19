@@ -67,6 +67,7 @@ class IOSHelper {
                         <p><strong>ステップ4:</strong> ホーム画面のアイコンからアプリを開く</p>
                         <p><strong>ステップ5:</strong> 右上のハンバーガーメニューを開いて通知をオンにする</p>
                         <p><strong>ステップ6:</strong> 通知の許可を求められたら「許可」をタップ</p>
+                        <p><strong>ステップ7:</strong> テスト通知を押して通知が届くか確認する</p>
                     </div>
                     
                     <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px; margin: 20px 0;">
