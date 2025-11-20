@@ -1,221 +1,300 @@
-// twitcasting.js (API対応版 - 認証/Webhook管理用)
+const http = require('http');
+const https = require('https');
+const { URL } = require('url');
+const puppeteer = require('puppeteer');
+const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const querystring = require('querystring');
-require('dotenv').config();
-// --- TwitCasting API 設定 ---
-// 登録情報から取得
 
+const SEEN_PATH = path.join(__dirname, 'twicas_seen.json');
+const CONFIG_PATH = path.join(__dirname, 'twitcasting-token.json'); // トークンファイルパスを定義
+const HEADLESS = true; // 💡 修正: ここを true から false に変更
+const CHECK_INTERVAL_MS = 5 * 1000;
+const MAX_AGE_HOURS = 24;
+const NOTIFY_ENDPOINT = 'http://localhost:8080/api/notify';
+const ICON_URL = 'https://elza.poitou-mora.ts.net/pushweb/icon.ico';
+const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
+
+const API_BASE_URL = 'https://apiv2.twitcasting.tv';
 const CLIENT_ID = process.env.TWITCASTING_CLIENT_ID;
 const CLIENT_SECRET = process.env.TWITCASTING_CLIENT_SECRET;
 
-const API_BASE_URL = 'https://apiv2.twitcasting.tv';
-const AUTH_URL = 'https://apiv2.twitcasting.tv/oauth2/authorize';
-const TOKEN_URL = 'https://apiv2.twitcasting.tv/oauth2/access_token';
+// --------------------------------------------------------
+// アクセストークンの読み込みロジック (グローバルスコープで即時実行)
+// 1. 環境変数から読み込み
+// 2. なければ twitcasting-token.json から読み込み、 access_token フィールドもチェックする
+let accessToken = process.env.TWITCASTING_ACCESS_TOKEN || null; // グローバルで初期化
 
-// Webhook/Callback URL (Nginx経由の公開URL)
-const BASE_DOMAIN = 'https://elza.poitou-mora.ts.net';
-// TwitCastingアプリに登録されているURLが /api/ のみだったので、今回は /api/twicas/auth/callback を使用
-const CALLBACK_PATH = '/api/twicas/auth/callback';
-const WEBHOOK_PATH = '/api/twitcasting-webhook'; // server.jsに既に実装済み
+// 通知一時無効フラグ（環境変数で制御）
+const DISABLE_NOTIFICATIONS = process.env.DISABLE_NOTIFICATIONS === '1' || process.env.DISABLE_NOTIFICATIONS === 'true';
+if (DISABLE_NOTIFICATIONS) console.log('TwitCasting: notifications disabled via DISABLE_NOTIFICATIONS');
 
-const CALLBACK_URL = `${BASE_DOMAIN}${CALLBACK_PATH}`;
-const WEBHOOK_URL = `${BASE_DOMAIN}${WEBHOOK_PATH}`;
-
-// 永続化ファイル（アクセストークン保存用）
-const TOKEN_FILE = path.resolve(__dirname, 'twitcasting-token.json');
-
-// 購読対象のユーザー (スクリーンID)
-let TARGET_USER_SCREEN_ID = 'c:koinoya_mai'; 
-
-// ユーザーIDから'c:'プレフィックスを削除する関数
-function sanitizeScreenId(screenId) {
-    if (screenId.startsWith('c:')) {
-        return screenId.substring(2);
-    }
-    return screenId;
-}
-
-// 初期化時にIDをクリーンアップ
-TARGET_USER_SCREEN_ID = sanitizeScreenId(TARGET_USER_SCREEN_ID);
-
-let accessToken = null;
-
-// --- 状態管理 ---
-function loadToken() {
+if (!accessToken) {
     try {
-        if (fs.existsSync(TOKEN_FILE)) {
-            const data = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
-            accessToken = data.access_token;
-            return true;
+        const configText = fs.readFileSync(CONFIG_PATH, 'utf8');
+        const config = JSON.parse(configText);
+        // TWITCASTING_ACCESS_TOKEN, access_token (APIレスポンス形式), または accessToken キーを探す
+        accessToken = config.TWITCASTING_ACCESS_TOKEN || config.access_token || config.accessToken || null; 
+        if (accessToken) {
+            console.log('Access token successfully loaded from twitcasting-token.json.');
         }
     } catch (e) {
-        console.error('TwitCasting token load error:', e);
-    }
-    return false;
-}
-
-function saveToken(token) {
-    try {
-        fs.writeFileSync(TOKEN_FILE, JSON.stringify(token), 'utf8');
-        accessToken = token.access_token;
-        console.log('TwitCasting: Access token saved.');
-    } catch (e) {
-        console.error('TwitCasting token save error:', e);
+        // twitcasting-token.json が存在しない、または無効な場合は警告を出すが、処理は続行
+        if (e.code !== 'ENOENT') {
+            console.warn(`[Config Load Warning] Error reading twitcasting-token.json: ${e.message}`);
+        }
     }
 }
+// --------------------------------------------------------
 
-// --- 認証フロー ---
+// 🔴 修正: lastLiveId をアカウントIDごとに管理する Map に変更
+const lastLiveStatus = new Map();
 
-// 認証開始URLを生成
-function getAuthUrl() {
-    const params = querystring.stringify({
-        client_id: CLIENT_ID,
-        response_type: 'code',
-        redirect_uri: CALLBACK_URL,
-        scope: 'readonly webhooks' // Webhook登録には webhooks スコープが必要
-    });
-    return `${AUTH_URL}?${params}`;
+// --- seen.json の読み書き ---
+function loadSeen() {
+    try { return JSON.parse(fs.readFileSync(SEEN_PATH, 'utf8')); } catch { return {}; }
+}
+function saveSeen(state) {
+    try { fs.writeFileSync(SEEN_PATH, JSON.stringify(state, null, 2)); } catch(e){ console.error('seen.json write error:', e); }
 }
 
-// 認証コードをトークンに交換する (server.jsから呼び出される)
-async function exchangeCodeForToken(code) {
-    try {
-        const res = await axios.post(
-            TOKEN_URL,
-            querystring.stringify({
-                grant_type: 'authorization_code',
-                client_id: CLIENT_ID,
-                client_secret: CLIENT_SECRET,
-                code: code,
-                redirect_uri: CALLBACK_URL
-            }),
-            {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            }
-        );
-        saveToken(res.data);
-        return res.data.access_token;
-    } catch (e) {
-        console.error('TwitCasting: Failed to exchange code for token:', e.response ? e.response.data : e.message);
+// --- retry ヘルパ ---
+async function retryAsync(fn, retries=3, baseDelay=300) {
+    for(let i=0;i<retries;i++){
+        try{ return await fn(); } catch(err){
+            const m = (err && (err.message || String(err))) || '';
+            const transient = /ECONNRESET|ETIMEDOUT|ECONNREFUSED|ENETUNREACH/i.test(m); 
+            if(i === retries-1 || !transient) throw err;
+            const delay = baseDelay * Math.pow(2,i);
+            console.warn(`retryAsync transient error (${m}), retry ${i+1}/${retries} after ${delay}ms in ${fn.name || 'anonymous function'}`);
+            await new Promise(r=>setTimeout(r,delay));
+        }
+    }
+}
+
+// --- 通知送信 ---
+// --- 通知送信 (no-op にできるように) ---
+async function sendNotify(screenId, movieId, title='【ツイキャス】ライブ配信') {
+    // 早期終了: 環境変数で通知を無効化している場合
+    if (DISABLE_NOTIFICATIONS) {
+        console.log(`[${screenId}] notify suppressed (DISABLE_NOTIFICATIONS) - movie ${movieId}`);
+        return;
+    }
+    // 早期終了: トークンやエンドポイントが設定されていない場合も安全にスキップ
+    if (!NOTIFY_TOKEN || !NOTIFY_ENDPOINT) {
+        console.log(`[${screenId}] notify skipped (missing token or endpoint) - movie ${movieId}`);
+        return;
+    }
+const payload = {
+  data: {
+    title: notify.title,
+    body: notify.body,
+    url: `https://twitcasting.tv/${screenId}/movie/${movieId}`,
+    icon: 'https://twitcasting.tv/favicon.ico'
+  },
+  type: 'twitcasting',
+  settingKey: screenId
+};
+
+
+    let agent;
+    try{
+        const parsed = new URL(NOTIFY_ENDPOINT);
+        agent = parsed.protocol === 'https:' ? new https.Agent({keepAlive:false}) : new http.Agent({keepAlive:false});
+    }catch(e){ agent = undefined; }
+
+    try{
+        const res = await retryAsync(()=>fetch(NOTIFY_ENDPOINT,{
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'X-Notify-Token': NOTIFY_TOKEN },
+            body: JSON.stringify(payload),
+            agent,
+            timeout:15000
+        }),3,300);
+        if(!res.ok){
+            const text = await res.text().catch(()=>'<no body>');
+            console.error(`[${screenId}] notify failed:`, res.status, text);
+        } else console.log(`[${screenId}] notify sent for movie ${movieId}`);
+    }catch(e){ console.error(`[${screenId}] notify error:`, e.stack||e); }
+}
+
+
+// --- プライベートライブ判定 ---
+async function checkPrivateLive(screenId){
+    const url = `https://twitcasting.tv/${screenId}/movie/latest`;
+    let browser;
+    try{
+        // puppeteer.launch の headless オプションが false になり、ブラウザが見えるようになる
+        browser = await puppeteer.launch({ headless: HEADLESS, args:['--no-sandbox','--disable-setuid-sandbox'] });
+        const page = await browser.newPage();
+        await retryAsync(async()=>{ await page.goto(url,{waitUntil:'domcontentloaded', timeout:60000}); await new Promise(r=>setTimeout(r,2000)); },3,500);
+        const isPrivate = await page.$eval('.tw-empty-state-text', el=>el.textContent.includes('合言葉')).catch(()=>false);
+        const isLiveBadge = await page.$eval('.tw-movie-thumbnail2-badge[data-status="live"]', ()=>true).catch(()=>false);
+        return isPrivate && isLiveBadge;
+    }catch(e){ console.error(`[${screenId}] checkPrivateLive error:`,e.stack||e); return false; }
+    finally{ if(browser) await browser.close(); }
+}
+
+// --- APIライブ判定 ---
+// --- APIライブ判定 (堅牢化版) ---
+// --- ポーリング開始 ---
+function startWatcher(screenId, intervalMs=CHECK_INTERVAL_MS){
+    if (!screenId) {
+        console.warn('[TwitCasting] startWatcher called with empty screenId — skipping');
+        return;
+    }
+
+    console.log(`[TwitCasting] ${screenId} の監視開始 (間隔: ${intervalMs/1000}秒)`);
+
+    setInterval(async()=>{
+        try{ await checkLiveStatus(screenId); }catch(e){ console.error(`[${screenId}] watcher error:`, e && (e.stack || e.message) ? (e.stack || e.message) : e); }
+    }, intervalMs);
+
+    (async()=>{ 
+        try{ await checkLiveStatus(screenId); }catch(e){ console.error(`[${screenId}] initial check error:`, e && (e.stack || e.message) ? (e.stack || e.message) : e); } 
+    })();
+}
+
+// --- APIライブ判定（タイトルを body に入れる修正版） ---
+async function checkLiveStatus(screenId){
+    if (!screenId) {
+        console.warn('[checkLiveStatus] empty screenId provided');
         return null;
     }
-}
 
-// --- Webhook 登録 (購読) ---
+    // 前回の状態を参照（null / 'private' / movieId）
+    let currentLiveId = lastLiveStatus.get(screenId) || null;
+    const prevLiveId = currentLiveId;
 
-/**
- * スクリーンIDからTwitCastingの数値IDを取得する
- * @returns {string | null} ユーザーID
- */
-async function getTwitCastingUserId() {
-    if (!accessToken) {
-        console.error('TwitCasting: Access token is missing.');
-        return null;
-    }
-    
-    // API v2 /users/:screen_id の形式を使用
-    const url = `${API_BASE_URL}/users/${TARGET_USER_SCREEN_ID}`;
-    
-    try {
-        const userRes = await axios.get(url, {
-            headers: { 'Authorization': `Bearer ${accessToken}`, 'X-Api-Version': '2.0' }
+    try{
+        if(!accessToken) throw new Error('TWITCASTING_ACCESS_TOKEN 未設定 (twitcasting-token.jsonまたは環境変数で設定してください)');
+
+        const res = await axios.get(`${API_BASE_URL}/users/${screenId}/movies?limit=1&status=live`, {
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'X-Api-Version':'2.0' },
+            validateStatus:()=>true,
+            timeout: 15000
         });
 
-        if (userRes.data && userRes.data.user && userRes.data.user.id) {
-            console.log(`TwitCasting: Screen ID ${TARGET_USER_SCREEN_ID} is User ID ${userRes.data.user.id}`);
-            return userRes.data.user.id;
-        } else {
-            console.error('TwitCasting: Failed to parse user ID response.', userRes.data);
-            return null;
+        if (!(res.status >= 200 && res.status < 300)) {
+            console.warn(`[${screenId}] TwitCasting API returned status ${res.status}`);
         }
+
+        const movie = Array.isArray(res.data?.movies) ? res.data.movies[0] : null;
+
+        // --- APIによるライブ判定 ---
+        if (movie) {
+            const isLiveFlag = movie.status === 'live' || movie.is_live === true;
+            // started_at の妥当性チェック
+            let startedOk = true;
+            if (movie.started_at) {
+                const started = new Date(movie.started_at).getTime();
+                const now = Date.now();
+                const ageMs = now - started;
+                const maxAcceptMs = (MAX_AGE_HOURS || 24) * 60 * 60 * 1000;
+                if (isNaN(started) || ageMs > maxAcceptMs) {
+                    startedOk = false;
+                    console.warn(`[${screenId}] movie.started_at too old or invalid: ${movie.started_at}`);
+                }
+            }
+
+            if (isLiveFlag && startedOk) {
+                const observedTitle = movie.title || 'タイトル不明';
+                console.log(
+                  `[${screenId}] Polling Result: 🟢 Live (ID: ${movie.id}, Title: "${observedTitle}", status=${movie.status}, is_live=${movie.is_live})`
+                );
+
+                // 新規ライブ開始のときだけ通知
+                if (movie.id !== prevLiveId) {
+                    currentLiveId = movie.id;
+                    lastLiveStatus.set(screenId, currentLiveId);
+                    console.log(`🔴 Live started! movie_id: ${currentLiveId}`);
+
+                    const notifyTitle = '【ツイキャス】ライブ開始';
+                    const notifyBody  = observedTitle; // ← body にタイトルを入れる
+
+                    // プレビュー用ログ
+                    console.log(`[Notify Preview] screenId=${screenId}, movieId=${currentLiveId}, title="${notifyTitle}", body="${notifyBody}"`);
+
+                    try {
+                        await sendNotify(
+                          screenId,
+                          currentLiveId,
+                          notifyTitle,
+                          notifyBody
+                        );
+                    } catch (e) {
+                        console.error(`[${screenId}] sendNotify error:`, e && (e.stack || e.message) ? (e.stack || e.message) : e);
+                    }
+                } else {
+                    // 既に同じライブIDを保持している場合は状態維持（lastLiveStatus を最新に）
+                    lastLiveStatus.set(screenId, movie.id);
+                }
+                return movie.id;
+            } else {
+                // API に movie があるがライブ確定できない場合はログにしてフォールバックへ
+                console.log(`[${screenId}] API returned movie but not confirmed live (status=${movie.status}, is_live=${movie.is_live}, started_ok=${startedOk})`);
+            }
+        } else {
+            // movies 配列が空
+            console.log(`[${screenId}] API returned no movies`);
+        }
+
+        // --- APIでライブ判定できない場合はプライベート判定（Puppeteer）へフォールバック ---
+        const isPrivate = await checkPrivateLive(screenId);
+        if (isPrivate) {
+            console.log(`[${screenId}] Polling Result: 🔒 Private Live detected (via Puppeteer)`);
+            if (prevLiveId !== 'private') {
+                currentLiveId = 'private';
+                lastLiveStatus.set(screenId, 'private');
+                console.log('🔒 プライベートライブ中！');
+
+                const notifyTitle = '【ツイキャス】プライベートライブ';
+                const notifyBody  = '(合言葉あり)'; // checkPrivateLive がタイトルを返すように拡張したらここを置き換える
+
+                console.log(`[Notify Preview] screenId=${screenId}, movieId=private, title="${notifyTitle}", body="${notifyBody}"`);
+
+                try {
+                    await sendNotify(screenId, 'private', notifyTitle, notifyBody);
+                } catch (e) {
+                    console.error(`[${screenId}] sendNotify error:`, e && (e.stack || e.message) ? (e.stack || e.message) : e);
+                }
+            }
+            return 'private';
+        }
+
+        // --- 最終的にオフライン ---
+        if (prevLiveId !== null) {
+            console.log(`[${screenId}] Polling Result: ⚪ Offline (No public or private live detected). previous=${prevLiveId}`);
+        } else {
+            console.log(`[${screenId}] Polling Result: ⚪ Offline (No public or private live detected)`);
+        }
+        lastLiveStatus.set(screenId, null);
+        return null;
+
     } catch (e) {
-        console.error(`TwitCasting: Failed to get user ID for ${TARGET_USER_SCREEN_ID} (API Call failed):`, e.response ? e.response.data : e.message);
+        // transient なエラーはログにして null を返す（監視は継続）
+        const msg = e && (e.message || e.stack) || String(e);
+        console.error(`[${screenId}] checkLiveStatus error:`, msg);
+        console.log(`[${screenId}] Polling Result: ⚠️ Error occurred`);
         return null;
     }
 }
 
 
-// Webhookを登録/購読する
-// --- subscribeToWebhook の差し替え ---
-async function subscribeToWebhook() {
-  // NOTE: subscribe requires Application-level auth (Basic auth using CLIENT_ID:CLIENT_SECRET).
-  // Ensure CLIENT_ID and CLIENT_SECRET are available (app credentials).
-  if (!CLIENT_ID || !CLIENT_SECRET) {
-    console.error('TwitCasting: CLIENT_ID/CLIENT_SECRET missing for webhook registration.');
-    return false;
-  }
 
-  // ユーザーIDを取得（GET /users/:screen_id はユーザトークンでも動くが、publicでも行ける）
-  const userId = await getTwitCastingUserId();
-  if (!userId) {
-    console.error('TwitCasting: Webhook購読に失敗。ターゲットUser IDが不明です。');
-    return false;
-  }
+// --- ポーリング開始 ---
+function startWatcher(screenId, intervalMs=CHECK_INTERVAL_MS){
+    console.log(`[TwitCasting] ${screenId} の監視開始 (間隔: ${intervalMs/1000}秒)`);
 
-  const basic = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
+    setInterval(async()=>{
+        try{ await checkLiveStatus(screenId); }catch(e){ console.error(`[${screenId}] watcher error:`, e.stack||e.message); }
+    }, intervalMs);
 
-  // 正しいイベント名に変更（livestart, liveend）
-  const body = {
-    user_id: String(userId),
-    events: ['livestart', 'liveend']
-  };
-
-  try {
-    // Application-level registration requires Basic auth per API docs
-    const res = await axios.post(
-      `${API_BASE_URL}/webhooks`,
-      body,
-      {
-        headers: {
-          'Authorization': `Basic ${basic}`,
-          'X-Api-Version': '2.0',
-          'Content-Type': 'application/json'
-        },
-        validateStatus: () => true // レスポンスのステータスを自分で判定してログする
-      }
-    );
-
-    if (res.status === 201 || res.status === 200) {
-      console.log(`TwitCasting: Webhook subscription successful for user ${TARGET_USER_SCREEN_ID} (${userId}). Response:`, res.data);
-      return true;
-    }
-    if (res.status === 409) {
-      console.log(`TwitCasting: Webhook already subscribed for user ${TARGET_USER_SCREEN_ID}. Response:`, res.data);
-      return true;
-    }
-
-    console.error('TwitCasting: Failed to subscribe to webhook:', res.status, res.data);
-    return false;
-
-  } catch (e) {
-    console.error('TwitCasting: subscribe request failed:', e && (e.response ? e.response.data : e.message));
-    return false;
-  }
+    (async()=>{ 
+        try{ await checkLiveStatus(screenId); }catch(e){ console.error(`[${screenId}] initial check error:`, e.stack||e.message); } 
+    })();
 }
 
-
-// 起動時にトークンを読み込み、Webhookを購読する
-async function initTwitcastingApi() {
-    loadToken();
-
-    if (!accessToken) {
-        console.warn('TwitCasting: Access token is missing. Please initiate OAuth flow.');
-        // 認証用のURLをログに出力しておけば、管理者が見て手動で認証を開始できる
-        console.log(`[認証URL]: ${getAuthUrl()}`);
-        return false;
-    }
-
-    console.log('TwitCasting: Token loaded. Attempting to subscribe to webhook.');
-    return subscribeToWebhook();
-}
-
-module.exports = {
-    getAuthUrl,
-    exchangeCodeForToken,
-    subscribeToWebhook,
-    initTwitcastingApi,
-    TARGET_USER_SCREEN_ID,
-    CALLBACK_PATH // server.jsで使う
-};
+// --- exports ---
+module.exports = { checkLiveStatus, startWatcher, sendNotify, checkPrivateLive };

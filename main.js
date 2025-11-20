@@ -46,9 +46,10 @@ try {
 }
 
 // --- API (モジュールからの POST を受ける) ---
+// 既存の /api/notify の先頭付近を次に置き換え
 app.post('/api/notify', (req, res) => {
   if (LOCAL_API_TOKEN) {
-    const token = req.headers['x-local-api-token'] || req.body?.token;
+    const token = (req.headers['x-local-api-token'] || req.headers['x-notify-token'] || req.body?.token);
     if (!token || token !== LOCAL_API_TOKEN) {
       console.warn('Unauthorized /api/notify attempt');
       return res.status(401).send('Unauthorized');
@@ -57,6 +58,7 @@ app.post('/api/notify', (req, res) => {
   console.log('[API通知] 受信:', req.body);
   res.status(200).send('OK');
 });
+
 
 // 起動処理
 async function main() {
@@ -165,6 +167,27 @@ async function main() {
     );
   }
 
+// 💡 新しい TwitCasting サーバーの起動
+if (typeof twitcasting.startTwitcastingServer === 'function') {
+    startPromises.push(
+      (async () => {
+        try {
+          await twitcasting.startTwitcastingServer(3002); // ポート3002で独立起動
+          console.log('TwitCasting API init 完了');
+
+          // ✅ ポーリング開始（プライベート配信も対応）
+          if (typeof twitcasting.startPolling === 'function') {
+            twitcasting.startPolling('@c:koinoya_mai', 10); // 30秒間隔
+            console.log('TwitCasting polling 起動');
+          }
+        } catch (e) {
+          console.error('TwitCasting API init 起動エラー:', e);
+          throw e;
+        }
+      })()
+    );
+}
+
   // TwitCasting 初期化
   if (typeof twitcasting.initTwitcastingApi === 'function') {
     startPromises.push(
@@ -202,6 +225,30 @@ async function main() {
       })()
     );
   }
+
+  // main の startPromises 構築部分の適切な場所（例えば Twitter watchers の後）に追加
+const MONITOR_TWITCASTING = ['g:115504375006997232927']; // 監視したい screenId を列挙
+
+if (typeof twitcasting.startWatcher === 'function') {
+  startPromises.push((async () => {
+    const results = [];
+    for (const s of MONITOR_TWITCASTING) {
+      try {
+        // twitcasting.startWatcher(screenId, intervalMs)
+        twitcasting.startWatcher(s, 5 * 1000); // 30秒間隔でポーリング
+        results.push({ screen: s, status: 'ok' });
+        console.log(`twitcasting.startWatcher(${s}) 起動`);
+      } catch (err) {
+        console.error(`twitcasting.startWatcher(${s}) error:`, err && err.message ? err.message : err);
+        results.push({ screen: s, status: 'error', error: err });
+      }
+    }
+    return results;
+  })());
+} else {
+  console.log('twitcasting.startWatcher 未定義。');
+}
+
 
   // bilibili watchers
   if (typeof bilibiliVideo.startWatcher === 'function') {
