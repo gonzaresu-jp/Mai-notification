@@ -73,16 +73,18 @@ if (updatedDate && updatedDate > publishedDate) {
                 title = title || 'YouTube新着'; // タイトルが空の場合のフォールバック
 
                 // ライブ/プレミア公開の判定は困難なので、シンプルに通知
-                const payload = {
-                    type: 'youtube',
-                    settingKey: 'youtube',
-                    data: {
-                        title: String(title),
-                        url,
-                        icon: ICON_URL,
-                        published: publishedStr || null
-                    }
-                };
+const payload = {
+    type: 'youtube',
+    settingKey: 'youtube',
+    data: {
+        title: '【YouTube】', // 修正：文字列としてクォート
+        body: String(title),
+        url,
+        icon: ICON_URL,
+        published: publishedStr || null
+    }
+};
+
 
                 axios.post(LOCAL_API_URL, payload, {
                     headers: {
