@@ -1,5 +1,5 @@
-// service-worker.js (iOS対応版 v3.2.1)
-const VERSION = 'v3.2.1';
+// service-worker.js (iOS対応版 v3.3)
+const VERSION = 'v3.3';
 const ALWAYS_OPEN_NEW_TAB = false;
 
 // iOS対応: キャッシュ設定
@@ -62,17 +62,40 @@ self.addEventListener('activate', event => {
 
 // iOS対応: オフライン対応のフェッチイベント
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // キャッシュがあればそれを返す
-        if (response) {
-          return response;
-        }
-        // なければネットワークから取得
-        return fetch(event.request);
-      })
-  );
+  // すぐに非同期関数を作ってその Promise を渡す（reject を絶対に外に出さない）
+  event.respondWith((async () => {
+    try {
+      // まず通常のネットワークフェッチを試みる
+      const networkResponse = await fetch(event.request);
+      // 成功ならそのまま返す（必要ならキャッシュへ保存する処理をここに追加）
+      return networkResponse;
+    } catch (err) {
+      // ネットワーク失敗時のフォールバック処理
+      console.warn('SW fetch failed for', event.request.url, err);
+
+      // ① キャッシュにフォールバックがあれば返す（推奨）
+      try {
+        const cache = await caches.open('static-v1'); // キャッシュ名は環境に合わせて
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+      } catch (cacheErr) {
+        console.warn('cache lookup failed', cacheErr);
+      }
+
+      // ② 特定リソース（アイコン等）用の固定フォールバックを返す
+      if (event.request.url.endsWith('/icon.ico')) {
+        // 事前に install イベントでキャッシュしておいたファイルを返すのが理想
+        try {
+          const cache = await caches.open('static-v1');
+          const fallback = await cache.match('/fallback-icon.ico');
+          if (fallback) return fallback;
+        } catch (e) { /* ignore */ }
+      }
+
+      // ③ 最終的なデフォルトレスポンス（404 や空のレスポンスなど）
+      return new Response('', { status: 503, statusText: 'Service Unavailable' });
+    }
+  })());
 });
 
 // --- push event ---
@@ -170,37 +193,71 @@ let targetUrl = notificationData.url || (notificationData.data && notificationDa
   console.log(`[SW ${VERSION}] Debug 1: Target URL (Pre-conversion): ${targetUrl}`);
   console.log(`[SW ${VERSION}] Debug 1: Is Android: ${isAndroid}, Is iOS: ${isIOS}`);
 
+// --- Android 用: ドメインに基づいて開くURLを決定 ---
+if (isAndroid && targetUrl) {
+    // pushweb を開くべきドメインのリスト
+    const pushWebDomains = [
+        'youtube.com',
+        'youtu.be', // YouTubeの短縮URL用
+        'x.com', 
+        'twitter.com',
+        'twitcasting.tv',
+        'fanbox.cc'
+    ];
+    
+    // 開くべき最終的なURLを決定する変数
+    let finalUrl = targetUrl;
+    
+    // ターゲットURLが pushWebDomains のいずれかに含まれているかチェック
+    const shouldOpenPushWeb = pushWebDomains.some(domain => targetUrl.includes(domain));
+    
+    // YouTube, X, TwitCasting, Fanbox の場合
+    if (shouldOpenPushWeb) {
+        // 固定の pushweb URL に書き換え
+        finalUrl = 'https://elza.poitou-mora.ts.net/pushweb/';
+        console.log(`[SW ${VERSION}] Info: Target URL is a special domain. Opening fixed pushweb URL -> ${finalUrl}`);
+    } else {
+        // その他の直リンク
+        console.log(`[SW ${VERSION}] Info: Target URL is direct. Opening original URL -> ${finalUrl}`);
+    }
 
-  // --- 1. Androidの場合 (Intentを使って完璧にハンドリング) ---
-  if (isAndroid) {
-    // Twitter
-    if (targetUrl.includes('twitter.com') || targetUrl.includes('x.com')) {
-      const match = targetUrl.match(/\/status\/(\d+)/);
-      if (match) {
-        // Intent構文: アプリがあれば開き、なければ元のhttps URLをブラウザで開く
-        targetUrl = `x://x.com/i/status/${match[1]}#Intent;scheme=x;package=com.twitter.android;S.browser_fallback_url=${encodeURIComponent(targetUrl)};end`;
-        // 🌟 デバッグログ 2-X: XのIntent URL生成の確認 🌟
-        console.log(`[SW ${VERSION}] Debug 2-X: Intent URL Generated: ${targetUrl}`);
-      }
-    }
-    // YouTube
-    else if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
-      let vId = null;
-      // 🚨 潜在的なエラー箇所: new URL() の呼び出しを try-catch で保護することを強く推奨します
-      try {
-        if (targetUrl.includes('v=')) vId = new URL(targetUrl).searchParams.get('v');
-        else if (targetUrl.includes('youtu.be/')) vId = targetUrl.split('youtu.be/')[1]?.split('?')[0];
-      } catch(e) {
-          console.error(`[SW ${VERSION}] ❌ YouTube URL解析エラー: ${e.message}`, targetUrl);
-      }
-      
-      if (vId) {
-        targetUrl = `intent://www.youtube.com/watch?v=${vId}#Intent;scheme=youtube;package=com.google.android.youtube;S.browser_fallback_url=${encodeURIComponent(targetUrl)};end`;
-        // 🌟 デバッグログ 2-Y: YouTubeのIntent URL生成の確認 🌟
-        console.log(`[SW ${VERSION}] Debug 2-Y: Intent URL Generated: ${targetUrl}`);
-      }
-    }
-  }
+    event.waitUntil(
+        (async () => {
+            try {
+                // 決定した finalUrl を開く
+                console.log(`[SW ${VERSION}] Debug: opening Android URL -> ${finalUrl}`);
+                await clients.openWindow(finalUrl);
+                console.log(`[SW ${VERSION}] Debug: URL open requested for: ${finalUrl}`);
+            } catch (e) {
+                console.warn(`[SW ${VERSION}] openWindow failed, attempting client messaging fallback:`, e);
+
+                // フォールバックロジックはそのまま維持
+                try {
+                    const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+                    if (windowClients && windowClients.length > 0) {
+                        const sameOrigin = windowClients.find(c => {
+                            try { return new URL(c.url).origin === self.location.origin; } catch(e){ return false; }
+                        }) || windowClients[0];
+
+                        try {
+                            await sameOrigin.focus();
+                            // フォールバックでも finalUrl を使用
+                            sameOrigin.postMessage({ type: 'OPEN_URL', url: finalUrl });
+                            console.log(`[SW ${VERSION}] Debug: posted OPEN_URL to client for: ${finalUrl}`);
+                        } catch (e) {
+                            console.warn(`[SW ${VERSION}] client messaging fallback failed:`, e);
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[SW ${VERSION}] matchAll fallback failed:`, e);
+                }
+            }
+        })()
+    );
+
+    return; // Android ブロック終了
+}
+
   // 🌟 Debug 2 が出力されなかった場合、targetUrl は https:// のままです
 
 

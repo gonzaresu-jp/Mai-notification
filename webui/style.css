@@ -175,13 +175,63 @@ header h1 {
 .nav-list a:hover, .nav-list button:hover {
     background-color: #921768; /* primaryの少し濃い色 */
 }
-
 /* 全体通知トグル */
 .menu-notification-toggle {
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
+.subscriber-linked {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  vertical-align: middle;
+  position:absolute;
+}
+.subscriber-linked svg { width:100%; height:100%; display:block; }
+
+
+.platform-name-row { display:flex; align-items:center; gap:8px; padding:6px 20px; }
+.platform-name-label { min-width:88px; font-size:0.95rem; }
+.platform-name-controls { display:flex; align-items:center; }
+.platform-name-status { margin-top:6px; font-size:0.85rem; }
+
+/* wrapper を横並びにして input を伸ばす（推奨） */
+.subscriber-input-wrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;           /* 必要なら制限する */
+  padding: 0px 20px;
+}
+
+/* input を横幅いっぱいに拡張 */
+.platform-name-input {
+  flex: 1 1 0;
+  min-width: 0;         /* flex 子の幅切り詰め対策 */
+  height: 32px;
+  padding:0px 0px 0px 30px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+#subscriber-name-submit{
+    background-color: var(--color-secondary)!important;
+  border-radius: 10px;
+  margin-right: 5px !important;
+  max-height: 40px;
+}
+
+/* アイコンを右に表示（img 要素） */
+.subscriber-linked {
+  width: 20px;
+  height: 20px;
+  display: none;        /* 保存済み時に inline-block などで表示 */
+  flex: 0 0 auto;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+
 
 /* プラットフォーム別設定エリアの開閉 */
 #platform-settings {
@@ -377,15 +427,18 @@ header h1 {
     font-weight: 600;
     width: 100%;
     margin: 1.5rem 0 0;
+    transition: transform 0.3s cubic-bezier(.22,.61,.36,1);
 }
 #more-logs-button:hover {
     background-color: #EEE !important;
+    transform: scale(1.01);
+    cursor: pointer;
 }
 
 
 /* --- メインコンテンツ：日数表示 --- */
 .stats-card {
-    background-color: rgba(255,255,255,0.7); /* カード背景はやや不透明にして可読性確保 */
+    background-color: rgba(255,255,255,0.25); /* カード背景はやや不透明にして可読性確保 */
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 2rem;
@@ -432,12 +485,13 @@ header h1 {
 .log-section h2 {
     font-size: 1.4rem;
     color: var(--color-text);
-    border-bottom: 2px solid var(--color-highlight-bg);
-    padding-bottom: 5px;
     margin-bottom: 1.5rem;
 }
 /* ログカードのダミースタイル */
 .card {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 1s ease-out forwards;
     display: flex;
     gap: 1rem;
     padding: 1rem;
@@ -445,23 +499,47 @@ header h1 {
     background-color: rgba(255,255,255,0.8);
     border-radius: 10px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-    border-left: 5px solid var(--color-primary); /* アクセントライン */
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-left: 5px solid var(--color-primary);
+    
+    /* ✅ ホバー用のイージング */
+    transition: transform 0.3s cubic-bezier(.22,.61,.36,1), 
+                box-shadow 0.3s ease, 
+                opacity 0.3s ease, 
+                max-height 0.3s ease;
+    overflow: hidden;
+    max-height: 500px;
 }
 
-.card .body{
-  margin: 0;
+.card .body {
+    margin: 0;
+    overflow-wrap: anywhere;
+    max-width: 100%;
 }
 
 .card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-5px)!important;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
 }
+
 .card .title a {
     color: var(--color-primary);
 }
+
 .card.hidden-log {
     display: none;
+}
+
+/* ✅ 修正: display: none の代わりに visibility で非表示 */
+.card.filtered-out {
+    opacity: 0 !important;
+    max-height: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+    /* アニメーションを無効化 */
+    animation: none !important;
 }
 .icon{
     width: 64px;
@@ -491,6 +569,7 @@ footer {
     text-decoration: none;
     font-size: 0.9rem;
     transition: color 0.2s;
+    transition: transform 0.3s cubic-bezier(.22,.61,.36,1);
 }
 .footer-links a:hover {
     color: var(--color-highlight-bg);
@@ -639,6 +718,67 @@ footer {
   position: relative;
 }
 
+.history {background-color: rgba(255,255,255,0.25); border-left: 5px solid var(--color-primary); padding: 1rem; border-radius: 10px; align-items: center;}
+
+.view-list {
+    list-style: none;
+}
+
+/* log-section 内の controls を Flexbox に設定 */
+.log-section .controls {
+    display: flex;
+    align-items: center; /* 縦方向の中央揃え */
+    gap: 10px; /* 要素間のスペース */
+    margin-bottom: 15px;
+    position: relative; /* 設定コンテナの絶対配置の基準点にする */
+}
+
+/* log-section 内の controls を Flexbox に設定 */
+.log-section .controls {
+    display: flex;
+    align-items: center; 
+    justify-content: space-between; /* 👈 このプロパティで左右に要素が分かれます */
+    margin-bottom: 15px;
+    position: relative; 
+}
+
+/* 左側のコントロール要素間のスペースを調整 */
+.log-section .controls-left {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* 要素間のスペース */
+}
+
+/* 右側の設定コンテナの配置を controls-right の中での絶対位置に変更 */
+.log-section .controls-right {
+    position: relative; /* 設定コンテナの基準点 */
+    height: 100%; /* 高さの調整 */
+    display: flex;
+    align-items: center;
+}
+
+.log-settings-container {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  padding: 9px;
+  min-width: 180px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgb(0,0,0);
+  z-index: 2;
+
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity .2s ease, transform .2s ease, visibility .2s;
+}
+
+.log-settings-container.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 /* iOS Safari の既定レンダリング差に対する追加指定 */
 @supports (-webkit-touch-callout: none) {
   .toggle-notify .slider { -webkit-appearance: none; }
@@ -649,3 +789,157 @@ footer {
   body::before { background-size: cover; } /* そのまま */
 }
 
+.fade-in {
+    /* 1. アニメーションの適用 */
+    animation: fadeInUp 0.5s ease-out forwards;
+
+    /* 2. アニメーション開始前の初期状態（重要！） */
+    /* アニメーションを繰り返さない場合、初期設定は@keyframesの0%と一致させる必要はありませんが、
+       アニメーション前の状態を明示的に定義しておくと分かりやすいです。
+       ここでは、アニメーションが始まる前の透明で下にある状態を定義します。
+    */
+    opacity: 0;
+    transform: translateY(20px); /* 初期位置: 通常位置より20px下 */
+}
+.d1 {animation-delay: 0.1s;}
+.d2 {animation-delay: 0.2s;}
+.d3 {animation-delay: 0.3s;}
+.d4 {animation-delay: 0.4s;}
+
+/* 3. @keyframes の定義 */
+@keyframes fadeInUp {
+    /* アニメーション開始時 (0%) */
+    0% {
+        opacity: 0;              /* 透明 */
+        transform: translateY(20px); /* 通常位置より20px下 */
+    }
+
+    /* アニメーション終了時 (100%) */
+    100% {
+        opacity: 1;              /* 完全に見える */
+        transform: translateY(0);    /* 通常位置 (移動なし) */
+    }
+}
+
+.fade {
+        /* 1. アニメーションの適用 */
+    animation: fadeIn 0.5s ease-out forwards;
+    opacity: 0;
+}
+@keyframes fadeIn {
+        /* アニメーション開始時 (0%) */
+    0% {
+        opacity: 0;              /* 透明 */
+    }
+
+    /* アニメーション終了時 (100%) */
+    100% {
+        opacity: 1;              /* 完全に見える */
+    }
+} 
+/* 初期状態：メニューは非表示（かつ transition 無効） */
+body.menu-transitions-disabled #nav-menu .nav-list li {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: none; /* ロード時は遷移なし */
+}
+/* リストアイテムの初期状態（確実に li に適用されていることを確認） */
+#nav-menu > .nav-list > li {
+    opacity: 0;
+    transform: translateX(20px);
+    transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+/* is-faded-in クラスの定義も当然必要です */
+#nav-menu > .nav-list > li.is-faded-in {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+ :root {
+    --icon-gap: 10px;
+    --tooltip-bg: rgba(0,0,0,0.85);
+    --tooltip-color: #fff;
+    --tooltip-radius: 6px;
+  }
+
+  footer { padding: 12px 16px; text-align:center; font-size:14px;}
+  footer p { margin:0 0 17px 0; font-weight:600; }
+
+  .icon-row { display:inline-flex; gap:var(--icon-gap); align-items:center; justify-content:center; flex-wrap:wrap; }
+  .icon-link {
+    --size: var(--icon-size);
+    position:relative;
+    display:inline-flex;
+    width:var(--size);
+    height:var(--size);
+    min-width:var(--size);
+    min-height:var(--size);
+    align-items:center;
+    justify-content:center;
+    text-decoration:none;
+    border-radius:6px;
+    background:transparent;
+    transition: transform .12s ease, background .12s ease;
+  }
+
+  .icon-link img {
+    max-height:50px;
+    fill:currentColor;
+    color:#333;
+  }
+
+  /* Hover/Focus styling */
+  .icon-link:hover,
+  .icon-link:focus {
+    transform: translateY(-4px);
+    background: rgba(0,0,0,0.04);
+    outline: none;
+  }
+
+  /* Tooltip (platform name) */
+  .tooltip {
+    position:absolute;
+    left:50%;
+    transform: translateX(-50%) translateY(6px);
+    bottom: calc(100% + 8px);
+    padding:6px 8px;
+    white-space:nowrap;
+    font-size:12px;
+    border-radius: var(--tooltip-radius);
+    background: var(--tooltip-bg);
+    color: var(--tooltip-color);
+    opacity:0;
+    pointer-events:none;
+    transition: opacity .12s ease, transform .12s ease;
+    z-index:50;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  }
+
+  .icon-link:hover .tooltip,
+  .icon-link:focus .tooltip {
+    opacity:1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Visually hidden text for screen readers */
+  .visually-hidden {
+    position:absolute !important;
+    height:1px; width:1px;
+    overflow:hidden;
+    clip:rect(1px,1px,1px,1px);
+    white-space:nowrap;
+    border:0; padding:0; margin:-1px;
+  }
+
+  /* Optional: adjust SVG stroke color for X icon */
+  .icon-link svg path[stroke-width] {
+    stroke: currentColor;
+    stroke: #333;
+    fill: none;
+  }
+
+  /* Focus visible for accessibility */
+  .icon-link:focus {
+    box-shadow: 0 0 0 3px rgba(21,156,228,0.25);
+  }
