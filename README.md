@@ -9,8 +9,8 @@
 
 - [概要](#概要)
 - [受け取れる通知](#受け取れる通知)
-- <font size="50">**[iPhone（iOS）手順](iPhone（iOS）手順)**</font>
-- [PC/Android(ブラウザ)](#PC/Android(ブラウザ))
+- ##[iPhone（iOS）手順](iPhone(iOS)手順)
+- [PC/Android](#PC/Android)
   - [Android設定](#Android設定)
   - [Androidをホーム画面に追加(Webアプリ化)](#Androidをホーム画面に追加(Webアプリ化))
 - [運用・注意点](#運用注意点)
@@ -36,17 +36,7 @@
 
 ---
 
-## 使い方（ユーザー向け）
-
-### 共通 URL
-
-```
-https://elza.poitou-mora.ts.net/pushweb/
-```
-
----
-
-### iPhone（iOS）手順
+### iPhone(iOS)手順
 
 1. Safari で URL を開く。
    * `https://elza.poitou-mora.ts.net/pushweb/`
@@ -77,7 +67,7 @@ https://elza.poitou-mora.ts.net/pushweb/
 
 ---
 
-## PC / Android（ブラウザ）手順
+## PC/Android
 
 1. 共通 URL を開く。
 
@@ -96,7 +86,7 @@ https://elza.poitou-mora.ts.net/pushweb/
 
 ---
 
-## Android 設定
+## Android設定
 
 # 推奨ブラウザ
 
