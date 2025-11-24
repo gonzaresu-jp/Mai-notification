@@ -13,6 +13,7 @@
 - [PC・Android](#pcandroid)
   - [Android設定](#Android設定)
   - [Androidをホーム画面に追加(Webアプリ化)](#Androidをホーム画面に追加Webアプリ化)
+- [トラブルシューティング](#トラブルシューティング)
 - [運用・注意点](#運用・注意点)
 - [不具合報告](#不具合報告)
 - [開発者メモ](#開発者メモ)
@@ -39,7 +40,7 @@
 # iPhone(iOS)
 
 1. Safari で URL を開く。
-   * `https://elza.poitou-mora.ts.net/pushweb/`
+   * https://elza.poitou-mora.ts.net/pushweb/
 2. 画面下の共有ボタン⎙をタップ。
 
    <img src="./img/IMG_3205.png" width="300">
@@ -71,8 +72,8 @@
 
 1. 共通 URL を開く。
 
-   * `https://elza.poitou-mora.ts.net/pushweb/`
-  <img src="./img/image.png.png" width="300">
+   * https://elza.poitou-mora.ts.net/pushweb/
+  <img src="./img/image.png" width="300">
 
 2. 右上のハンバーガーメニューを開く。
 <img src="./img/image 1.png" width="300">
@@ -95,7 +96,9 @@
 ### Chrome の通知設定確認手順
 
 1. Chrome を開き、右上のメニュー（3点） → **設定** → **通知** を選択。
+
    <img src="./img/Screenshot_20251116-231344.png" width="300">
+
 2. サイト一覧から `elza.poitou-mora.ts.net` を選択して詳細設定を行う。
 
    <img src="./img/Screenshot_20251116-231405.png" width="300">
@@ -125,6 +128,7 @@
 ## トラブルシューティング
 
 * **通知が来ない**
+  - データベースとの連携が切れていると思われるので、通知テストで通知が来なかった場合は再度通知をオンにし直してください。
 
 ---
 
