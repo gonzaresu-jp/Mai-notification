@@ -9,10 +9,10 @@
 
 - [概要](#概要)
 - [受け取れる通知](#受け取れる通知)
-# [iPhone（iOS）手順](#iPhone（iOS）手順)
+[iPhone（iOS）手順](#iPhone（iOS）手順)
 - [PC/Android(ブラウザ)](#PC/Android(ブラウザ))
-  - [Android 設定](#Android 設定)
-  - [Android をホーム画面に追加（Web アプリ化）](#Android をホーム画面に追加（Web アプリ化）)
+  - [Android設定](#Android設定)
+  - [Androidをホーム画面に追加(Webアプリ化)](#Androidをホーム画面に追加(Webアプリ化))
 - [運用・注意点](#運用注意点)
 - [不具合報告](#不具合報告)
 - [開発者メモ](#開発者メモ)
@@ -52,25 +52,24 @@ https://elza.poitou-mora.ts.net/pushweb/
    * `https://elza.poitou-mora.ts.net/pushweb/`
 2. 画面下の共有ボタン⎙をタップ。
 
-   [./img/IMG_3213.png]
    <img src="./img/IMG_3205.png" width="300">
-4. 「ホーム画面に追加」を選択して、任意のアプリ名で追加。
+3. 「ホーム画面に追加」を選択して、任意のアプリ名で追加。
 
    <img src="./img/IMG_3213.png" width="300">
    <img src="./img/IMG_3214.png" width="300">
-5. ホーム画面に追加したアイコンをタップして起動する。
+4. ホーム画面に追加したアイコンをタップして起動する。
 
    <img src="./img/IMG_3215.png" width="300">
-6. 右上のハンバーガーメニューを開く（または横スワイプでメニュー表示）。
+5. 右上のハンバーガーメニューを開く（または横スワイプでメニュー表示）。
 <img src="./img/IMG_3216.png" width="300">
 
-8. 「通知を受信する」をオンにして、通知の許可ダイアログで許可する。
+6. 「通知を受信する」をオンにして、通知の許可ダイアログで許可する。
    * ユーザーネームは任意で入力可能。
 <img src="./img/IMG_3217.png" width="300">
 <img src="./img/IMG_3219.png" width="300">
 <img src="./img/IMG_3221.png" width="300">
    
-9. 「テスト通知」ボタンを押して、受信と指定ページ遷移が正常に動作するか確認する。
+7. 「テスト通知」ボタンを押して、受信と指定ページ遷移が正常に動作するか確認する。
 
    <img src="./img/IMG_3221.png" width="300">
 
@@ -107,10 +106,10 @@ https://elza.poitou-mora.ts.net/pushweb/
 
 1. Chrome を開き、右上のメニュー（3点） → **設定** → **通知** を選択。
    <img src="./img/Screenshot_20251116-231344.png" width="300">
-3. サイト一覧から `elza.poitou-mora.ts.net` を選択して詳細設定を行う。
+2. サイト一覧から `elza.poitou-mora.ts.net` を選択して詳細設定を行う。
 
    <img src="./img/Screenshot_20251116-231405.png" width="300">
-4. 推奨設定例（参考）：
+3. 推奨設定例（参考）：
 
    * 通知表示をデフォルトに設定
    * ポップアップ通知をオン
@@ -124,7 +123,7 @@ https://elza.poitou-mora.ts.net/pushweb/
 
 ---
 
-## Android をホーム画面に追加（Web アプリ化）
+## Androidをホーム画面に追加(Web アプリ化)
 
 * Chrome のメニューから「ホーム画面に追加」で Web アプリ化可能です。Web アプリ化した場合、通知の管理はブラウザ（Chrome）ではなくアプリ単位の通知設定になります。
 * アプリ化した後は、端末のアプリ通知設定または当該ウェブアプリ内の通知設定から調整してください。
