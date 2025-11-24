@@ -52,13 +52,13 @@
 
    <img src="./img/IMG_3215.png" width="300">
 5. 右上のハンバーガーメニューを開く（または横スワイプでメニュー表示）。
+
 <img src="./img/IMG_3216.png" width="300">
 
 6. 「通知を受信する」をオンにして、通知の許可ダイアログで許可する。
    * ユーザーネームは任意で入力可能。
-<img src="./img/IMG_3217.png" width="300">
-<img src="./img/IMG_3219.png" width="300">
-<img src="./img/IMG_3221.png" width="300">
+  
+<img src="./img/IMG_3217.png" width="300"><img src="./img/IMG_3219.png" width="300"><img src="./img/IMG_3221.png" width="300">
    
 7. 「テスト通知」ボタンを押して、受信と指定ページ遷移が正常に動作するか確認する。
 
@@ -76,10 +76,13 @@
   <img src="./img/image.png" width="300">
 
 2. 右上のハンバーガーメニューを開く。
+
 <img src="./img/image 1.png" width="300">
 3. 「通知を受信する」をオンにして、表示される各プラットフォーム設定を必要に応じて有効化する。
+
 <img src="./img/image 2.png" width="300">
 4. 「テスト通知を送信」を実行し、デバイス側で通知が表示されること、通知から指定 URL に遷移できることを確認する。
+
 <img src="./img/image 3.png" width="300">
 #### 注意点
 
