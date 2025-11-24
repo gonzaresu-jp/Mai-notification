@@ -5,13 +5,13 @@
 
 ---
 
+## <a href="#user-content-iphoneios">iPhone(iOS)の設定</a>
+
 ## 目次
 
 - [概要](#概要)
 - [受け取れる通知](#受け取れる通知)
-
-<a font-size="50px" href="#user-content-iphoneios">iPhone(iOS)</a>
-
+- <a href="#user-content-iphoneios">iPhone(iOS)</a>
 - [PC・Android](#pcandroid)
   - [Android設定](#Android設定)
   - [Androidをホーム画面に追加(Webアプリ化)](#Androidをホーム画面に追加Webアプリ化)
