@@ -50,7 +50,7 @@ https://elza.poitou-mora.ts.net/pushweb/
 
 1. Safari で URL を開く。
    * `https://elza.poitou-mora.ts.net/pushweb/`
-2. 画面下の共有ボタン（矢印が上向きのアイコン）をタップ。
+2. 画面下の共有ボタン⎙をタップ。
 
    [./img/IMG_3213.png]
    <img src="./img/IMG_3205.png" width="300">
@@ -103,7 +103,7 @@ https://elza.poitou-mora.ts.net/pushweb/
 
 * Chrome を推奨（Brave,Firefox 等でも可）。
 
-### Chrome の通知設定確認手順
+## Chrome の通知設定確認手順
 
 1. Chrome を開き、右上のメニュー（3点） → **設定** → **通知** を選択。
    <img src="./img/Screenshot_20251116-231344.png" width="300">
