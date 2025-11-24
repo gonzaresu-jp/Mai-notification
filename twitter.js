@@ -161,6 +161,16 @@ async function checkOneUser(page, username, seenState) {
       await page.goto(`https://x.com/${username}`, { waitUntil: 'networkidle2', timeout: 60000 });
       // ページ安定待ち
       await new Promise(r => setTimeout(r, 2500));
+      
+      // ▼▼▼【追加部分】ここから ▼▼▼
+      // 2000ピクセルほどスクロールして追加読み込みを誘発
+      await page.evaluate(() => {
+        window.scrollBy(0, 2000);
+      });
+      // 追加読み込み完了まで少し待機（2秒）
+      await new Promise(r => setTimeout(r, 2000));
+      // ▲▲▲【追加部分】ここまで ▲▲▲
+
     }, 3, 500);
 
 

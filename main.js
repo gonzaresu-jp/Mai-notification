@@ -3,6 +3,7 @@ require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
+const cron = require('node-cron');
 
 const youtube = require('./youtube');
 const youtubeCommunity = require('./ytcommunity');
@@ -132,32 +133,40 @@ async function main() {
   const startPromises = [];
 
   // YouTube webhook 起動
-  try {
-    if (typeof youtube.startWebhook === 'function') {
-      startPromises.push(
-        (async () => {
-          try {
-            await youtube.startWebhook(YT_WEBHOOK_PORT);
-            console.log(`YouTube webhook 起動 on ${YT_WEBHOOK_PORT}`);
-          } catch (e) {
-            console.error('YouTube webhook 起動エラー:', e && e.message ? e.message : e);
-            throw e;
-          }
-        })()
-      );
-    } else {
-      console.log('youtube.startWebhook 未定義。');
-    }
-  } catch (e) {
-    console.error('YouTube 起動ハンドルエラー:', e);
-  }
+  try {
+    if (typeof youtube.startWebhook === 'function') {
+      startPromises.push(
+        (async () => {
+          try {
+            await youtube.startWebhook(YT_WEBHOOK_PORT);
+            console.log(`YouTube webhook 起動 on ${YT_WEBHOOK_PORT}`);
+
+            // ★★★ 起動直後の初回購読リクエストを追加 ★★★
+            if (typeof youtube.subscribeAllChannels === 'function') {
+              await youtube.subscribeAllChannels();
+              console.log('✅ YouTube チャンネルの初回購読リクエストを送信しました。');
+            }
+            // ★★★ 追加ここまで ★★★
+
+          } catch (e) {
+            console.error('YouTube webhook 起動エラー:', e && e.message ? e.message : e);
+            throw e;
+          }
+        })()
+      );
+    } else {
+      console.log('youtube.startWebhook 未定義。');
+    }
+  } catch (e) {
+    console.error('YouTube 起動ハンドルエラー:', e);
+  }
 
   // youtubeCommunity
   if (typeof youtubeCommunity.startPolling === 'function') {
     startPromises.push(
       (async () => {
         try {
-          youtubeCommunity.startPolling();
+          await youtubeCommunity.startPolling();
           console.log('youtubeCommunity polling 起動');
         } catch (e) {
           console.error('youtubeCommunity 起動エラー:', e && e.message ? e.message : e);
@@ -227,7 +236,7 @@ if (typeof twitcasting.startTwitcastingServer === 'function') {
   }
 
   // main の startPromises 構築部分の適切な場所（例えば Twitter watchers の後）に追加
-const MONITOR_TWITCASTING = ['g:115504375006997232927']; // 監視したい screenId を列挙
+const MONITOR_TWITCASTING = ['c:koinoya_mai']; // 監視したい screenId を列挙
 
 if (typeof twitcasting.startWatcher === 'function') {
   startPromises.push((async () => {
@@ -334,6 +343,23 @@ if (typeof twitcasting.startWatcher === 'function') {
     });
   } catch (e) {
     console.error('起動タスク集約中にエラー:', e && e.message ? e.message : e);
+  }
+  // ▼▼▼ YouTube 購読 自動更新スケジューラーの追加 ▼▼▼
+  if (typeof youtube.subscribeAllChannels === 'function') {
+    // 毎日午前 3:00 に実行する
+    // 構文: '分 時 日 月 曜日' -> '0 3 * * *'
+    cron.schedule('0 3 * * *', async () => {
+      console.log('[Cron] YouTube購読の自動更新を開始します...');
+      try {
+        await youtube.subscribeAllChannels();
+        console.log('✅ [Cron] YouTube購読の自動更新が完了しました。');
+      } catch (e) {
+        console.error('❌ [Cron] YouTube購読の自動更新中にエラー:', e && e.message ? e.message : e);
+      }
+    });
+    console.log('✅ YouTube購読自動更新スケジューラー起動 (毎日 3:00)');
+  } else {
+    console.warn('⚠️ youtube.subscribeAllChannels 関数が定義されていません。自動更新は無効です。');
   }
 }
 
