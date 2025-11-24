@@ -9,8 +9,8 @@
 
 - [概要](#概要)
 - [受け取れる通知](#受け取れる通知)
-- [iPhone(iOS)手順](#iPhone(iOS)手順)
-- [PC/Android](#PC/Android)
+- [iPhone(iOS)](#iPhone(iOS))
+- [PC・Android](#PC・Android)
   - [Android設定](#Android設定)
   - [Androidをホーム画面に追加(Webアプリ化)](#Androidをホーム画面に追加Webアプリ化)
 - [運用・注意点](#運用・注意点)
@@ -36,7 +36,7 @@
 
 ---
 
-### iPhone(iOS)手順
+# iPhone(iOS)
 
 1. Safari で URL を開く。
    * `https://elza.poitou-mora.ts.net/pushweb/`
@@ -67,7 +67,7 @@
 
 ---
 
-## PC/Android
+## PC・Android
 
 1. 共通 URL を開く。
 
