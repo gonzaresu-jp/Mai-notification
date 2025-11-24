@@ -9,7 +9,7 @@
 
 - [概要](#概要)
 - [受け取れる通知](#受け取れる通知)
-- [iPhone(iOS)](#iPhoneiOS)
+- <p size="50px">iPhone(iOS)</p>(#iPhoneiOS)
 - [PC・Android](#pcandroid)
   - [Android設定](#Android設定)
   - [Androidをホーム画面に追加(Webアプリ化)](#Androidをホーム画面に追加Webアプリ化)
