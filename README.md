@@ -9,7 +9,7 @@
 
 - [概要](#概要)
 - [受け取れる通知](#受け取れる通知)
-- <font size="5">**iPhone（iOS）手順**</font>
+- [iPhone(iOS)手順](#iPhone(iOS)手順)
 - [PC/Android](#PC/Android)
   - [Android設定](#Android設定)
   - [Androidをホーム画面に追加(Webアプリ化)](#Androidをホーム画面に追加Webアプリ化)
@@ -92,7 +92,7 @@
 
 * Chrome を推奨（Brave,Firefox 等でも可）。
 
-## Chrome の通知設定確認手順
+### Chrome の通知設定確認手順
 
 1. Chrome を開き、右上のメニュー（3点） → **設定** → **通知** を選択。
    <img src="./img/Screenshot_20251116-231344.png" width="300">
@@ -113,7 +113,7 @@
 
 ---
 
-## Androidをホーム画面に追加(Web アプリ化)
+## Androidをホーム画面に追加(Webアプリ化)
 
 * Chrome のメニューから「ホーム画面に追加」で Web アプリ化可能です。Web アプリ化した場合、通知の管理はブラウザ（Chrome）ではなくアプリ単位の通知設定になります。
 * アプリ化した後は、端末のアプリ通知設定または当該ウェブアプリ内の通知設定から調整してください。
