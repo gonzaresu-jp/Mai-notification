@@ -78,7 +78,7 @@
 1. 共通 URL を開く。
 
    * https://elza.poitou-mora.ts.net/pushweb/
-  <img src="./img/image.png" width="300">
+  (./img/image.png)
 
 2. 右上のハンバーガーメニューを開く。
 
