@@ -21,13 +21,13 @@
     
     <link rel="stylesheet" href="/pushweb/style.css" />
 </head>
-<body id="app-body">
+<body id="app-body" class="menu-transitions-disabled">
     <header>
         <div class="header-left">
-            <a href="https://elza.poitou-mora.ts.net/pushweb/" rel="noopener noreferrer" style="text-decoration: none; color: inherit;"><h2>通知ダッシュボード</h2></a>
+            <a href="https://elza.poitou-mora.ts.net/pushweb/" rel="noopener noreferrer" style="text-decoration: none; color: inherit;"><h2 class="fade">通知ダッシュボード</h2></a>
         </div>
         
-        <div class="hamburger-icon" id="hamburger-toggle" aria-controls="nav-menu" aria-expanded="false">
+        <div class="hamburger-icon fade" id="hamburger-toggle" aria-controls="nav-menu" aria-expanded="false">
             <span></span>
             <span></span>
             <span></span>
@@ -52,7 +52,44 @@
                         </label>
                     </div>
                 </li>
-                
+<li class="nav-setting-item">
+  <div id="subscriber-name-settings" class="platform-subscriber-name-section">
+    
+    <!-- ラベル + チェックマーク -->
+    <div class="platform-name-row">
+      <div class="platform-name-label">
+        ユーザー名
+      </div>
+    </div>
+
+<!-- 入力欄 + 送信ボタン -->
+<div class="platform-name-controls">
+  
+  <div class="subscriber-input-wrapper">
+    <input id="subscriber-name-input" type="text" class="platform-name-input" placeholder="ユーザー名を入力">
+
+    <!-- ここに PNG のチェックアイコンを配置 -->
+    <img id="subscriber-linked-icon"
+         class="subscriber-linked"
+         src="https://img.icons8.com/?size=100&id=sz8cPVwzLrMP&format=png&color=000000"
+         alt="linked"
+         style="display:none;">
+  </div>
+
+  <button id="subscriber-name-submit" class="platform-setting-button">
+    保存
+  </button>
+
+</div>
+
+<div id="subscriber-name-status" class="platform-name-status"></div>
+
+
+  </div>
+</li>
+
+
+
                 <li class="nav-setting-item">
                     <div id="platform-settings">
                         <ul class="platform-settings-list">
@@ -106,32 +143,80 @@
 
     <main>
         <div class="stats-card">
-            <h2 style="margin-top: 0; font-size: 1.5rem;">カウント</h2>
+            <h2 style="margin-top: 0; font-size: 1.5rem;" class="fade-in">カウント</h2>
             <div class="stats-grid">
-                <div class="stat-item">
-                    <div class="label">デビューから</div>
-                    <div class="value" id="days-since-debut">0</div>
+                <div class="stat-item fade">
+                    <div class="label fade-in">デビューから</div>
+                    <div class="value fade-in d1" id="days-since-debut">0</div>
                 </div>
-                <div class="stat-item">
-                    <div class="label">お誕生日まで</div>
-                    <div class="value" id="days-to-birthday">0</div>
+                <div class="stat-item fade">
+                    <div class="label fade-in d1">お誕生日まで</div>
+                    <div class="value fade-in d2" id="days-to-birthday">0</div>
                 </div>
-                <div class="stat-item">
-                    <div class="label">周年記念まで</div>
-                    <div class="value" id="days-to-anniversary">0</div>
+                <div class="stat-item fade">
+                    <div class="label fade-in d2">周年記念まで</div>
+                    <div class="value fade-in d3" id="days-to-anniversary">0</div>
                 </div>
             </div>
         </div>
 
         <div class="log-section">
-            <h2>通知履歴</h2>
+            <h2 class="history fade">通知履歴</h2>
             
             <div class="controls">
-                <button id="btn-refresh">手動更新</button>
-                <label>
-                    自動更新
-                    <input id="auto-refresh" class="plain-checkbox" type="checkbox" />
-                </label>
+                <div class="controls-left">
+                    <button id="btn-refresh" class="fade d2">手動更新</button>
+                    <label class="fade d2">
+                        自動更新
+                        <input id="auto-refresh" class="plain-checkbox" type="checkbox" />
+                    </label>
+                </div>
+                <button id="btn-log-settings" class="fade d2" aria-expanded="false" aria-controls="log-settings-container">表示設定</button>
+                <div id="log-settings-container" class="log-settings-container" aria-hidden="true">
+                    <ul class="view-list">
+                        <li>
+                            <button id="filter-sync-notification" class="filter-button is-on">
+                                通知設定連動: ON
+                            </button>
+                        </li>
+                        <li>
+                            <button id="filter-twitcasting" class="filter-button is-on" disabled>
+                                TwitCasting: ON
+                            </button>
+                        </li>
+                        <li>
+                            <button id="filter-youtube" class="filter-button is-on" disabled>
+                                YouTube: ON
+                            </button>
+                        </li>
+                        <li>
+                            <button id="filter-youtube-community" class="filter-button is-on" disabled>
+                                YouTube Community: ON
+                            </button>
+                        </li>
+                        <li>
+                            <button id="filter-fanbox" class="filter-button is-on" disabled>
+                                Pixiv Fanbox: ON
+                            </button>
+                        </li>
+                        <li>
+                            <button id="filter-twitter-main" class="filter-button is-on" disabled>
+                                Twitter(@koinoya_mai): ON
+                            </button>
+                        </li>
+                        <li>
+                            <button id="filter-twitter-sub" class="filter-button is-on" disabled>
+                                Twitter(@koinoyamai17): ON
+                            </button>
+                        </li>
+                        <li>
+                            <button id="filter-milestone" class="filter-button is-on" disabled>
+                                記念日通知: ON
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+
                 <select id="limit" style="display:none;">
                     <option value="5">初期表示</option>
                     <option value="50">追加読み込み</option>
@@ -144,22 +229,128 @@
             <div id="status" class="muted"></div>
         </div>
     </main>
+<footer>
+  <p>Mai's Platform</p>
 
-    <footer>
-        <p>Mai's Platform</p>
-        <div class="footer-links">
-            <a href="https://www.youtube.com/@koinoyamaich" target="_blank" rel="noopener noreferrer">YouTube(main)</a> |
-            <a href="https://www.youtube.com/@koinoyamaich" target="_blank" rel="noopener noreferrer">YouTube(sub)</a> |
-            <a href="https://x.com/koinoya_mai" target="_blank" rel="noopener noreferrer">X (Twitter)</a> |
-            <a href="https://www.fanbox.cc/@koinoya-mai" target="_blank" rel="noopener noreferrer">Pixiv Fanbox</a> |
-            <a href="https://twitcasting.tv/c:koinoya_mai" target="_blank" rel="noopener noreferrer">TwitCasting</a>
-        </div>
-    </footer>
+  <div class="footer-links icon-row">
+
+    <!-- YouTube (main) -->
+    <a class="icon-link"
+       href="https://www.youtube.com/@koinoyamaich"
+       target="_blank" rel="noopener noreferrer"
+       aria-label="YouTube (main)"
+       data-tooltip="YouTube (main)">
+      <picture>
+        <source srcset="./logo/yt-main.webp" type="image/webp">
+        <img src="/assets/icons/youtube-sub.svg" alt="">
+      </picture>
+    </a>
+
+    <!-- YouTube (sub) -->
+    <a class="icon-link"
+       href="https://www.youtube.com/@koinoyamaich"
+       target="_blank" rel="noopener noreferrer"
+       aria-label="YouTube (sub)"
+       data-tooltip="YouTube (sub)">
+      <picture>
+        <source srcset="./logo/yt-sub.webp" type="image/webp">
+        <img src="/assets/icons/youtube-sub.svg" alt="">
+      </picture>
+    </a>
+
+    <!-- X -->
+    <a class="icon-link"
+       href="https://x.com/koinoya_mai"
+       target="_blank" rel="noopener noreferrer"
+       aria-label="X (Twitter)"
+       data-tooltip="X (Twitter)">
+      <picture>
+        <img src="./logo/twitter.svg" alt="twitter">
+      </picture>
+    </a>
+
+    <!-- Fanbox -->
+    <a class="icon-link"
+       href="https://www.fanbox.cc/@koinoya-mai"
+       target="_blank" rel="noopener noreferrer"
+       aria-label="Pixiv Fanbox"
+       data-tooltip="Pixiv Fanbox">
+      <picture>
+        <source srcset="./logo/fanbox.webp" type="image/webp">
+        <img src="/assets/icons/fanbox.svg" alt="">
+      </picture>
+    </a>
+
+    <!-- TwitCasting -->
+    <a class="icon-link"
+       href="https://twitcasting.tv/c:koinoya_mai"
+       target="_blank" rel="noopener noreferrer"
+       aria-label="TwitCasting"
+       data-tooltip="TwitCasting">
+      <picture>
+        <source srcset="./logo/twitcasting.webp" type="image/webp">
+        <img src="/assets/icons/twitcasting.svg" alt="">
+      </picture>
+    </a>
+
+    <!-- マシュマロ -->
+    <a class="icon-link"
+       href="https://marshmallow-qa.com/koinoya_mai?t=HBJBYN"
+       target="_blank" rel="noopener noreferrer"
+       aria-label="マシュマロ"
+       data-tooltip="マシュマロ">
+      <picture>
+        <source srcset="./logo/mashumaro.webp" type="image/webp">
+        <img src="./logo/mashumaro.svg" alt="">
+      </picture>
+    </a>
+
+  </div>
+</footer>
 
     <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/pushweb/ios-helper.js"></script>
     <script src="/pushweb/main.js"></script>
+    <script>
+const btn = document.getElementById('btn-log-settings');
+const menu = document.getElementById('log-settings-container');
+
+btn.addEventListener('click', () => {
+  const open = menu.classList.toggle('is-open');
+  btn.setAttribute('aria-expanded', open);
+  menu.setAttribute('aria-hidden', !open);
+});
+
+// メニュー外クリックで閉じる
+document.addEventListener('click', (e) => {
+  if (!btn.contains(e.target) && !menu.contains(e.target)) {
+    menu.classList.remove('is-open');
+    btn.setAttribute('aria-expanded', false);
+    menu.setAttribute('aria-hidden', true);
+  }
+});
+
+</script>
+
+    <script>
+// メニューアイテムに遅延を適用する関数
+function applyHamburgerSequentialFadeIn() {
+    const menuItems = document.querySelectorAll('#nav-menu > .nav-list > li');
     
+    // 【✅ 修正点】: この関数内でリセット処理は行わない
+    
+    const delayIncrement = 100; // ms単位
+
+    menuItems.forEach((item, index) => {
+        const delay = index * delayIncrement;
+        
+        // ★修正点: setTimeout を使って時間差で 'is-faded-in' クラスを追加する
+        setTimeout(() => {
+            item.classList.add('is-faded-in');
+        }, delay);
+    });
+}
+    </script>
     <script>
 (() => {
     const DEBUT_DATE = new Date(2021, 2, 21);
@@ -225,56 +416,191 @@
 })();
 </script>
 
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/pushweb/service-worker.js')
-                .then(reg => console.log('Service Worker 登録成功', reg))
-                .catch(err => console.error('Service Worker 登録失敗', err));
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/pushweb/service-worker.js')
+            .then(reg => console.log('Service Worker 登録成功', reg))
+            .catch(err => console.error('Service Worker 登録失敗', err));
+    }
+
+// 1. フェードイン用関数（定義するだけ。ロード時は呼ばない）
+    function applyHamburgerSequentialFadeIn() {
+        const menuItems = document.querySelectorAll('#nav-menu > .nav-list > li');
+        const delayIncrement = 100; 
+
+        menuItems.forEach((item, index) => {
+            const delay = index * delayIncrement;
+            setTimeout(() => {
+                item.classList.add('is-faded-in');
+            }, delay);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+    const body = document.getElementById('app-body');
+
+    // 1) 初期はトランジション無効（bodyに class を付けておく）
+    //    ここでは最小遅延で「初回描画を挟んで」トランジションを有効にする。
+    requestAnimationFrame(() => {
+        // 1フレーム待ってからさらに次フレームで class を除去 → トランジションが発火するのは以降の操作だけ
+        requestAnimationFrame(() => {
+            body.classList.remove('menu-transitions-disabled');
+        });
+    });
+
+    // --- 以下は既存の初期化処理（メニュー初期化等） ---
+    const toggle = document.getElementById('hamburger-toggle');
+    const overlay = document.getElementById('menu-overlay');
+    const notifyToggle = document.getElementById('toggle-notify');
+
+    // メニュー項目集合
+    const menuItems = document.querySelectorAll('#nav-menu > .nav-list > li');
+    // 初期状態として is-faded-in を外しておく（念のため）
+    menuItems.forEach(item => item.classList.remove('is-faded-in'));
+
+    function applyHamburgerSequentialFadeIn() {
+        const delayIncrement = 100;
+        menuItems.forEach((item, index) => {
+            const delay = index * delayIncrement;
+            setTimeout(() => {
+                item.classList.add('is-faded-in');
+            }, delay);
+        });
+    }
+
+    function toggleMenu(isOpen) {
+        if (isOpen) {
+            // 開くときはまずクラスを外して確実に 0 → 1 の遷移が発生するように
+            menuItems.forEach(item => item.classList.remove('is-faded-in'));
+
+            body.classList.add('menu-open');
+            toggle.setAttribute('aria-expanded', 'true');
+            overlay.style.display = 'block';
+
+            // スライド等の外枠アニメーションがあるなら遅延（既定値の 300ms 等）
+            setTimeout(() => applyHamburgerSequentialFadeIn(), 300);
+        } else {
+            body.classList.remove('menu-open');
+            toggle.setAttribute('aria-expanded', 'false');
+            overlay.style.display = 'none';
+            menuItems.forEach(item => item.classList.remove('is-faded-in'));
+        }
+    }
+
+    // --- 右端スワイプでメニュー開閉 ---
+// 挿入場所: document.addEventListener('DOMContentLoaded', ...) 内、toggleMenu 定義の直後
+(function installRightEdgeSwipeMenu() {
+    const EDGE_START = 270;
+    const OPEN_THRESHOLD = 60;
+    const CLOSE_THRESHOLD = 60;
+    const MAX_VERTICAL_DELTA = 30;
+    let pointerActive = false;
+    let startX = 0, startY = 0;
+    let trackingForOpen = false;
+    let trackingForClose = false;
+
+    function isMenuOpen() {
+        return document.body.classList.contains('menu-open');
+    }
+
+    function onPointerDown(e) {
+        const x = e.clientX || (e.touches && e.touches[0].clientX);
+        const y = e.clientY || (e.touches && e.touches[0].clientY);
+
+        startX = x; startY = y;
+        pointerActive = true;
+        trackingForOpen = false;
+        trackingForClose = false;
+
+        if (!isMenuOpen() && startX >= (window.innerWidth - EDGE_START)) {
+            trackingForOpen = true;
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const body = document.getElementById('app-body');
-            const toggle = document.getElementById('hamburger-toggle');
+        if (isMenuOpen()) {
+            const menu = document.getElementById('nav-menu');
             const overlay = document.getElementById('menu-overlay');
-            const notifyToggle = document.getElementById('toggle-notify');
-
-            function toggleMenu(isOpen) {
-                if (isOpen) {
-                    body.classList.add('menu-open');
-                    toggle.setAttribute('aria-expanded', 'true');
-                    overlay.style.display = 'block';
-                } else {
-                    body.classList.remove('menu-open');
-                    toggle.setAttribute('aria-expanded', 'false');
-                    overlay.style.display = 'none';
+            const target = e.target || (e.touches && e.touches[0].target);
+            
+            if (overlay && overlay.style.display !== 'none' && overlay.contains(target)) {
+                trackingForClose = true;
+            } else if (menu) {
+                const r = menu.getBoundingClientRect();
+                if (startX >= r.left && startX <= r.right && startY >= r.top && startY <= r.bottom) {
+                    trackingForClose = true;
                 }
             }
+        }
+    }
 
-            toggle.addEventListener('click', () => {
-                const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
-                toggleMenu(!isExpanded);
-            });
-            overlay.addEventListener('click', () => toggleMenu(false));
+    function onPointerMove(e) {
+        if (!pointerActive) return;
+        
+        const x = e.clientX || (e.touches && e.touches[0].clientX);
+        const y = e.clientY || (e.touches && e.touches[0].clientY);
+        const dx = x - startX;
+        const dy = y - startY;
 
-            // 通知トグルの画像切り替え
-            if (notifyToggle) {
-                function updateToggleImage() {
-                    if (notifyToggle.checked) {
-                        body.classList.add('notifications-enabled');
-                    } else {
-                        body.classList.remove('notifications-enabled');
-                    }
-                }
+        if (Math.abs(dy) > MAX_VERTICAL_DELTA) {
+            trackingForOpen = false;
+            trackingForClose = false;
+            return;
+        }
 
-                // トグル変更時に画像を切り替え
-                notifyToggle.addEventListener('change', updateToggleImage);
-                
-                // 少し遅延させて初期状態を反映（DOMが完全に準備されるのを待つ）
-                setTimeout(() => {
-                    updateToggleImage();
-                }, 100);
-            }
-        });
-    </script>
+        if (trackingForOpen && dx < -OPEN_THRESHOLD) {
+            toggleMenu(true);
+            trackingForOpen = false;
+            pointerActive = false;
+            if (e.cancelable) e.preventDefault();
+            return;
+        }
+
+        if (trackingForClose && dx > CLOSE_THRESHOLD) {
+            toggleMenu(false);
+            trackingForClose = false;
+            pointerActive = false;
+            if (e.cancelable) e.preventDefault();
+            return;
+        }
+    }
+
+    function onPointerUp() {
+        pointerActive = false;
+        trackingForOpen = false;
+        trackingForClose = false;
+    }
+
+    // タッチデバイス優先で登録
+    if ('ontouchstart' in window) {
+        // タッチデバイスの場合
+        document.addEventListener('touchstart', onPointerDown, { passive: true });
+        document.addEventListener('touchmove', onPointerMove, { passive: false }); // passive: false が重要
+        document.addEventListener('touchend', onPointerUp, { passive: true });
+        document.addEventListener('touchcancel', onPointerUp, { passive: true });
+    } else if (window.PointerEvent) {
+        // Pointer Events 対応デバイス
+        document.addEventListener('pointerdown', onPointerDown, { passive: true });
+        document.addEventListener('pointermove', onPointerMove, { passive: false });
+        document.addEventListener('pointerup', onPointerUp, { passive: true });
+        document.addEventListener('pointercancel', onPointerUp, { passive: true });
+    }
+})();
+
+    toggle.addEventListener('click', () => {
+        const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+        toggleMenu(!isExpanded);
+    });
+    overlay.addEventListener('click', () => toggleMenu(false));
+
+    if (notifyToggle) {
+        function updateToggleImage() {
+            if (notifyToggle.checked) body.classList.add('notifications-enabled');
+            else body.classList.remove('notifications-enabled');
+        }
+        notifyToggle.addEventListener('change', updateToggleImage);
+        setTimeout(updateToggleImage, 100);
+    }
+});
+
+</script>
 </body>
 </html>

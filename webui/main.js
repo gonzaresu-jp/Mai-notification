@@ -1,4 +1,4 @@
-// main.js (client side) - iOS対応版
+// main.js (client side) - フィルター機能付き完全版
 const API_HISTORY = '/api/history';
 const API_VAPID = '/api/vapidPublicKey';
 const API_SUBSCRIBE = '/api/save-platform-settings';
@@ -10,18 +10,30 @@ let autoTimer = null;
 // --- UI制御ユーティリティ ---
 const $body = document.getElementById('app-body');
 
-// iOS Helper チェック
-if (typeof iosHelper === 'undefined') {
-    console.warn('iOS Helper not loaded - iOS features disabled');
+// --- グローバルスコープに updateToggleImage を定義 ---
+function updateToggleImage() {
+    const $toggleNotify = document.getElementById('toggle-notify');
+    if ($toggleNotify) {
+        document.body.classList.toggle('notifications-enabled', $toggleNotify.checked);
+        document.body.classList.toggle('settings-on', $toggleNotify.checked);
+    }
 }
 
+// --- プラットフォーム設定の表示/非表示制御 ---
 function updatePlatformSettingsVisibility(isChecked) {
-    if (!$body) return; 
+    const $platformSettings = document.getElementById('platform-settings');
+    if (!$platformSettings) return;
 
     if (isChecked) {
-        $body.classList.add('settings-on');
+        $platformSettings.style.display = 'block';
+        $platformSettings.classList.remove('fade-out');
+        $platformSettings.classList.add('fade-in');
     } else {
-        $body.classList.remove('settings-on');
+        $platformSettings.classList.remove('fade-in');
+        $platformSettings.classList.add('fade-out');
+        setTimeout(() => {
+            $platformSettings.style.display = 'none';
+        }, 200);
     }
 }
 
@@ -42,190 +54,184 @@ function getClientId() {
   return cid;
 }
 
-async function registerServiceWorker() {
-    if (!('serviceWorker' in navigator)) {
-        console.warn('Service Worker 未対応ブラウザです');
-        return null;
-    }
-
-    try {
-        // 登録
-        const registration = await navigator.serviceWorker.register('/pushweb/service-worker.js');
-        console.log('Service Worker 登録成功:', registration);
-
-        // 登録後 ready を待つ
-        const sw = await navigator.serviceWorker.ready;
-        console.log('Service Worker ready:', sw);
-        return sw;
-    } catch (e) {
-        console.error('Service Worker 登録失敗:', e);
-        return null;
-    }
-}
-
-
-// プラットフォーム別設定の保存
-async function savePlatformSettings() {
-    const clientId = getClientId();
-    if (!clientId) return;
-
-    const platformSettings = getPlatformSettings();
-    console.log('プラットフォーム設定保存:', platformSettings);
-
-    try {
-        const subRaw = localStorage.getItem('pushSubscription');
-        if (!subRaw) throw new Error('購読情報が見つかりません。通知を有効にしてください。');
-        const sub = JSON.parse(subRaw);
-
-        const res = await fetch(API_SAVE_SETTINGS, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                clientId,
-                subscription: sub,
-                settings: platformSettings
-            })
-        });
-
-        if (!res.ok) throw new Error(await res.text());
-        console.log('プラットフォーム設定保存成功');
-
-    } catch (e) {
-        console.error('プラットフォーム設定保存失敗:', e);
-        const $toggleNotify = document.getElementById('toggle-notify');
-        if ($toggleNotify) $toggleNotify.checked = false;
-    }
-}
-
-// --- Push Notification ---（iOS対応版）
+// --- Push Notification ---
 async function initPush() {
-    console.log('--- Push Initialization START ---');
-    
-    // iOS対応: PWA必須チェック
-    if (typeof iosHelper !== 'undefined' && !iosHelper.isPushAvailable()) {
-        if (iosHelper.isIOS && !iosHelper.isPWA) {
-            console.warn('iOS: PWAモードが必要です');
-            // ガイドを表示
-            if (iosHelper.shouldShowInstallGuide()) {
-                iosHelper.showInstallGuide();
-            }
-            throw new Error('iOS_PWA_REQUIRED: ホーム画面に追加してください');
-        }
-        throw new Error('Push Notificationに対応していません');
+  console.log('--- Push Initialization START ---');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    throw new Error('Push Notificationに対応していません。');
+  }
+
+  const sw = await navigator.serviceWorker.ready;
+
+  if (Notification.permission === 'default') {
+    const p = await Notification.requestPermission();
+    if (p !== 'granted') {
+      throw new Error('ユーザーが通知を許可しませんでした');
     }
+  } else if (Notification.permission === 'denied') {
+    throw new Error('通知が拒否されています(ブラウザ設定をご確認ください)');
+  }
 
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.error('Push Notificationに対応していません。');
-        throw new Error('Push Notificationに対応していません。');
-    }
+  const vapidResp = await fetch(API_VAPID);
+  if (!vapidResp.ok) throw new Error('VAPID鍵取得失敗');
+  const vapidPublicKey = (await vapidResp.text()).trim();
 
-    let sw;
-    try {
-        console.log('1. Service Workerを取得中...');
-        sw = await navigator.serviceWorker.ready;
-        console.log('1. Service Workerの取得が完了しました。', sw);
-    } catch (e) {
-        console.error('1. Service Workerの取得に失敗しました。', e);
-        throw new Error(`Service Worker取得失敗: ${e.message}`);
-    }
+  const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
 
-    try {
-        console.log('2. VAPID公開鍵を取得中...');
-        const response = await fetch(API_VAPID);
-        if (!response.ok) {
-             throw new Error(`VAPID公開鍵の取得に失敗: ${response.statusText}`);
-        }
-        const vapidPublicKey = await response.text();
-        console.log('2. VAPID公開鍵の取得が完了しました。');
+  let existing = await sw.pushManager.getSubscription();
+  if (existing) {
+    console.log('既存購読を使用');
+    return existing;
+  }
 
-        const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
-        
-        console.log('3. プッシュ通知を購読中...');
-        const sub = await sw.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: applicationServerKey
-        });
-        console.log('3. プッシュ通知の購読が完了しました。');
+  const sub = await sw.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey
+  });
 
-        console.log('4. 購読情報をサーバーに送信中...');
-        await sendSubscriptionToServer(sub);
-        console.log('4. 購読情報のサーバー送信が完了しました。');
+  await sendSubscriptionToServer(sub.toJSON ? sub.toJSON() : JSON.parse(JSON.stringify(sub)));
 
-        localStorage.setItem('pushSubscription', JSON.stringify(sub));
-        console.log('--- Push Initialization SUCCESS ---');
-        return sub;
+  try { localStorage.setItem('pushSubscription', JSON.stringify(sub.toJSON ? sub.toJSON() : JSON.parse(JSON.stringify(sub)))); } catch(e){}
 
-    } catch (e) {
-        console.error('プッシュ通知の購読またはサーバー送信に失敗しました。', e);
-        localStorage.removeItem('pushSubscription');
-        throw new Error(`Push購読失敗: ${e.message}`);
-    }
+  return sub;
 }
-
-// main.js の sendSubscriptionToServer 関数を詳細ログ付きに修正
 
 async function sendSubscriptionToServer(sub) {
-    const clientId = getClientId();
-    
-    console.log('========== 購読情報送信デバッグ START ==========');
-    console.log('1. Client ID:', clientId);
-    console.log('2. Subscription:', sub);
-    console.log('3. Endpoint:', sub?.endpoint);
-    
+  const clientId = getClientId();
+  if (!clientId) throw new Error('Client ID missing');
+
+  const subscriptionPayload = sub?.toJSON ? sub.toJSON() : sub;
+
+  const platformSettings = (typeof getPlatformSettings === 'function') ? getPlatformSettings() : null;
+
+  const response = await fetch(API_SUBSCRIBE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      clientId,
+      subscription: subscriptionPayload,
+      settings: platformSettings
+    }),
+    credentials: 'same-origin'
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(()=>'<no-body>');
+    throw new Error(`subscribe API failed: ${response.status} ${text}`);
+  }
+}
+
+async function saveNameToServer(clientId, name) {
     if (!clientId) {
-        console.error('❌ Client IDが取得できません。購読情報を送信できません。');
-        return;
+        console.error('[saveNameToServer] clientId がありません');
+        return false;
     }
-    
-    const requestBody = {
-        clientId: clientId,
-        subscription: sub
-    };
-    
-    console.log('4. Request Body:', JSON.stringify(requestBody, null, 2));
-    
+    if (!name || typeof name !== 'string') {
+        console.error('[saveNameToServer] name が不正です');
+        return false;
+    }
+
+    let sub = null;
     try {
-        console.log('5. Sending POST to:', API_SUBSCRIBE);
-        
-        const response = await fetch(API_SUBSCRIBE, {
+        if ('serviceWorker' in navigator) {
+            const sw = await navigator.serviceWorker.ready;
+            const swSub = await sw.pushManager.getSubscription();
+            if (swSub) sub = swSub;
+        }
+    } catch (e) {
+        console.warn('[saveNameToServer] ServiceWorker から subscription 取得に失敗', e);
+    }
+    if (!sub) {
+        const subRaw = localStorage.getItem('pushSubscription');
+        if (subRaw) {
+            try { sub = JSON.parse(subRaw); } catch (e) { sub = null; }
+        }
+    }
+
+    const platformSettings = (typeof getPlatformSettings === 'function') ? getPlatformSettings() : null;
+
+    try {
+        const res = await fetch('/api/save-name', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({ clientId, name })
         });
-
-        console.log('6. Response Status:', response.status);
-        console.log('7. Response OK:', response.ok);
-
-        const responseText = await response.text();
-        console.log('8. Response Text:', responseText);
-
-        if (!response.ok) {
-            console.error('❌ 購読情報のサーバー送信に失敗しました。');
-            console.error('Status:', response.status);
-            console.error('Response:', responseText);
-            throw new Error(`サーバーエラー: 購読情報の保存に失敗 (${response.status})`);
+        console.log('[saveNameToServer] /api/save-name HTTP', res.status);
+        if (res.ok) {
+            const text = await res.text();
+            try { console.log('[saveNameToServer] /api/save-name response:', JSON.parse(text || '{}')); }
+            catch (e) { console.log('[saveNameToServer] /api/save-name response (text):', text); }
+            return true;
+        } else if (res.status === 404) {
+            console.log('[saveNameToServer] /api/save-name が存在しないためフォールバックします');
+        } else {
+            const text = await res.text();
+            console.warn('[saveNameToServer] /api/save-name 失敗:', res.status, text);
         }
-
-        let responseData;
-        try {
-            responseData = JSON.parse(responseText);
-            console.log('9. Response Data:', responseData);
-        } catch (e) {
-            console.warn('⚠️ JSON parse failed, response was:', responseText);
-        }
-
-        console.log('✅ 購読情報のサーバー送信が完了しました。');
-        console.log('========== 購読情報送信デバッグ END ==========');
-        
     } catch (e) {
-        console.error('========== エラー発生 ==========');
-        console.error('Error Type:', e.name);
-        console.error('Error Message:', e.message);
-        console.error('Error Stack:', e.stack);
-        console.error('========== エラー終了 ==========');
-        throw e;
+        console.warn('[saveNameToServer] /api/save-name へのネットワークエラー:', e);
+    }
+
+    try {
+        const body = {
+            clientId: clientId,
+            name: name,
+            subscription: sub,
+            settings: platformSettings
+        };
+        console.log('[saveNameToServer] フォールバックで /api/save-platform-settings POST', body);
+        const res2 = await fetch(API_SAVE_SETTINGS, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        console.log('[saveNameToServer] /api/save-platform-settings HTTP', res2.status);
+        const text2 = await res2.text();
+        if (!res2.ok) {
+            console.error('[saveNameToServer] 名前保存失敗 response:', res2.status, text2);
+            return false;
+        }
+        try {
+            const json = JSON.parse(text2 || '{}');
+            console.log('[saveNameToServer] saved (fallback)', json);
+        } catch (e) {
+            console.log('[saveNameToServer] saved (fallback, non-json response):', text2);
+        }
+        return true;
+    } catch (e) {
+        console.error('[saveNameToServer] 名前保存(fallback)失敗:', e);
+        return false;
     }
 }
+
+async function fetchNameFromServer(clientId) {
+    try {
+        const res = await fetch(`/api/get-name?clientId=${clientId}`);
+        console.log('[fetchNameFromServer] HTTP', res.status);
+        if (res.status === 404) return null;
+        if (!res.ok) {
+            console.warn('[fetchNameFromServer] 非OKレスポンス', await res.text());
+            return null;
+        }
+        const data = await res.json();
+        console.log('[fetchNameFromServer] body', data);
+        return typeof data.name !== 'undefined' ? data.name : null;
+    } catch (e) {
+        console.error('name取得失敗:', e);
+        return null;
+    }
+}
+
+async function promptForName() {
+    let name = null;
+    while (!name) {
+        name = prompt('購読者名を入力してください(日本語可):');
+        if (name === null) break;
+        name = name.trim();
+    }
+    return name;
+}
+
 async function unsubscribePush() {
     console.log('--- Push Unsubscribe START ---');
     try {
@@ -262,7 +268,6 @@ async function unsubscribePush() {
     }
 }
 
-// --- Test Notification ---
 async function sendTestToMe() {
     const clientId = getClientId();
     if (!clientId) {
@@ -288,7 +293,6 @@ async function sendTestToMe() {
     }
 }
 
-// --- History Fetching ---
 const _paging = {
   offset: 0,
   limit: 5,
@@ -317,8 +321,11 @@ function createLogItem(log) {
     
     const statusClass = log.status === 'fail' ? ' status-fail' : '';
     
+    // プラットフォーム名を正規化してdata属性に追加
+    const platformData = normalizePlatformName(log.platform || '不明');
+    
     return `
-        <div class="card${statusClass}">
+        <div class="card${statusClass}" data-platform="${platformData}">
             ${iconHtml}
             <div class="card-content">
                 <div class="title">${titleHtml}</div>
@@ -333,56 +340,176 @@ function createLogItem(log) {
     `;
 }
 
+// プラットフォーム名を正規化する関数
+function normalizePlatformName(platform) {
+    const normalized = platform.toLowerCase().trim();
+    
+    // プラットフォーム名のマッピング
+    if (normalized.includes('twitcasting')) return 'twitcasting';
+    if (normalized.includes('youtube') && normalized.includes('community')) return 'youtube-community';
+    if (normalized.includes('youtube')) return 'youtube';
+    if (normalized.includes('fanbox') || normalized.includes('pixiv')) return 'fanbox';
+    if (normalized.includes('twitter') || normalized.includes('x.com')) {
+        if (normalized.includes('koinoyamai17') || normalized.includes('sub')) return 'twitter-sub';
+        return 'twitter-main';
+    }
+    if (normalized.includes('milestone') || normalized.includes('記念日')) return 'milestone';
+    
+    return 'unknown';
+}
+
+function applySequentialFadeIn() {
+    const cards = document.querySelectorAll('#logs .card:not([data-fade-applied])'); 
+    
+    const delayIncrement = 0.15;
+
+    cards.forEach((card, index) => {
+        const delay = index * delayIncrement;
+        card.style.animationDelay = `${delay}s`; 
+        card.setAttribute('data-fade-applied', 'true');
+                // ✅ アニメーション完了後に animation プロパティを削除
+        card.addEventListener('animationend', function handler() {
+            card.style.animation = 'none';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+            card.removeEventListener('animationend', handler);
+        }, { once: true });
+    });
+}
+
 async function fetchHistory($logsEl, $statusEl, { append = false } = {}) {
     if (_paging.loading) {
         console.log('既にロード中です。');
         return;
     }
-    
     _paging.loading = true;
-    
-    if ($statusEl) { 
+
+    if ($statusEl) {
         $statusEl.textContent = append ? '履歴を読み込み中...' : '最新の履歴を取得中...';
         $statusEl.className = 'status-message info-message';
     }
 
-    const limit = 5;
-    const offset = append ? _paging.offset : 0;
+    const pageLimit = _paging.limit || 5;
+    // サーバへ投げる offset はサーバサイドのオフセット（未フィルタの行）
+    let serverOffset = append ? _paging.offset : 0;
+
     const clientId = getClientId();
+    if (!clientId) {
+        console.warn('clientId missing for history fetch');
+    }
 
-    const url = `${API_HISTORY}?clientId=${clientId}&limit=${limit}&offset=${offset}`;
+    // 現在のフィルター設定を反映する判定関数（log オブジェクトを受け取る）
+    function shouldIncludeLog(log, settings) {
+        if (!log) return false;
+        const platform = normalizePlatformName((log.platform || '').toString());
+        // settings が未定義なら表示（保守的）
+        if (!settings) return true;
 
+        // 柔軟マッチ（normalizePlatformName がだいたい 'youtube','twitter-main' などを返す想定）
+        if (platform.includes('twitcasting')) return !!settings.twitcasting;
+        if (platform.includes('youtube') && platform.includes('community')) return !!settings.youtubeCommunity;
+        if (platform.includes('youtube')) return !!settings.youtube;
+        if (platform.includes('fanbox') || platform.includes('pixiv')) return !!settings.fanbox;
+        if (platform.includes('twitter') && platform.includes('sub')) return !!settings.twitterSub;
+        if (platform.includes('twitter')) return !!settings.twitterMain;
+        if (platform.includes('milestone')) return !!settings.milestone;
+        // unknown は表示する（要件に応じて false に変えてください）
+        return true;
+    }
+
+    const settings = (typeof window.getCurrentFilterSettings === 'function') ? window.getCurrentFilterSettings() : (function(){
+        // fallback: read DOM
+        return {
+            twitcasting: document.getElementById('filter-twitcasting')?.classList.contains('is-on') || false,
+            youtube: document.getElementById('filter-youtube')?.classList.contains('is-on') || false,
+            youtubeCommunity: document.getElementById('filter-youtube-community')?.classList.contains('is-on') || false,
+            fanbox: document.getElementById('filter-fanbox')?.classList.contains('is-on') || false,
+            twitterMain: document.getElementById('filter-twitter-main')?.classList.contains('is-on') || false,
+            twitterSub: document.getElementById('filter-twitter-sub')?.classList.contains('is-on') || false,
+            milestone: document.getElementById('filter-milestone')?.classList.contains('is-on') || false
+        };
+    })();
+
+    // 集めるバッファ（フィルタ後の表示対象）
+    const collectedLogs = [];
+
+    // ループでサーバページを追いかけ、集める。無限ループ防止に maxFetchPages を設定しても良い（例: 10）
+    let lastServerResponse = null;
+    const maxPagesToFetch = 20; // 必要なら調整。過度に大きいと負荷になる。
+    let pagesFetched = 0;
     try {
-        const res = await fetch(url);
-        if (!res.ok) {
-            throw new Error(`Failed to fetch history: ${res.status}`);
-        }
-
-        const data = await res.json();
-        
-        const newLogItems = data.logs.map(createLogItem).join('');
-        
-        if ($logsEl) {
-             if (!append) {
-                $logsEl.innerHTML = newLogItems;
-                _paging.offset = 0;
-            } else {
-                $logsEl.insertAdjacentHTML('beforeend', newLogItems);
+        while (collectedLogs.length < pageLimit) {
+            if (pagesFetched >= maxPagesToFetch) {
+                console.warn('fetchHistory: max pages fetched, breaking to avoid infinite loop');
+                break;
             }
+            const url = `${API_HISTORY}?clientId=${encodeURIComponent(clientId||'')}&limit=${pageLimit}&offset=${serverOffset}`;
+            const res = await fetch(url);
+            if (!res.ok) {
+                throw new Error(`Failed to fetch history: ${res.status}`);
+            }
+            const data = await res.json();
+            lastServerResponse = data;
+            pagesFetched++;
+
+            if (!Array.isArray(data.logs) || data.logs.length === 0) {
+                // サーバ側にこれ以上データがない
+                serverOffset += data.logs ? data.logs.length : 0;
+                break;
+            }
+
+            // 受け取ったサーバページをフィルタしてバッファへ追加
+            for (const log of data.logs) {
+                if (shouldIncludeLog(log, settings)) {
+                    collectedLogs.push(log);
+                    if (collectedLogs.length >= pageLimit) break;
+                }
+            }
+
+            // サーバ側の offset は常に「既読にした」未フィルタの行数を進める
+            serverOffset += data.logs.length;
+
+            // サーバがもう先が無い場合は終了
+            if (!data.hasMore) {
+                break;
+            }
+
+            // ループ継続するときは次のサーバページを取る（offset を更新して上で続行）
         }
 
-        _paging.offset += data.logs.length;
-        _paging.hasMore = data.hasMore;
+        // 描画用 HTML を生成
+        const html = collectedLogs.map(createLogItem).join('');
+
+        if ($logsEl) {
+            if (!append) {
+                $logsEl.innerHTML = html;
+            } else {
+                $logsEl.insertAdjacentHTML('beforeend', html);
+            }
+            applySequentialFadeIn();
+        }
+
+        // 表示カウントを累積更新（DOM の実際の可視カード数を正確な単位とする）
+        const visibleCards = $logsEl ? $logsEl.querySelectorAll('.card:not(.filtered-out)').length : 0;
+        // visibleCards は既に append 後の合計を返すはずだが、念のため累積管理も行う
+        _paging.displayedCount = visibleCards;
+
+        // paging 情報を更新
+        _paging.offset = serverOffset;
+        _paging.hasMore = lastServerResponse ? !!lastServerResponse.hasMore : false;
 
         const $btnMore = document.getElementById('more-logs-button');
-        if ($btnMore) {
-            $btnMore.style.display = _paging.hasMore ? 'block' : 'none';
-        }
+        if ($btnMore) $btnMore.style.display = _paging.hasMore ? 'block' : 'none';
 
-        if ($statusEl) { 
-            $statusEl.textContent = `表示中: ${_paging.offset} / 全 ${data.total} 件`;
+        // ステータス表示は accumulated count を使う（ここで「増分ではなく累積」を表示）
+        const totalReported = lastServerResponse && typeof lastServerResponse.total !== 'undefined' ? lastServerResponse.total : '?';
+        if ($statusEl) {
+            $statusEl.textContent = `表示中: ${_paging.displayedCount} / サーバ総数: ${totalReported}`;
             $statusEl.className = 'status-message success-message';
         }
+
+        // フィルタリングは既に反映済みだが、念のため window.applyLogFiltering を呼ぶ（CSS側で filtered-out を使っている場合）
+        if (typeof window.applyLogFiltering === 'function') window.applyLogFiltering();
 
     } catch (e) {
         console.error('Failed to fetch history:', e);
@@ -415,6 +542,21 @@ function initPlatformSettingsUI($toggleNotify) {
                 await savePlatformSettings();
             } else {
                 console.log('通知OFFのためサーバー保存はスキップ');
+            }
+
+            // 通知設定連動がONの場合、フィルターも更新
+            if (typeof window.syncFilterWithNotificationSettings === 'function' &&
+                typeof window.applyFilterSettingsToUI === 'function' &&
+                typeof window.saveFilterSettings === 'function' &&
+                typeof window.applyLogFiltering === 'function') {
+                
+                const syncButton = document.getElementById('filter-sync-notification');
+                if (syncButton?.classList.contains('is-on')) {
+                    const synced = window.syncFilterWithNotificationSettings();
+                    window.applyFilterSettingsToUI(synced);
+                    window.saveFilterSettings(synced);
+                    window.applyLogFiltering();
+                }
             }
         });
     });
@@ -466,59 +608,564 @@ function getPlatformSettings() {
     };
 }
 
-async function fetchPlatformSettingsFromServer() {
+async function savePlatformSettings() {
     const clientId = getClientId();
     if (!clientId) {
-        console.log('clientId がないため設定取得をスキップ');
-        return null;
+        console.error('Client IDが取得できません。設定保存を中止します。');
+        return false;
     }
-    
+
+    const platformSettings = getPlatformSettings();
+    console.log('プラットフォーム設定保存:', platformSettings);
+
     try {
-        const res = await fetch(`/api/get-platform-settings?clientId=${clientId}`);
+        if (!('serviceWorker' in navigator)) throw new Error('ServiceWorker 未対応');
+        const sw = await navigator.serviceWorker.ready;
+        const sub = await sw.pushManager.getSubscription();
+        if (!sub) throw new Error('購読情報が見つかりません。通知を有効にしてください。');
+
+        const serializedSub = (typeof sub.toJSON === 'function') ? sub.toJSON() : JSON.parse(JSON.stringify(sub));
+
+        const res = await fetch(API_SAVE_SETTINGS, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                clientId: clientId,
+                subscription: serializedSub,
+                settings: platformSettings
+            })
+        });
+
         if (!res.ok) {
-            console.log('サーバー設定取得不可 (status:', res.status, ') - ローカル設定を使用します');
-            return null;
+            const text = await res.text().catch(()=>'<no-body>');
+            throw new Error(`サーバーエラー: ${res.status} ${text}`);
         }
-        const data = await res.json();
-        if (data && data.settings) {
-            console.log('サーバーから設定を取得しました:', data.settings);
-            localStorage.setItem('platformSettings', JSON.stringify(data.settings));
-            return data.settings;
-        }
-        return null;
+
+        try { localStorage.setItem('platformSettings', JSON.stringify(platformSettings)); } catch(e){}
+
+        console.log('プラットフォーム設定保存成功');
+        return true;
+
     } catch (e) {
-        console.log('サーバーからプラットフォーム設定取得失敗 - ローカル設定を使用:', e.message);
-        return null;
+        console.error('プラットフォーム設定保存失敗:', e);
+        return false;
     }
 }
 
-async function loadPlatformSettingsUIFromServer() {
-    const settings = await fetchPlatformSettingsFromServer();
-    if (!settings) {
-        console.log('サーバー設定なし - ローカル設定のみ使用します');
+async function fetchWithTimeout(url, opts = {}, timeoutMs = 5000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...opts, signal: controller.signal });
+    clearTimeout(id);
+    return res;
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
+  }
+}
+
+function mergeSettings(existing = {}, incoming = {}) {
+  return { ...existing, ...incoming };
+}
+
+async function fetchPlatformSettingsFromServer({ timeoutMs = 5000 } = {}) {
+  try {
+    const clientId = await Promise.resolve(getClientId());
+    if (!clientId) {
+      console.log('[fetchPlatformSettings] clientId がないため設定取得をスキップ');
+      return { ok: false, reason: 'no-clientId' };
+    }
+
+    const url = `/api/get-platform-settings?clientId=${encodeURIComponent(clientId)}`;
+    const fetchOpts = {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      },
+      credentials: 'same-origin',
+      cache: 'no-store'
+    };
+
+    const res = await fetchWithTimeout(url, fetchOpts, timeoutMs);
+
+    if (!res.ok) {
+      console.warn(`[fetchPlatformSettings] HTTP status=${res.status} ${res.statusText}`);
+      return { ok: false, status: res.status, statusText: res.statusText };
+    }
+
+    const ct = res.headers.get('Content-Type') || '';
+    if (!ct.includes('application/json')) {
+      console.warn('[fetchPlatformSettings] 応答が JSON ではありません:', ct);
+      return { ok: false, reason: 'invalid-content-type', contentType: ct };
+    }
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      console.error('[fetchPlatformSettings] JSON parse error', parseErr);
+      return { ok: false, reason: 'json-parse-error', error: String(parseErr) };
+    }
+
+    if (!data || typeof data !== 'object') {
+      console.warn('[fetchPlatformSettings] data が期待型でない', data);
+      return { ok: false, reason: 'invalid-data' };
+    }
+
+    const incoming = data.settings || data;
+    if (!incoming || typeof incoming !== 'object') {
+      console.warn('[fetchPlatformSettings] settings が無効', incoming);
+      return { ok: false, reason: 'no-settings' };
+    }
+
+    let existing = {};
+    try {
+      const raw = localStorage.getItem('platformSettings');
+      existing = raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      console.warn('[fetchPlatformSettings] localStorage parse error, overwrite', e);
+      existing = {};
+    }
+
+    const merged = mergeSettings(existing, incoming);
+    localStorage.setItem('platformSettings', JSON.stringify(merged));
+    console.log('[fetchPlatformSettings] サーバーから設定を取得しました:', merged);
+
+    return { ok: true, settings: merged };
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      console.error('[fetchPlatformSettings] タイムアウト/中断', err);
+      return { ok: false, reason: 'timeout' };
+    }
+    console.error('[fetchPlatformSettings] 取得失敗', err);
+    return { ok: false, reason: 'exception', error: String(err) };
+  }
+}
+
+async function loadPlatformSettingsUI() {
+  try {
+    const raw = localStorage.getItem('platformSettings');
+    if (!raw) return { ok: false, reason: 'no-local' };
+
+    let settings;
+    try { settings = JSON.parse(raw); } catch (e) {
+      console.warn('[loadPlatformSettingsUI] localStorage JSON parse error', e);
+      return { ok: false, reason: 'parse-error' };
+    }
+    if (!settings || typeof settings !== 'object') return { ok: false, reason: 'invalid-data' };
+
+    return { ok: true, settings };
+  } catch (err) {
+    console.error('[loadPlatformSettingsUI] error', err);
+    return { ok: false, reason: 'exception', error: String(err) };
+  }
+}
+
+async function loadPlatformSettingsUIFromServer($toggleNotify) {
+  try {
+    let hasSubscription = false;
+    try {
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        const sw = await navigator.serviceWorker.ready;
+        const sub = await sw.pushManager.getSubscription();
+        hasSubscription = !!sub;
+      }
+    } catch (e) {
+      console.warn('[loadPlatformSettingsUIFromServer] subscription check error', e);
+      hasSubscription = false;
+    }
+
+    if (!hasSubscription) {
+      console.log('[loadPlatformSettingsUIFromServer] subscription 無のためサーバ反映をスキップ');
+      const local = await loadPlatformSettingsUI();
+      if (local.ok) {
+        applySettingsToUI(local.settings);
+        return { applied: true, source: 'local', settings: local.settings };
+      } else {
+        if ($toggleNotify) { 
+          $toggleNotify.checked = false; 
+          updatePlatformSettingsVisibility(false); 
+        }
+        return { applied: false, source: 'none' };
+      }
+    }
+
+    const res = await fetchPlatformSettingsFromServer();
+    if (res && res.ok && res.settings) {
+      applySettingsToUI(res.settings);
+      if ($toggleNotify) {
+        const anyOn = Object.values(res.settings).some(v => !!v);
+        $toggleNotify.checked = anyOn;
+        updatePlatformSettingsVisibility(anyOn);
+        updateToggleImage();
+      }
+      return { applied: true, source: 'server', settings: res.settings };
+    }
+
+    const local = await loadPlatformSettingsUI();
+    if (local.ok) {
+      applySettingsToUI(local.settings);
+      return { applied: true, source: 'local', settings: local.settings };
+    }
+
+    if ($toggleNotify) { 
+      $toggleNotify.checked = false; 
+      updatePlatformSettingsVisibility(false); 
+    }
+    return { applied: false, source: 'none' };
+
+  } catch (err) {
+    console.error('[loadPlatformSettingsUIFromServer] unexpected error', err);
+    if ($toggleNotify) { 
+      $toggleNotify.checked = false; 
+      updatePlatformSettingsVisibility(false); 
+    }
+    return { applied: false, source: 'error', error: String(err) };
+  }
+}
+
+function applySettingsToUI(settings) {
+  if (!settings || typeof settings !== 'object') return;
+  const keyMap = {
+    twitcasting: 'toggle-twitcasting',
+    youtube: 'toggle-youtube',
+    youtubeCommunity: 'toggle-youtube-community',
+    fanbox: 'toggle-fanbox',
+    twitterMain: 'toggle-twitter-main',
+    twitterSub: 'toggle-twitter-sub',
+    milestone: 'toggle-milestone'
+  };
+  for (const [key, value] of Object.entries(settings)) {
+    const btnId = keyMap[key];
+    if (!btnId) continue;
+    const btn = document.getElementById(btnId);
+    if (!btn) continue;
+    btn.classList.toggle('is-on', !!value);
+    const label = (btn.textContent || btnId).split(':')[0];
+    btn.textContent = `${label}: ${value ? 'ON' : 'OFF'}`;
+  }
+}
+
+async function initSubscriberNameUI() {
+    const input = document.getElementById('subscriber-name-input');
+    const btn = document.getElementById('subscriber-name-submit');
+    const status = document.getElementById('subscriber-name-status');
+    let linkedEl = document.getElementById('subscriber-linked-icon');
+
+    if (!input || !btn || !status) {
+        console.warn('[initSubscriberNameUI] UI要素が見つかりません');
         return;
     }
-    
-    const keyMap = {
-        twitcasting: 'toggle-twitcasting',
-        youtube: 'toggle-youtube',
-        youtubeCommunity: 'toggle-youtube-community',
-        fanbox: 'toggle-fanbox',
-        twitterMain: 'toggle-twitter-main',
-        twitterSub: 'toggle-twitter-sub',
-        milestone: 'toggle-milestone'
-    };
-    
-    for (const [key, value] of Object.entries(settings)) {
-        const btnId = keyMap[key];
-        if (!btnId) continue;
-        
-        const btn = document.getElementById(btnId);
-        if (!btn) continue;
-        
-        btn.classList.toggle('is-on', !!value);
-        btn.textContent = `${btn.textContent.split(':')[0]}: ${value ? 'ON' : 'OFF'}`;
+
+    const clientId = getClientId();
+
+    function showLinked(visible) {
+        if (!linkedEl) return;
+        linkedEl.style.display = visible ? 'inline-block' : 'none';
     }
+
+    let wrapper = input.closest('.subscriber-input-wrapper');
+    if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'subscriber-input-wrapper';
+        input.parentNode.insertBefore(wrapper, input);
+        wrapper.appendChild(input);
+    }
+
+    const ICON_URL = 'https://img.icons8.com/?size=100&id=sz8cPVwzLrMP&format=png&color=000000';
+    if (!linkedEl) {
+        linkedEl = document.createElement('img');
+        linkedEl.id = 'subscriber-linked-icon';
+        linkedEl.className = 'subscriber-linked';
+        linkedEl.src = ICON_URL;
+        linkedEl.alt = '保存済み';
+        linkedEl.style.display = 'none';
+        input.insertAdjacentElement('afterend', linkedEl);
+    } else if (linkedEl.tagName.toLowerCase() !== 'img') {
+        const newImg = document.createElement('img');
+        newImg.id = linkedEl.id;
+        newImg.className = linkedEl.className || 'subscriber-linked';
+        newImg.src = ICON_URL;
+        newImg.alt = '保存済み';
+        newImg.style.display = linkedEl.style.display || 'none';
+        linkedEl.parentNode.replaceChild(newImg, linkedEl);
+        linkedEl = newImg;
+    } else {
+        linkedEl.src = ICON_URL;
+    }
+
+    let currentNameValue = '';
+    if (clientId) {
+        try {
+            const currentName = await fetchNameFromServer(clientId);
+            if (currentName) {
+                input.value = currentName;
+                showLinked(true);
+                currentNameValue = currentName;
+            } else {
+                input.value = '';
+                showLinked(false);
+            }
+        } catch (e) {
+            console.warn('[initSubscriberNameUI] name 取得エラー', e);
+            showLinked(false);
+        }
+    }
+
+    input.addEventListener('input', () => showLinked(false));
+
+    btn.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        const name = input.value ? input.value.trim() : '';
+        if (!name) { 
+            status.style.display = 'block';
+            status.textContent = '名前を入力してください';
+            status.className = 'status-message error-message';
+            return; 
+        }
+
+        btn.disabled = true;
+        status.style.display = 'block';
+        status.textContent = '保存中...';
+        status.className = 'status-message info-message';
+
+        try {
+            const ok = await saveNameToServer(clientId, name);
+            if (ok) {
+                status.textContent = '名前を保存しました';
+                status.className = 'status-message success-message';
+                showLinked(true);
+            } else {
+                status.textContent = '名前の保存に失敗しました';
+                status.className = 'status-message error-message';
+                showLinked(false);
+            }
+        } catch (e) {
+            console.error('[SubscriberName] save error', e);
+            status.textContent = '保存中にエラーが発生しました';
+            status.className = 'status-message error-message';
+            showLinked(false);
+        } finally {
+            btn.disabled = false;
+            setTimeout(() => { status.style.display = 'none'; }, 4000);
+        }
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            btn.click();
+        }
+    });
+
+    return { 
+        currentName: input.value || '', 
+        showLinked
+    };
+}
+
+// --- ログフィルター設定の初期化 ---
+function initLogFilterSettings($toggleNotify) {
+    const syncButton = document.getElementById('filter-sync-notification');
+    const filterButtons = {
+        twitcasting: document.getElementById('filter-twitcasting'),
+        youtube: document.getElementById('filter-youtube'),
+        youtubeCommunity: document.getElementById('filter-youtube-community'),
+        fanbox: document.getElementById('filter-fanbox'),
+        twitterMain: document.getElementById('filter-twitter-main'),
+        twitterSub: document.getElementById('filter-twitter-sub'),
+        milestone: document.getElementById('filter-milestone')
+    };
+
+    // LocalStorageからフィルター設定を読み込む
+    function loadFilterSettings() {
+        try {
+            const saved = localStorage.getItem('logFilterSettings');
+            if (saved) {
+                return JSON.parse(saved);
+            }
+        } catch (e) {
+            console.warn('フィルター設定の読み込みに失敗', e);
+        }
+        return {
+            syncWithNotification: true,
+            twitcasting: true,
+            youtube: true,
+            youtubeCommunity: true,
+            fanbox: true,
+            twitterMain: true,
+            twitterSub: true,
+            milestone: true
+        };
+    }
+
+    // フィルター設定を保存
+    function saveFilterSettings(settings) {
+        try {
+            localStorage.setItem('logFilterSettings', JSON.stringify(settings));
+            console.log('[saveFilterSettings] 保存:', settings);
+        } catch (e) {
+            console.error('フィルター設定の保存に失敗', e);
+        }
+    }
+
+    // 現在のフィルター設定を取得
+    function getCurrentFilterSettings() {
+        return {
+            syncWithNotification: syncButton?.classList.contains('is-on') || false,
+            twitcasting: filterButtons.twitcasting?.classList.contains('is-on') || false,
+            youtube: filterButtons.youtube?.classList.contains('is-on') || false,
+            youtubeCommunity: filterButtons.youtubeCommunity?.classList.contains('is-on') || false,
+            fanbox: filterButtons.fanbox?.classList.contains('is-on') || false,
+            twitterMain: filterButtons.twitterMain?.classList.contains('is-on') || false,
+            twitterSub: filterButtons.twitterSub?.classList.contains('is-on') || false,
+            milestone: filterButtons.milestone?.classList.contains('is-on') || false
+        };
+    }
+
+    // UIにフィルター設定を適用
+    function applyFilterSettingsToUI(settings) {
+        console.log('[applyFilterSettingsToUI] 適用:', settings);
+        
+        if (syncButton) {
+            syncButton.classList.toggle('is-on', settings.syncWithNotification);
+            syncButton.textContent = `通知設定連動: ${settings.syncWithNotification ? 'ON' : 'OFF'}`;
+        }
+
+        Object.keys(filterButtons).forEach(key => {
+            const btn = filterButtons[key];
+            if (btn) {
+                btn.classList.toggle('is-on', settings[key]);
+                const label = btn.textContent.split(':')[0];
+                btn.textContent = `${label}: ${settings[key] ? 'ON' : 'OFF'}`;
+                btn.disabled = settings.syncWithNotification;
+            }
+        });
+    }
+
+    // 通知設定からフィルター設定を同期
+    function syncFilterWithNotificationSettings() {
+        const platformSettings = getPlatformSettings();
+        console.log('[syncFilterWithNotificationSettings] 通知設定:', platformSettings);
+        return {
+            syncWithNotification: true,
+            twitcasting: platformSettings.twitcasting || false,
+            youtube: platformSettings.youtube || false,
+            youtubeCommunity: platformSettings.youtubeCommunity || false,
+            fanbox: platformSettings.fanbox || false,
+            twitterMain: platformSettings.twitterMain || false,
+            twitterSub: platformSettings.twitterSub || false,
+            milestone: platformSettings.milestone || false
+        };
+    }
+
+    // ログをフィルタリング
+    function applyLogFiltering() {
+        const settings = getCurrentFilterSettings();
+        const cards = document.querySelectorAll('#logs .card[data-platform]');
+
+        console.log('[applyLogFiltering] フィルター適用:', settings, 'カード数:', cards.length);
+
+        cards.forEach(card => {
+            const platform = card.getAttribute('data-platform');
+            let shouldShow = true;
+
+            switch(platform) {
+                case 'twitcasting':
+                    shouldShow = settings.twitcasting;
+                    break;
+                case 'youtube':
+                    shouldShow = settings.youtube;
+                    break;
+                case 'youtube-community':
+                    shouldShow = settings.youtubeCommunity;
+                    break;
+                case 'fanbox':
+                    shouldShow = settings.fanbox;
+                    break;
+                case 'twitter-main':
+                    shouldShow = settings.twitterMain;
+                    break;
+                case 'twitter-sub':
+                    shouldShow = settings.twitterSub;
+                    break;
+                case 'milestone':
+                    shouldShow = settings.milestone;
+                    break;
+                default:
+                    shouldShow = true;
+            }
+
+            card.classList.toggle('filtered-out', !shouldShow);
+        });
+    }
+
+    // 通知設定連動ボタンのイベント
+    if (syncButton) {
+        syncButton.addEventListener('click', () => {
+            const isCurrentlyOn = syncButton.classList.contains('is-on');
+            const newState = !isCurrentlyOn;
+
+            console.log('[syncButton] クリック: ', isCurrentlyOn, '->', newState);
+
+            if (newState) {
+                // 連動ONにする場合、通知設定から同期
+                const synced = syncFilterWithNotificationSettings();
+                applyFilterSettingsToUI(synced);
+                saveFilterSettings(synced);
+            } else {
+                // 連動OFFにする場合
+                const current = getCurrentFilterSettings();
+                current.syncWithNotification = false;
+                applyFilterSettingsToUI(current);
+                saveFilterSettings(current);
+            }
+
+            applyLogFiltering();
+        });
+    }
+
+    // 各プラットフォームのフィルターボタンのイベント
+    Object.keys(filterButtons).forEach(key => {
+        const btn = filterButtons[key];
+        if (btn) {
+            btn.addEventListener('click', () => {
+                if (btn.disabled) return;
+
+                console.log('[filterButton] クリック:', key);
+
+                btn.classList.toggle('is-on');
+                const label = btn.textContent.split(':')[0];
+                btn.textContent = `${label}: ${btn.classList.contains('is-on') ? 'ON' : 'OFF'}`;
+
+                const settings = getCurrentFilterSettings();
+                saveFilterSettings(settings);
+                applyLogFiltering();
+            });
+        }
+    });
+
+    // 初期設定を読み込んで適用
+    const initialSettings = loadFilterSettings();
+    
+    // 通知設定連動がONの場合は通知設定から同期
+    if (initialSettings.syncWithNotification && $toggleNotify) {
+        const synced = syncFilterWithNotificationSettings();
+        applyFilterSettingsToUI(synced);
+        saveFilterSettings(synced);
+    } else {
+        applyFilterSettingsToUI(initialSettings);
+    }
+
+    // グローバルに公開(他の部分から呼び出せるように)
+    window.applyLogFiltering = applyLogFiltering;
+    window.syncFilterWithNotificationSettings = syncFilterWithNotificationSettings;
+    window.applyFilterSettingsToUI = applyFilterSettingsToUI;
+    window.saveFilterSettings = saveFilterSettings;
+
+    console.log('[initLogFilterSettings] 初期化完了');
 }
 
 // --- Main Execution ---
@@ -529,138 +1176,147 @@ document.addEventListener('DOMContentLoaded', async () => {
     const $btnSendTest = document.getElementById('btn-send-test');
     const $autoRefreshCheckbox = document.getElementById('auto-refresh');
 
+    console.log('[Main] 初期化開始');
+
+    function areAllPlatformsDisabled(settings) {
+        return Object.values(settings).every(v => !v);
+    }
+
     if (!$logs || !$status) {
         console.error('履歴UI要素が不足しています');
     }
 
-    // Service Worker からのメッセージを受信
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.addEventListener('message', event => {
-            console.log('[Client] Received message from SW:', event.data);
-            
-            if (event.data && event.data.type === 'NAVIGATE') {
-                const targetUrl = event.data.url;
-                console.log('[Client] Navigating to:', targetUrl);
-                
-                if (targetUrl) {
-                    window.location.href = targetUrl;
-                }
+            if (event.data?.type === 'NAVIGATE' && event.data.url) {
+                window.location.href = event.data.url;
             }
         });
-        
-        console.log('[Client] Service Worker message listener registered');
     }
 
-    // iOS対応: 初期化処理（最初に実行）
-    if (typeof iosHelper !== 'undefined') {
-        console.log('[iOS] デバッグ情報:', iosHelper.getDebugInfo());
-        
-        // インストールガイド表示（遅延実行）
-        if (iosHelper.shouldShowInstallGuide()) {
-            setTimeout(() => {
-                iosHelper.showInstallGuide();
-            }, 2000);
-        }
-
-        // 通知ブロック警告
-        setTimeout(() => {
-            iosHelper.showNotificationBlockedWarning();
-        }, 1000);
-    }
-
-    // プラットフォーム設定UI初期化
-    async function loadPlatformSettingsUI() {
-        const subRaw = localStorage.getItem('platformSettings');
-        if (!subRaw) return;
-        const settings = JSON.parse(subRaw);
-        
-        const keyMap = {
-            twitcasting: 'toggle-twitcasting',
-            youtube: 'toggle-youtube',
-            youtubeCommunity: 'toggle-youtube-community',
-            fanbox: 'toggle-fanbox',
-            twitterMain: 'toggle-twitter-main',
-            twitterSub: 'toggle-twitter-sub',
-            milestone: 'toggle-milestone'
-        };
-        
-        for (const [key, value] of Object.entries(settings)) {
-            const btnId = keyMap[key];
-            if (!btnId) continue;
-            
-            const btn = document.getElementById(btnId);
-            if (btn) {
-                if (value) btn.classList.add('is-on');
-                else btn.classList.remove('is-on');
-                btn.textContent = `${btn.textContent.split(':')[0]}: ${value ? 'ON' : 'OFF'}`;
-            }
-        }
-    }
-
+    // プラットフォーム設定UIの初期化
     initPlatformSettingsUI($toggleNotify);
-    loadPlatformSettingsUI();
-    await loadPlatformSettingsUIFromServer();
+    await loadPlatformSettingsUI();
+    const serverResult = await loadPlatformSettingsUIFromServer($toggleNotify);
+    if (serverResult && serverResult.applied && serverResult.settings) {
+        const settings = serverResult.settings;
+        const anyOn = Object.values(settings).some(v => !!v);
+        $toggleNotify.checked = anyOn;
+        updatePlatformSettingsVisibility(anyOn);
+        updateToggleImage();
+    }
 
-    // 全体通知トグル初期化
-    (async () => {
-        if (!$toggleNotify) return;
+    // ログフィルター設定の初期化（プラットフォーム設定の後に呼び出す）
+    initLogFilterSettings($toggleNotify);
 
+    const subscriberUI = await initSubscriberNameUI();
+    const showLinked = (subscriberUI && typeof subscriberUI.showLinked === 'function') ? subscriberUI.showLinked : (()=>{});
+
+    if ($toggleNotify) {
         let enabled = false;
         try {
             if ('serviceWorker' in navigator && 'PushManager' in window) {
                 const sw = await navigator.serviceWorker.ready;
-                const sub = await sw.pushManager.getSubscription();
+                let sub = await sw.pushManager.getSubscription();
+
+                if (!sub) {
+                    const localSubRaw = localStorage.getItem('pushSubscription');
+                    if (localSubRaw) {
+                        try { sub = JSON.parse(localSubRaw); } catch (e) { sub = null; }
+                    }
+                }
+
                 if (sub) {
                     enabled = true;
-                    localStorage.setItem('pushSubscription', JSON.stringify(sub));
-                    await sendSubscriptionToServer(sub);
-                } else {
-                    const localSubRaw = localStorage.getItem('pushSubscription');
-                    if (localSubRaw) enabled = true;
+                    try {
+                        const serialized = (typeof sub.toJSON === 'function') ? sub.toJSON() : sub;
+                        const clientId = getClientId();
+                        if (clientId) {
+                            await sendSubscriptionToServer(serialized);
+                            try { localStorage.setItem('pushSubscription', JSON.stringify(serialized)); } catch {}
+                        }
+                    } catch (e) {
+                        console.warn('既存購読のサーバ送信失敗', e);
+                    }
                 }
             }
         } catch (e) {
             console.warn('購読チェック失敗', e);
         }
 
+        const settings = getPlatformSettings();
+        if (areAllPlatformsDisabled(settings)) {
+            enabled = false;
+            showLinked(false);
+        }
+
         $toggleNotify.checked = enabled;
         updatePlatformSettingsVisibility(enabled);
-
-        // 画像切り替えの初期化関数
-        function updateToggleImage() {
-            const body = document.body;
-            if ($toggleNotify.checked) {
-                body.classList.add('notifications-enabled');
-            } else {
-                body.classList.remove('notifications-enabled');
-            }
-        }
-
-        // 初期状態を反映
         updateToggleImage();
 
-let pushProcessing = false;
+        let pushProcessing = false;
+        $toggleNotify.addEventListener('change', async () => {
+            if (pushProcessing) return;
+            pushProcessing = true;
 
-$toggleNotify.addEventListener('change', async () => {
-    if (pushProcessing) return; // 処理中なら無視
-    pushProcessing = true;
+            try {
+                if ($toggleNotify.checked) {
+                    let sub = null;
+                    try {
+                        sub = await initPush();
+                    } catch (e) {
+                        console.error('Push初期化失敗:', e);
+                        $toggleNotify.checked = false;
+                        updatePlatformSettingsVisibility(false);
+                        updateToggleImage();
+                        return;
+                    }
 
-    try {
-        if ($toggleNotify.checked) {
-            const sub = await initPush(); // subscribe + server send
-            if (sub) await savePlatformSettings();
-        } else {
-            await unsubscribePush();
-        }
-    } catch (e) {
-        console.error('Push操作失敗:', e);
-    } finally {
-        pushProcessing = false;
+                    const saveOk = await savePlatformSettings();
+                    if (!saveOk) {
+                        console.warn('プラットフォーム設定の保存に失敗したため購読を維持しません');
+                        $toggleNotify.checked = false;
+                        updatePlatformSettingsVisibility(false);
+                        updateToggleImage();
+                        return;
+                    }
+
+                    try {
+                        const input = document.getElementById('subscriber-name-input');
+                        const name = input ? (input.value || '').trim() : '';
+                        if (name) {
+                            const ok = await saveNameToServer(getClientId(), name);
+                            if (!ok) console.warn('通知ON時の名前保存に失敗しました');
+                            else showLinked(true);
+                        }
+                    } catch (e) {
+                        console.warn('通知ON時の名前保存でエラー', e);
+                    }
+
+                } else {
+                    try {
+                        await unsubscribePush();
+                        showLinked(false);
+                    } catch (e) {
+                        console.error('unsubscribe 失敗', e);
+                        $toggleNotify.checked = true;
+                        updatePlatformSettingsVisibility(true);
+                        updateToggleImage();
+                    }
+                }
+            } catch (e) {
+                console.warn('Push操作で予期せぬエラー', e);
+                $toggleNotify.checked = false;
+                updatePlatformSettingsVisibility(false);
+                document.body.classList.remove('notifications-enabled', 'settings-on');
+            } finally {
+                pushProcessing = false;
+                updatePlatformSettingsVisibility($toggleNotify.checked);
+                updateToggleImage();
+            }
+        });
     }
-});
 
-
-    // テスト通知
     if ($btnSendTest) {
         $btnSendTest.addEventListener('click', async () => {
             $btnSendTest.disabled = true;
@@ -669,13 +1325,11 @@ $toggleNotify.addEventListener('change', async () => {
         });
     }
 
-    // 履歴取得・"もっと見る"
     const $btnMoreLogs = document.getElementById('more-logs-button');
     if ($btnMoreLogs && $logs && $status) {
         $btnMoreLogs.addEventListener('click', () => fetchHistoryMore($logs, $status));
     }
 
-    // 手動更新ボタン
     const $btnRefresh = document.getElementById('btn-refresh');
     if ($btnRefresh && $logs && $status) {
         $btnRefresh.addEventListener('click', () => {
@@ -685,9 +1339,8 @@ $toggleNotify.addEventListener('change', async () => {
         });
     }
 
-    // 自動更新
     if ($autoRefreshCheckbox && $logs && $status) {
-        $autoRefreshCheckbox.addEventListener('change', (e) => {
+        $autoRefreshCheckbox.addEventListener('change', e => {
             if (e.target.checked) {
                 _paging.offset = 0;
                 fetchHistory($logs, $status, { append: false });
@@ -702,6 +1355,5 @@ $toggleNotify.addEventListener('change', async () => {
         if ($autoRefreshCheckbox.checked) $autoRefreshCheckbox.dispatchEvent(new Event('change'));
     }
 
-    // 初回履歴取得
     if ($logs && $status) fetchHistory($logs, $status, { append: false });
 });
