@@ -9,11 +9,11 @@
 
 - [概要](#概要)
 - [受け取れる通知](#受け取れる通知)
-- ##[iPhone（iOS）手順](iPhone(iOS)手順)
+- <font size="5">**iPhone（iOS）手順**</font>
 - [PC/Android](#PC/Android)
   - [Android設定](#Android設定)
-  - [Androidをホーム画面に追加(Webアプリ化)](#Androidをホーム画面に追加(Webアプリ化))
-- [運用・注意点](#運用注意点)
+  - [Androidをホーム画面に追加(Webアプリ化)](#Androidをホーム画面に追加Webアプリ化)
+- [運用・注意点](#運用・注意点)
 - [不具合報告](#不具合報告)
 - [開発者メモ](#開発者メモ)
 ---
