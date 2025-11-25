@@ -162,19 +162,41 @@ async function main() {
   }
 
   // youtubeCommunity
-  if (typeof youtubeCommunity.startPolling === 'function') {
-    startPromises.push(
-      (async () => {
-        try {
-          await youtubeCommunity.startPolling();
-          console.log('youtubeCommunity polling 起動');
-        } catch (e) {
-          console.error('youtubeCommunity 起動エラー:', e && e.message ? e.message : e);
-          throw e;
-        }
-      })()
-    );
+// 監視対象 YouTube ハンドル
+const MONITOR_YT_COMMUNITY = ['@koinoyamaich', '@koinoyamaisub'];
+
+if (typeof youtubeCommunity.startPolling === 'function') {
+  startPromises.push(
+    (async () => {
+      try {
+        for (const handle of MONITOR_YT_COMMUNITY) {
+  const postUrls = await youtubeCommunity.startPolling(handle);
+  console.log(`[${handle}] 投稿 URL:`, postUrls);
+
+  if (notifyConfig.token && postUrls.length > 0) {
+    const fetch = global.fetch || (await import('node-fetch')).then(mod => mod.default);
+    await fetch(notifyConfig.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Notify-Token': notifyConfig.token
+      },
+      body: JSON.stringify({ type: 'ytcommunity', channel: handle, data: postUrls })
+    });
+    console.log(`[${handle}] 通知送信完了`);
   }
+}
+
+      } catch (e) {
+        console.error('youtubeCommunity 起動エラー:', e && e.message ? e.message : e);
+        throw e;
+      }
+    })()
+  );
+}
+
+
+
 
 // 💡 新しい TwitCasting サーバーの起動
 if (typeof twitcasting.startTwitcastingServer === 'function') {

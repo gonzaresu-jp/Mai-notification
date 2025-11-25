@@ -1,124 +1,83 @@
-const { google } = require('googleapis');
-const axios = require('axios');
-const fs = require('fs/promises');
-require('dotenv').config();
+// ytcommunity.js - 単体完結版（抽出ロジック内蔵 + postUrl対応）
+const fs = require('fs');
+const path = require('path');
+const puppeteer = require('puppeteer');
 
-const API_KEY = process.env.YOUTUBE_API_KEY;
-const LOCAL_API_URL = 'http://localhost:8080/api/notify';
-const ICON_URL = 'https://elza.poitou-mora.ts.net/pushweb/icon.ico';
-const POLL_INTERVAL = 3 * 60 * 1000;
-const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
+let notifyConfig = null;
 
-const CHANNEL_IDS = [
-  'UCgttI8QfdWhvd3SRtCYcJzw',
-  'UCElHA6-5CBmgWODVWNxS8VA'
-];
-
-const LAST_POSTS_FILE = 'community.json';
-
-const youtube = google.youtube({
-  version: 'v3',
-  auth: API_KEY
-});
-
-let lastPostIds = {};
-
-async function loadLastPostIds() {
-  try {
-    const data = await fs.readFile(LAST_POSTS_FILE, 'utf-8');
-    lastPostIds = JSON.parse(data);
-    console.log(`Loaded last post IDs from ${LAST_POSTS_FILE}.`);
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      // ファイルが存在しない場合は初期データとして空のオブジェクトを使用
-      console.log(`${LAST_POSTS_FILE} not found. Starting with empty state.`);
-      lastPostIds = {};
-    } else {
-      console.error('Error loading last post IDs:', err.message);
-      // 読み込みエラーの場合も空のオブジェクトで続行
-      lastPostIds = {};
-    }
-  }
+function init(config) {
+  notifyConfig = config || {};
 }
 
-async function saveLastPostIds() {
-  try {
-    const data = JSON.stringify(lastPostIds, null, 2);
-    await fs.writeFile(LAST_POSTS_FILE, data, 'utf-8');
-    console.log(`Saved current post IDs to ${LAST_POSTS_FILE}.`);
-  } catch (err) {
-    console.error('Error saving last post IDs:', err.message);
-  }
-}
+// HTML から post 情報を抽出する関数
+async function parseCommunity(htmlPath) {
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  const posts = [];
 
-async function checkCommunityPosts(channelId) {
+  const jsonRegex = /var ytInitialData = (\{.*?\});/s;
+  const match = html.match(jsonRegex);
+  if (!match) return posts;
+
   try {
-    const res = await youtube.activities.list({
-      part: ['snippet'],
-      channelId,
-      maxResults: 5,
+    const data = JSON.parse(match[1]);
+    const contents = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content
+      ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents;
+
+    if (!contents) return posts;
+
+    contents.forEach(item => {
+      const postRenderer = item?.backstagePostThreadRenderer || item?.backstagePostRenderer;
+      if (!postRenderer) return;
+
+      const postId = postRenderer.post?.postId || postRenderer.postId;
+      if (!postId) return;
+
+      const author = postRenderer.authorText?.simpleText || 'Unknown';
+      const content = postRenderer.contentText?.runs?.map(r => r.text).join('') || '';
+      const publishedTime = postRenderer.publishedTimeText?.runs?.map(r => r.text).join('') || '';
+      const postUrl = `https://www.youtube.com/post/${postId}`;
+
+      posts.push({ postId, postUrl, author, content, publishedTime });
     });
-
-    const items = res.data.items || [];
-    let shouldSave = false;
-    // --- 取得データ全体のログを追加 ---
-    console.log(`[YouTube API Response] Channel ${channelId}: ${items.length} items received.`);
-    // itemsの中身を詳細に確認したい場合は、下の行も追加
-    // console.log(JSON.stringify(items, null, 2));
-
-    for (const item of items.reverse()) {
-      if (!item.snippet || item.snippet.type !== 'community') continue;
-
-      const postId = item.id;
-      // --- コミュニティ投稿として認識されたログを追加 ---
-      console.log(`[New Post Check] Channel ${channelId} - Post ID: ${postId}. Last ID: ${lastPostIds[channelId]}`);
-      
-      if (lastPostIds[channelId] === postId) continue;
-      lastPostIds[channelId] = postId;
-      shouldSave = true;
-
-      const title = item.snippet.title || 'YouTubeコミュニティ投稿';
-      const url = `https://www.youtube.com/post/${postId}`;
-      const published = item.snippet.publishedAt || null;
-
-      const payload = {
-        type: 'youtubeCommunity',
-        settingKey: 'youtubeCommunity',
-        data: {
-          title,
-          url,
-          icon: ICON_URL,
-          published
-        }
-      };
-
-      await axios.post(LOCAL_API_URL, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Notify-Token': NOTIFY_TOKEN
-        }
-      })
-        .then(() => console.log(`Community post sent for ${channelId}: ${postId}`))
-        .catch(e => console.error('Community notify failed:', e.message || e));
-    }
-if (shouldSave) {
-        await saveLastPostIds();
-    }
-  } catch (err) {
-    console.error(`Error fetching community posts for ${channelId}:`, err.message || err);
+  } catch (e) {
+    console.error('parseCommunity JSON parse error:', e.message);
   }
+
+  return posts;
 }
 
-async function startPolling() {
-  // 👈 最初に前回の状態を読み込む
-  await loadLastPostIds();
-    
-  console.log(`Community polling started for channels: ${CHANNEL_IDS.join(', ')}`);
-  CHANNEL_IDS.forEach(chId => checkCommunityPosts(chId));
+// handle から直接 URL
+async function startPolling(handle) {
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+  const page = await browser.newPage();
+  const url = `https://www.youtube.com/${handle}/posts`;
 
-  setInterval(() => {
-    CHANNEL_IDS.forEach(chId => checkCommunityPosts(chId));
-  }, POLL_INTERVAL);
+  await page.goto(url, { waitUntil: 'networkidle2' });
+
+  // スクロールしてすべての投稿をロード
+  let previousHeight = 0;
+  while (true) {
+    const height = await page.evaluate('document.body.scrollHeight');
+    if (height === previousHeight) break;
+    previousHeight = height;
+    await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+    await page.waitForTimeout(1000);
+  }
+
+  const postUrls = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('a[href^="/post/"]'))
+      .map(a => a.href)
+      .filter((v, i, self) => self.indexOf(v) === i); // 重複排除
+  });
+
+  await browser.close();
+  return postUrls;
 }
 
-module.exports = { startPolling };
+
+
+module.exports = {
+  init,
+  startPolling,
+  parseCommunity
+};

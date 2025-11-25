@@ -1,14 +1,14 @@
+// youtube-webhook.js
 const express = require('express');
 const bodyParser = require('body-parser');
 const xml2js = require('xml2js');
 const axios = require('axios');
-const querystring = require('querystring'); // ★ 新しく追加
+const querystring = require('querystring');
+const fs = require('fs');
+const path = require('path');
 
-// xml2jsのPromise対応バージョンを取得
-const { parseStringPromise } = require('xml2js'); 
+const { parseStringPromise } = require('xml2js');
 
-// 監視対象チャンネルIDとコールバックURLを設定
-// ※ Nginxのドメインとパスに合わせる
 const CHANNEL_IDS = [
     'UCElHA6-5CBmgWODVWNxS8VA',
     'UCgttI8QfdWhvd3SRtCYcJzw'
@@ -16,7 +16,6 @@ const CHANNEL_IDS = [
 const CALLBACK_URL = 'https://elza.poitou-mora.ts.net/youtube-webhook';
 const PUBSUBHUBBUB_HUB = 'https://pubsubhubbub.appspot.com/subscribe';
 
-// 通知設定（initで注入されることを想定）
 let NOTIFY_CONFIG = {
     token: null,
     apiUrl: 'http://localhost:8080/api/notify',
@@ -24,193 +23,358 @@ let NOTIFY_CONFIG = {
 };
 
 const ICON_URL = 'https://elza.poitou-mora.ts.net/pushweb/icon.ico';
-const RECENT_VIDEO_THRESHOLD_MS = 5 * 60 * 1000;
 
-/**
- * 外部のmain.jsから呼ばれる初期化関数
- * @param {object} config - 通知設定を含むオブジェクト
- */
+// 閾値（使用箇所あり）
+const RECENT_VIDEO_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours (既存値を維持)
+
+const API_KEY = process.env.YOUTUBE_API_KEY || ''; // 必ず環境変数で提供する事
+
+const SENT_RECORDS_FILE = path.join(__dirname, 'sent_records.json');
+
+function loadSentRecords() {
+    try {
+        if (fs.existsSync(SENT_RECORDS_FILE)) {
+            const raw = fs.readFileSync(SENT_RECORDS_FILE, 'utf8');
+            return JSON.parse(raw || '{}');
+        }
+    } catch (e) {
+        console.error('Failed to load sent records:', e);
+    }
+    return {};
+}
+
+function saveSentRecords(records) {
+    try {
+        fs.writeFileSync(SENT_RECORDS_FILE, JSON.stringify(records, null, 2), 'utf8');
+    } catch (e) {
+        console.error('Failed to save sent records:', e);
+    }
+}
+
+/** YouTube Data API で動画情報を取得 */
+async function fetchVideoStatus(videoId) {
+    if (!API_KEY) throw new Error('YOUTUBE_API_KEY not set in environment');
+    const url = 'https://www.googleapis.com/youtube/v3/videos';
+    try {
+        const resp = await axios.get(url, {
+            params: {
+                id: videoId,
+                part: 'liveStreamingDetails,status',
+                key: API_KEY
+            },
+            timeout: 10_000
+        });
+        if (resp.data && resp.data.items && resp.data.items.length > 0) {
+            return resp.data.items[0];
+        }
+        return null;
+    } catch (err) {
+        console.error(`fetchVideoStatus error for ${videoId}:`, err.message || err);
+        return null;
+    }
+}
+
+/** 内部通知サーバ（NOTIFY_CONFIG.apiUrl）へ送る汎用関数 */
+async function sendNotifyApi(payload) {
+    try {
+        await axios.post(NOTIFY_CONFIG.apiUrl, payload, {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Notify-Token': NOTIFY_CONFIG.token || ''
+            },
+            timeout: 8000
+        });
+        return true;
+    } catch (e) {
+        console.error('sendNotifyApi failed:', e.message || e);
+        return false;
+    }
+}
+
+/** 指定の内部エンドポイントに URL を送りつける（新規動画用） */
+async function sendInternalUrl(urlToSend) {
+    try {
+        await axios.post('http://192.168.1.70:1700/', { url: urlToSend }, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 8000
+        });
+        return true;
+    } catch (e) {
+        console.error('sendInternalUrl failed:', e.message || e);
+        return false;
+    }
+}
+
 function init(config) {
     NOTIFY_CONFIG = { ...NOTIFY_CONFIG, ...config };
     console.log('[YouTube] Notification config loaded.');
 }
 
-
-/**
- * 単一のチャンネルに対して購読リクエストを送信する
- * @param {string} channelId - 購読対象のYouTubeチャンネルID
- */
+/** Subscribe helper (既存) */
 async function subscribeToChannel(channelId) {
     const topicUrl = `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${channelId}`;
-
-    // POSTで送信するデータ
     const data = querystring.stringify({
         'hub.mode': 'subscribe',
         'hub.topic': topicUrl,
         'hub.callback': CALLBACK_URL,
-        'hub.verify': 'sync', // 同期検証を要求
-        // 購読期限を最長に設定（なくてもGoogle側でデフォルト設定されるが明示的に指定）
-        'hub.lease_seconds': 432000 // 5日間 (60*60*24*5)
+        'hub.verify': 'sync',
+        'hub.lease_seconds': 432000
     });
-
     try {
         const response = await axios.post(PUBSUBHUBBUB_HUB, data, {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 10000
         });
-
-        // Hubは通常、成功時に 204 No Content または 202 Accepted を返す
         if (response.status === 204 || response.status === 202) {
-            console.log(`[YouTube Sub] ✅ 購読リクエスト成功: ${channelId}. 検証を待機中...`);
+            console.log(`[YouTube Sub] ✅ 購読リクエスト成功: ${channelId}.`);
         } else {
             console.error(`[YouTube Sub] ❌ 購読リクエスト失敗 (${channelId}). Status: ${response.status}`);
         }
     } catch (error) {
-        console.error(`[YouTube Sub] 致命的なエラー (${channelId}):`, error.message);
-        // エラー詳細を確認するため、レスポンスがあれば出力
-        if (error.response) {
-            console.error('  Response Body:', error.response.data);
-        }
+        console.error(`[YouTube Sub] エラー (${channelId}):`, error.message || error);
+        if (error.response) console.error('  Response Body:', error.response.data);
     }
 }
 
-/**
- * すべての監視対象チャンネルに対して購読リクエストを送信する (自動更新用)
- */
 async function subscribeAllChannels() {
-    console.log('[YouTube Sub] 全チャンネルの購読リクエスト/更新を開始します...');
-    const promises = CHANNEL_IDS.map(channelId => subscribeToChannel(channelId));
-    
-    // 全てのリクエストが完了するのを待つ
+    console.log('[YouTube Sub] 全チャンネルの購読リクエスト/更新を開始');
+    const promises = CHANNEL_IDS.map(c => subscribeToChannel(c));
     await Promise.allSettled(promises);
-    console.log('[YouTube Sub] 全チャンネルの購読リクエスト送信完了。');
+    console.log('[YouTube Sub] 完了');
 }
 
-
-// Webhookサーバーを起動する関数
+/** Webhook server start */
 function startWebhook(port = 3001) {
     const app = express();
     console.log('Starting YouTube Webhook server...');
 
-    // 1. POSTリクエスト (通知本体)
+    // raw log dir
+    const RAW_LOG_DIR = path.join(__dirname, 'logs');
+    if (!fs.existsSync(RAW_LOG_DIR)) fs.mkdirSync(RAW_LOG_DIR, { recursive: true });
+    const rawFile = path.join(RAW_LOG_DIR, 'youtube-webhook-raw.log');
+
+    // POST handler
     app.post('/youtube-webhook', bodyParser.text({ type: '*/*' }), async (req, res) => {
         const xml = req.body;
-        const now = new Date(); 
-        const fs = require('fs');
-const path = require('path');
-
-const RAW_LOG_DIR = path.join(__dirname, 'logs'); // または /var/log/yourapp
-if (!fs.existsSync(RAW_LOG_DIR)) fs.mkdirSync(RAW_LOG_DIR, { recursive: true });
-
-const rawFile = path.join(RAW_LOG_DIR, 'youtube-webhook-raw.log');
-const nowIso = new Date().toISOString();
-fs.appendFile(rawFile, `\n--- ${nowIso} ---\n${xml}\n`, (err) => {
-  if (err) console.error('Failed to write raw webhook:', err);
-});
-
+        const nowIso = new Date().toISOString();
+        fs.appendFile(rawFile, `\n--- ${nowIso} ---\n${xml}\n`, (err) => {
+            if (err) console.error('Failed to write raw webhook:', err);
+        });
 
         if (!xml || typeof xml !== 'string' || xml.trim().length === 0) {
-            console.error('Received empty or invalid XML body. Sending 400.');
-            return res.sendStatus(400); 
+            console.error('Received empty or invalid XML body. 400.');
+            return res.sendStatus(400);
         }
-        console.log('Received POST notification from YouTube Hub.');
 
+        let parsed;
         try {
-            const result = await parseStringPromise(xml); 
-            const entries = (result && result.feed && result.feed.entry) ? (Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry]) : [];
-
-            if (entries.length === 0) {
-                console.log('YouTube Webhook: Received notification without video entries (e.g., video deletion). Status OK.');
-                return res.sendStatus(200);
-            }
-
-            for (const entry of entries) {
-                const videoId = entry['yt:videoId'] && entry['yt:videoId'][0];
-                let title = entry.title && entry.title[0];
-                const publishedStr = entry.published && entry.published[0];
-                const updatedStr = entry.updated && entry.updated[0]; 
-
-                if (!videoId) {
-                    console.warn('YouTube entry missing videoId, skip');
-                    continue;
-                }
-
-                let publishedDate = publishedStr ? new Date(publishedStr) : null;
-                let updatedDate = updatedStr ? new Date(updatedStr) : null;
-
-let dateToCheck = updatedDate || publishedDate;
-
-if (dateToCheck && dateToCheck < now) {
-    // Hubからの通知時刻と動画のタイムスタンプの差をチェック
-    if (now.getTime() - dateToCheck.getTime() > RECENT_VIDEO_THRESHOLD_MS) {
-        console.log(`[YouTube Filter] Skip old video or old update: ${videoId}. Published: ${publishedStr}, Updated: ${updatedStr}`);
-        continue; // 通知をスキップ
-    } else {
-        console.log(`[YouTube] Recent video/update detected: ${videoId} - allowing notification`);
-    }
-}
-                // --- フィルター処理 終了 ---
-
-                const url = `https://www.youtube.com/watch?v=${videoId}`;
-                title = title || 'YouTube新着'; 
-
-                const payload = {
-                    type: 'youtube',
-                    settingKey: 'youtube',
-                    data: {
-                        title: '【YouTube】', 
-                        body: String(title),
-                        url,
-                        icon: ICON_URL,
-                        published: publishedStr || null
-                    }
-                };
-
-                axios.post(NOTIFY_CONFIG.apiUrl, payload, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Notify-Token': NOTIFY_CONFIG.token
-                    }
-                })
-                    .then(() => console.log('YouTube -> /api/notify sent:', videoId))
-                    .catch(e => console.error('YouTube notify post failed:', e.message || e));
-            }
+            parsed = await parseStringPromise(xml);
         } catch (err) {
-            console.error('XML parse or processing error:', err);
-            return res.sendStatus(400); 
+            console.error('XML parse error:', err);
+            return res.sendStatus(400);
         }
 
-        res.sendStatus(200); // Hubからの通知は常に200 OKで応答
+        const entries = (parsed && parsed.feed && parsed.feed.entry)
+            ? (Array.isArray(parsed.feed.entry) ? parsed.feed.entry : [parsed.feed.entry])
+            : [];
+
+        if (entries.length === 0) {
+            console.log('No entries in feed (possible deletion). 200 OK.');
+            return res.sendStatus(200);
+        }
+
+        const records = loadSentRecords();
+
+        for (const entry of entries) {
+            const videoId = entry['yt:videoId'] && entry['yt:videoId'][0];
+            let title = entry.title && entry.title[0];
+            const publishedStr = entry.published && entry.published[0];
+
+            if (!videoId) {
+                console.warn('Entry missing videoId, skip.');
+                continue;
+            }
+
+            const publishedDate = publishedStr ? new Date(publishedStr) : null;
+            if (!publishedDate) {
+                console.warn(`No published date for video ${videoId}, skip.`);
+                continue;
+            }
+
+            const nowUtc = new Date();
+            const diffMs = nowUtc.getTime() - publishedDate.getTime();
+
+            if (diffMs > RECENT_VIDEO_THRESHOLD_MS) {
+                console.log(`Skip ${videoId}: published older than threshold.`);
+                continue;
+            }
+
+            // データ取得
+            const item = await fetchVideoStatus(videoId);
+            if (!item) {
+                console.warn(`No data from YouTube Data API for ${videoId}, skip.`);
+                continue;
+            }
+
+            const live = item.liveStreamingDetails || null;
+            const status = item.status || {};
+            const url = `https://www.youtube.com/watch?v=${videoId}`;
+            title = title || 'YouTube動画';
+
+            // 判定フラグ
+            const isUpcoming = live && live.scheduledStartTime && !live.actualStartTime;
+            const isLive = live && live.actualStartTime && !live.actualEndTime;
+            const isArchivedFromLive = live && live.actualEndTime; // ライブ終了してアーカイブ化済み or 処理中
+            const isNonLiveVideo = !live && (status.uploadStatus === 'processed' || status.uploadStatus === 'uploaded' || status.uploadStatus === 'completed');
+
+            const rec = records[videoId] || {};
+            const recIsEmpty = Object.keys(rec).length === 0;
+
+            // 1) 予定 (Upcoming) -> タイトルに【予定】付与して notify。一度だけ送る（plannedSent）
+            if (isUpcoming) {
+                if (!rec.plannedSent) {
+                    const payload = {
+                        type: 'youtube',
+                        settingKey: 'youtube',
+                        data: {
+                            title: `【予定】`,
+                            body: `${title}`,
+                            url,
+                            icon: ICON_URL,
+                            published: publishedStr || null
+                        }
+                    };
+                    const ok = await sendNotifyApi(payload);
+                    if (ok) {
+                        records[videoId] = { ...rec, plannedSent: true, plannedAt: new Date().toISOString() };
+                        console.log(`Planned notify sent for ${videoId}`);
+                    } else {
+                        console.error(`Failed to send planned notify for ${videoId}`);
+                    }
+                    saveSentRecords(records);
+                } else {
+                    console.log(`Planned notify already sent for ${videoId}, ignored.`);
+                }
+                continue;
+            }
+
+            // 2) ライブ中 (Live) -> 【ライブ】付けて通知。基本的に一度だけ（liveSent）
+            if (isLive) {
+                if (!rec.liveSent) {
+                    const payload = {
+                        type: 'youtube',
+                        settingKey: 'youtube',
+                        data: {
+                            title: `【ライブ】`,
+                            body: `${title}`,
+                            url,
+                            icon: ICON_URL,
+                            published: publishedStr || null
+                        }
+                    };
+                    const ok = await sendNotifyApi(payload);
+                    if (ok) {
+                        records[videoId] = { ...rec, liveSent: true, liveAt: new Date().toISOString() };
+                        console.log(`Live notify sent for ${videoId}`);
+                    } else {
+                        console.error(`Failed to send live notify for ${videoId}`);
+                    }
+                    saveSentRecords(records);
+                } else {
+                    console.log(`Live notify already sent for ${videoId}, ignored.`);
+                }
+                continue;
+            }
+
+            // 4) 新規で動画になった場合の処理
+            // - ライブ終了アーカイブ (isArchivedFromLive): 通知は送らず内部URLへPOSTのみ送信（重複防止）
+            // - 非ライブの新規動画 (isNonLiveVideo): ログにない（recIsEmpty）の場合は内部URLへPOST + 通知を送る
+            if (isArchivedFromLive) {
+                if (!rec.newVideoSent) {
+                    const ok = await sendInternalUrl(url);
+                    if (ok) {
+                        records[videoId] = { ...rec, newVideoSent: true, newVideoAt: new Date().toISOString(), archivedFromLive: true };
+                        console.log(`Archived-from-live POST sent for ${videoId}`);
+                    } else {
+                        console.error(`Failed to POST archived-from-live for ${videoId}`);
+                    }
+                    saveSentRecords(records);
+                } else {
+                    console.log(`Archived-from-live already POSTed for ${videoId}, ignored.`);
+                }
+                continue;
+            }
+
+            if (isNonLiveVideo) {
+                // 非ライブの通常動画は「ログにないもの」は通知 + 内部POST
+                if (!rec.newVideoSent) {
+                    // If rec is empty => new/newly detected (ログにない)
+                    if (recIsEmpty) {
+                        // 1) send notify
+                        const notifyPayload = {
+                            type: 'youtube',
+                            settingKey: 'youtube',
+                            data: {
+                                title: `【動画】`,
+                                body: `${title}`,
+                                url,
+                                icon: ICON_URL,
+                                published: publishedStr || null
+                            }
+                        };
+                        const notified = await sendNotifyApi(notifyPayload);
+                        if (notified) {
+                            records[videoId] = { ...rec, notifiedAt: new Date().toISOString() };
+                            console.log(`Notify sent for new non-live video ${videoId}`);
+                        } else {
+                            console.error(`Failed to send notify for new non-live video ${videoId}`);
+                        }
+                    }
+
+                    // 2) always send internal URL POST once (for new video)
+                    const ok = await sendInternalUrl(url);
+                    if (ok) {
+                        records[videoId] = { ...records[videoId], newVideoSent: true, newVideoAt: new Date().toISOString(), nonLive: true };
+                        console.log(`New non-live video POST sent for ${videoId}`);
+                    } else {
+                        console.error(`Failed to POST new non-live video for ${videoId}`);
+                    }
+                    saveSentRecords(records);
+                } else {
+                    console.log(`New-video already processed for ${videoId}, ignored.`);
+                }
+                continue;
+            }
+
+            // それ以外のケース（processing中など）はログに残してスキップ
+            console.log(`No action for ${videoId}. status.uploadStatus=${status.uploadStatus}, live present=${!!live}`);
+        }
+
+        // 常に200で応答
+        res.sendStatus(200);
     });
 
-    // 2. GETリクエスト (購読検証)
+    // GET verification
     app.get('/youtube-webhook', (req, res) => {
         const hubChallenge = req.query['hub.challenge'];
-        console.log(`[YouTube Webhook] Received GET for verification. Challenge: ${hubChallenge}`);
-
-        if (hubChallenge) {
-            return res.send(hubChallenge);
-        }
-
-        res.sendStatus(400); 
+        if (hubChallenge) return res.send(hubChallenge);
+        res.sendStatus(400);
     });
 
     return new Promise((resolve) => {
         app.listen(port, () => {
-            console.log(`Webhook受信待ち on port ${port} (Re-enabled for NGINX proxy)`);
+            console.log(`Webhook listening on port ${port}`);
             resolve();
         });
     });
 }
 
-// ファイルが直接実行された場合にサーバーを起動
 if (require.main === module) {
-    startWebhook(3001);
+    startWebhook(3001).catch(err => console.error('Failed to start webhook:', err));
 }
 
 module.exports = {
-    init, // ★ 追加
+    init,
     startWebhook,
-    subscribeAllChannels // ★ 追加
+    subscribeAllChannels
 };
