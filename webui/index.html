@@ -81,7 +81,18 @@
   </button>
 
 </div>
-
+<li class="nav-setting-item">
+    <div class="platform-name-row">推し始め</div>
+    <div class="subscriber-input-wrapper" style="margin-block-end: 10px;"> 
+        <input
+      type="date"
+      id="start"
+      name="trip-start"
+      value="2020-01-07"
+      min="2020-01-01"
+      max="2099-12-31" />
+    </div>
+</li>
 <div id="subscriber-name-status" class="platform-name-status"></div>
 
 
@@ -156,6 +167,10 @@
                 <div class="stat-item fade">
                     <div class="label fade-in d2">周年記念まで</div>
                     <div class="value fade-in d3" id="days-to-anniversary">0</div>
+                </div>
+                <div class="stat-item fade">
+                    <div class="label fade-in d3">推してから</div>
+                    <div class="value fade-in d4" id="days-to-meet">0</div>
                 </div>
             </div>
         </div>
@@ -331,6 +346,115 @@ document.addEventListener('click', (e) => {
 });
 
 </script>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'maistart_date';
+  const DEFAULT_DATE = '2020-01-07';
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  // DOM 要素
+  const dateInput = document.getElementById('start');
+  const meetValueEl = document.getElementById('days-to-meet');
+  const meetStatItem = document.querySelector('#days-to-meet')?.closest('.stat-item');
+
+  // 日付を YYYY-MM-DD 形式の文字列から Date に変換（ローカルタイムで 00:00）
+  function parseYMD(ymd) {
+    if (!ymd) return null;
+    const parts = ymd.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return null;
+    // month は 0 始まり
+    return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+  }
+
+  function stripTime(d) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  }
+
+  // 指定日から今日までの経過日数（負にならない）
+  function daysSinceLocal(date) {
+    if (!date) return null;
+    const now = stripTime(new Date()).getTime();
+    const then = stripTime(date).getTime();
+    return Math.max(0, Math.floor((now - then) / MS_PER_DAY));
+  }
+
+  // localStorage から値を読み込み、UI を初期化
+  function loadAndApply() {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    // 優先順: localStorage -> input の現在値 -> 未設定
+    let effective = stored || (dateInput ? dateInput.value : null);
+
+    // treat DEFAULT_DATE (2020-01-07) as "未設定"
+    if (!effective || effective === DEFAULT_DATE) {
+      // 非表示にする
+      if (meetStatItem) meetStatItem.style.display = 'none';
+      if (meetValueEl) meetValueEl.textContent = '0 日';
+      // input はデフォルト値を残すか、空にするかは要件次第。
+      // ここでは input に保存がない場合は空にする（視認性向上）
+      if (dateInput && !stored) dateInput.value = '';
+      return;
+    }
+
+    // 有効な日付なら表示して日数を更新
+    const parsed = parseYMD(effective);
+    if (!parsed) {
+      if (meetStatItem) meetStatItem.style.display = 'none';
+      return;
+    }
+
+    const since = daysSinceLocal(parsed);
+    if (meetValueEl) meetValueEl.textContent = String(since) + ' 日';
+    if (meetStatItem) meetStatItem.style.display = ''; // 再表示
+    // reflect stored value into input if different
+    if (dateInput && dateInput.value !== effective) dateInput.value = effective;
+  }
+
+  // 保存処理
+  function saveDate(value) {
+    if (!value || value === DEFAULT_DATE) {
+      // treat as unset -> remove from storage
+      localStorage.removeItem(STORAGE_KEY);
+    } else {
+      localStorage.setItem(STORAGE_KEY, value);
+    }
+    loadAndApply();
+  }
+
+  // イベント登録
+  document.addEventListener('DOMContentLoaded', () => {
+    // 初期適用（DOMContentLoaded の二重呼び出しでも安全）
+    loadAndApply();
+
+    if (dateInput) {
+      // 日付が変わったら即保存
+      dateInput.addEventListener('change', (e) => {
+        const v = e.target.value;
+        saveDate(v);
+      });
+    }
+
+    // 「保存」ボタンがあるなら紐づけ（既にある #subscriber-name-submit を利用）
+    const saveBtn = document.getElementById('subscriber-name-submit');
+    if (saveBtn && dateInput) {
+      saveBtn.addEventListener('click', (e) => {
+        // 既存の username 保存処理に追加で日付も保存する
+        const v = dateInput.value;
+        saveDate(v);
+        // 既存の保存処理がある場合はそれが動く想定。ここでは割り込みしない。
+      });
+    }
+
+    // 定期更新（真夜中を跨いで日数が変わるので毎分チェック）
+    // 既にページに setInterval があるなら重複するが影響は小さい。
+    setInterval(loadAndApply, 60 * 1000);
+  });
+
+  // 即時初期化（DOMContentLoaded より前にスクリプトが実行された場合に備える）
+  if (document.readyState !== 'loading') loadAndApply();
+})();
+</script>
+
 
     <script>
 // メニューアイテムに遅延を適用する関数

@@ -194,14 +194,14 @@ header h1 {
 
 .platform-name-row { display:flex; align-items:center; gap:8px; padding:6px 20px; }
 .platform-name-label { min-width:88px; font-size:0.95rem; }
-.platform-name-controls { display:flex; align-items:center; }
+.platform-name-controls { display:flex; align-items:center; margin-block-end: 10px;}
 .platform-name-status { margin-top:6px; font-size:0.85rem; }
 
 /* wrapper を横並びにして input を伸ばす（推奨） */
 .subscriber-input-wrapper {
   display: flex;
   align-items: center;
-  width: 100%;           /* 必要なら制限する */
+  max-width: 217px;
   padding: 0px 20px;
 }
 
@@ -219,6 +219,9 @@ header h1 {
   border-radius: 10px;
   margin-right: 5px !important;
   max-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* アイコンを右に表示（img 要素） */
