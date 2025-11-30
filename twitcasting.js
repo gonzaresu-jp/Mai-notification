@@ -75,50 +75,62 @@ async function retryAsync(fn, retries=3, baseDelay=300) {
 
 // --- 通知送信 ---
 // --- 通知送信 (no-op にできるように) ---
-async function sendNotify(screenId, movieId, title='【ツイキャス】ライブ配信') {
+async function sendNotify(screenId, movieId, title = '【ツイキャス】ライブ配信', body = '') {
     // 早期終了: 環境変数で通知を無効化している場合
     if (DISABLE_NOTIFICATIONS) {
         console.log(`[${screenId}] notify suppressed (DISABLE_NOTIFICATIONS) - movie ${movieId}`);
         return;
     }
+    
     // 早期終了: トークンやエンドポイントが設定されていない場合も安全にスキップ
     if (!NOTIFY_TOKEN || !NOTIFY_ENDPOINT) {
         console.log(`[${screenId}] notify skipped (missing token or endpoint) - movie ${movieId}`);
         return;
     }
-const payload = {
-  data: {
-    title: notify.title,
-    body: notify.body,
-    url: `https://twitcasting.tv/${screenId}/movie/${movieId}`,
-    icon: 'https://twitcasting.tv/favicon.ico'
-  },
-  type: 'twitcasting',
-  settingKey: screenId
-};
 
+    const payload = {
+        data: {
+            title: title,
+            body: body,
+            url: `https://twitcasting.tv/${screenId}/movie/${movieId}`,
+            icon: 'https://twitcasting.tv/favicon.ico'
+        },
+        type: 'twitcasting',
+        settingKey: screenId
+    };
 
     let agent;
-    try{
+    try {
         const parsed = new URL(NOTIFY_ENDPOINT);
-        agent = parsed.protocol === 'https:' ? new https.Agent({keepAlive:false}) : new http.Agent({keepAlive:false});
-    }catch(e){ agent = undefined; }
+        agent = parsed.protocol === 'https:' 
+            ? new https.Agent({keepAlive: false}) 
+            : new http.Agent({keepAlive: false});
+    } catch(e) { 
+        agent = undefined; 
+    }
 
-    try{
-        const res = await retryAsync(()=>fetch(NOTIFY_ENDPOINT,{
-            method:'POST',
-            headers:{ 'Content-Type':'application/json', 'X-Notify-Token': NOTIFY_TOKEN },
+    try {
+        const res = await retryAsync(() => fetch(NOTIFY_ENDPOINT, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'X-Notify-Token': NOTIFY_TOKEN 
+            },
             body: JSON.stringify(payload),
             agent,
-            timeout:15000
-        }),3,300);
-        if(!res.ok){
-            const text = await res.text().catch(()=>'<no body>');
+            timeout: 15000
+        }), 3, 300);
+        
+        if (!res.ok) {
+            const text = await res.text().catch(() => '<no body>');
             console.error(`[${screenId}] notify failed:`, res.status, text);
-        } else console.log(`[${screenId}] notify sent for movie ${movieId}`);
-    }catch(e){ console.error(`[${screenId}] notify error:`, e.stack||e); }
+        } else {
+            console.log(`[${screenId}] notify sent for movie ${movieId}`);
+        }
+    } catch(e) { 
+        console.error(`[${screenId}] notify error:`, e.stack || e); 
+    }
 }
-
 
 // --- プライベートライブ判定 ---
 async function checkPrivateLive(screenId){
