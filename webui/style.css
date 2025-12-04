@@ -8,7 +8,7 @@
     --color-text: #2c2c3e;
     --color-light-text: #f7f7fa;
     --color-highlight-bg: #f7e0ef; /* 薄いハイライト */
-    --bg-image: url('/pushweb/bg.webp');
+    --bg-image: url('./bg.webp');
     --main-blur: 10px; /* 推奨: 6-14px の間で調整 */
     --main-bg-rgba: #ABABAB33;
 }
@@ -887,7 +887,8 @@ body.menu-transitions-disabled #nav-menu .nav-list li {
   }
 
   .icon-link img {
-    max-height:50px;
+    height:50px;
+    width: 100%;
     fill:currentColor;
     color:#333;
   }
@@ -946,3 +947,61 @@ body.menu-transitions-disabled #nav-menu .nav-list li {
   .icon-link:focus {
     box-shadow: 0 0 0 3px rgba(21,156,228,0.25);
   }
+
+  .skeleton-card {
+  background: #f0f0f0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 12px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #e0e0e0;
+  flex-shrink: 0;
+}
+
+.skeleton-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-title {
+  height: 20px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  width: 60%;
+}
+
+.skeleton-text {
+  height: 16px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  width: 100%;
+}
+
+.skeleton-text.short {
+  width: 40%;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* データ読み込み後はスケルトンを非表示 */
+#logs:has(.card) .skeleton-card {
+  display: none;
+}
+</style>

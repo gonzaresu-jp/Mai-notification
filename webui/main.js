@@ -435,7 +435,7 @@ async function fetchHistory($logsEl, $statusEl, { append = false } = {}) {
 
     // ループでサーバページを追いかけ、集める。無限ループ防止に maxFetchPages を設定しても良い（例: 10）
     let lastServerResponse = null;
-    const maxPagesToFetch = 20; // 必要なら調整。過度に大きいと負荷になる。
+    const maxPagesToFetch = 5; // 必要なら調整。過度に大きいと負荷になる。
     let pagesFetched = 0;
     try {
         while (collectedLogs.length < pageLimit) {

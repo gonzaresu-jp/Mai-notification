@@ -4,27 +4,44 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>まいちゃん通知ダッシュボード</title>
+
+    <meta name="description" content="まいちゃんの配信や活動の通知を受け取れるサービスです。" />
+
+    <meta property="og:url" content="https://mai.honna-yuzuki.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="まいちゃん通知ダッシュボード" />
+    <meta property="og:description" content="まいちゃんの配信や活動の通知を受け取れるサービスです。" />
+    <meta property="og:site_name" content="まいちゃん通知" />
+    <meta property="og:image" content="https://mai.honna-yuzuki.com/social.jpg" />
+    <meta property="og:locale" content="ja_JP" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@Yuzuki_Mai_17" /> 
+    <meta name="twitter:image" content="https://mai.honna-yuzuki.com/social.jpg" />
     
     <!-- iOS対応のmeta情報 -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="まいちゃん通知" />
+
+    <meta name="mobile-web-app-capable" content="yes">
     
     <!-- アイコン -->
-    <link rel="icon" href="/pushweb/icon.ico">
-    <link rel="apple-touch-icon" href="/pushweb/icon-192.webp" />
-    <link rel="apple-touch-icon" sizes="192x192" href="/pushweb/icon-192.webp" />
-    <link rel="apple-touch-icon" sizes="512x512" href="/pushweb/icon-512.webp" />
+    <link rel="icon" href="./icon.ico">
+    <link rel="apple-touch-icon" href="./icon-192.webp" />
+    <link rel="apple-touch-icon" sizes="192x192" href="./icon-192.webp" />
+    <link rel="apple-touch-icon" sizes="512x512" href="./icon-512.webp" />
     
     <!-- manifest -->
-    <link rel="manifest" href="/pushweb/manifest.json" />
+    <link rel="manifest" href="./manifest.json" />
     
-    <link rel="stylesheet" href="/pushweb/style.css" />
+    <link rel="stylesheet" href="./style.css" />
+    <link rel="preconnect" href="https://elza.poitou-mora.ts.net">
 </head>
 <body id="app-body" class="menu-transitions-disabled">
     <header>
         <div class="header-left">
-            <a href="https://elza.poitou-mora.ts.net/pushweb/" rel="noopener noreferrer" style="text-decoration: none; color: inherit;"><h2 class="fade">通知ダッシュボード</h2></a>
+            <a href="/" rel="noopener noreferrer" style="text-decoration: none; color: inherit;"><h2 class="fade">通知ダッシュボード</h2></a>
         </div>
         
         <div class="hamburger-icon fade" id="hamburger-toggle" aria-controls="nav-menu" aria-expanded="false">
@@ -40,8 +57,8 @@
                 <li class="menu-notification-toggle">
                     <!-- 画像切り替えコンテナ -->
                     <div class="toggle-image-container">
-                        <img src="/pushweb/off.webp" alt="" class="toggle-image off" />
-                        <img src="/pushweb/on.webp" alt="" class="toggle-image on" />
+                        <img src="./off.webp" alt="" class="toggle-image off" />
+                        <img src="./on.webp" alt="" class="toggle-image on" />
                     </div>
                     
                     <div class="toggle-controls-wrapper">
@@ -144,7 +161,7 @@
                 </li>
                 
                 <li><a href="https://github.com/gonzaresu-jp/Mai-notification" target="_blank" rel="noopener noreferrer">GitHubページ</a></li>
-                <li><a href="https://elza.poitou-mora.ts.net/pushweb/info/" rel="noopener noreferrer">このサービスについて</a></li>
+                <li><a href="./info/" rel="noopener noreferrer">このサービスについて</a></li>
                 <li><a href="https://form.jotform.com/253191048959063" target="_blank" rel="noopener noreferrer">不具合報告</a></li>
             </ul>
         </nav>
@@ -238,7 +255,49 @@
                 </select>
             </div>
             
-            <div id="logs" class="log-container"></div>
+            <div id="logs" class="log-container">
+                <!-- 初期表示用のスケルトン（実際のデータが読み込まれたら置き換わる） -->
+              <div class="skeleton-card">
+                <div class="skeleton-icon"></div>
+                <div class="skeleton-content">
+                  <div class="skeleton-title"></div>
+                  <div class="skeleton-text"></div>
+                  <div class="skeleton-text short"></div>
+                </div>
+              </div>
+              <div class="skeleton-card">
+                <div class="skeleton-icon"></div>
+                <div class="skeleton-content">
+                  <div class="skeleton-title"></div>
+                  <div class="skeleton-text"></div>
+                  <div class="skeleton-text short"></div>
+                </div>
+              </div>
+              <div class="skeleton-card">
+                <div class="skeleton-icon"></div>
+                <div class="skeleton-content">
+                  <div class="skeleton-title"></div>
+                  <div class="skeleton-text"></div>
+                  <div class="skeleton-text short"></div>
+                </div>
+              </div>
+              <div class="skeleton-card">
+                <div class="skeleton-icon"></div>
+                <div class="skeleton-content">
+                  <div class="skeleton-title"></div>
+                  <div class="skeleton-text"></div>
+                  <div class="skeleton-text short"></div>
+                </div>
+              </div>
+              <div class="skeleton-card">
+                <div class="skeleton-icon"></div>
+                <div class="skeleton-content">
+                  <div class="skeleton-title"></div>
+                  <div class="skeleton-text"></div>
+                  <div class="skeleton-text short"></div>
+                </div>
+              </div>
+            </div>
             
             <button id="more-logs-button" style="display:none;">もっと見る</button>
             <div id="status" class="muted"></div>
@@ -324,8 +383,8 @@
 </footer>
 
     <!-- iOS Helper を main.js より先に読み込む -->
-    <script src="/pushweb/ios-helper.js"></script>
-    <script src="/pushweb/main.js"></script>
+    <script src="./ios-helper.js" defer></script>
+    <script type="module" src="./js/main.js" defer></script>
     <script>
 const btn = document.getElementById('btn-log-settings');
 const menu = document.getElementById('log-settings-container');
@@ -542,7 +601,7 @@ function applyHamburgerSequentialFadeIn() {
 
 <script>
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/pushweb/service-worker.js')
+        navigator.serviceWorker.register('./service-worker.js')
             .then(reg => console.log('Service Worker 登録成功', reg))
             .catch(err => console.error('Service Worker 登録失敗', err));
     }

@@ -204,7 +204,7 @@
             
             <div class="form-group">
                  <label for="icon">アイコンURL</label>
-                 <input type="text" id="icon" value="https://elza.poitou-mora.ts.net/pushweb/ad.ico" />
+                 <input type="text" id="icon" value="./ad.ico" />
                  <div class="helper-text">通知のアイコン画像URL</div>
              </div>
 
@@ -279,7 +279,7 @@
         // クリアボタン
         btnClear.addEventListener('click', () => {
             form.reset();
-            iconInput.value = 'https://elza.poitou-mora.ts.net/pushweb/ad.ico';
+            iconInput.value = './ad.ico';
             updatePreview();
             statusMessage.classList.remove('show');
         });
@@ -319,8 +319,8 @@
                         data: {
                             title: title,
                             body: body,
-                            url: url || 'https://elza.poitou-mora.ts.net/pushweb/',
-                            icon: icon || 'https://elza.poitou-mora.ts.net/pushweb/icon.ico'
+                            url: url || './',
+                            icon: icon || './icon.ico'
                         }
                     })
                 });
@@ -341,7 +341,7 @@
                 // フォームをクリア
                 setTimeout(() => {
                     form.reset();
-                    iconInput.value = 'https://elza.poitou-mora.ts.net/pushweb/ad.ico';
+                    iconInput.value = './ad.ico';
                     updatePreview();
                 }, 2000);
                 
