@@ -1,18 +1,18 @@
-// service-worker.js (iOS対応版 v3.3)
-const VERSION = 'v3.3';
+// service-worker.js (iOS対応版 v3.4)
+const VERSION = 'v3.4';
 const ALWAYS_OPEN_NEW_TAB = false;
 
 // iOS対応: キャッシュ設定
 const CACHE_NAME = 'mai-notification-v1';
 const urlsToCache = [
-  '/pushweb/',
-  '/pushweb/index.html',
-  '/pushweb/style.css',
-  '/pushweb/main.js',
-  '/pushweb/ios-helper.js',
-  '/pushweb/icon.ico',
-  '/pushweb/icon-192.webp',
-  '/pushweb/icon-512.webp'
+  '/',
+  './index.html',
+  './style.css',
+  './main.js',
+  './ios-helper.js',
+  './icon.ico',
+  './icon-192.webp',
+  './icon-512.webp'
 ];
 
 console.log(`[SW ${VERSION}] ========== Service Worker loaded ==========`);
@@ -73,24 +73,27 @@ self.addEventListener('fetch', event => {
       // ネットワーク失敗時のフォールバック処理
       console.warn('SW fetch failed for', event.request.url, err);
 
-      // ① キャッシュにフォールバックがあれば返す（推奨）
-      try {
-        const cache = await caches.open('static-v1'); // キャッシュ名は環境に合わせて
-        const cached = await cache.match(event.request);
-        if (cached) return cached;
-      } catch (cacheErr) {
-        console.warn('cache lookup failed', cacheErr);
-      }
+// ① キャッシュにフォールバックがあれば返す（推奨）
+try {
+  // 修正 1: 'static-v1' を CACHE_NAME に変更
+  const cache = await caches.open(CACHE_NAME); 
+  const cached = await cache.match(event.request);
+  if (cached) return cached;
+} catch (cacheErr) {
+  // ...
+}
 
-      // ② 特定リソース（アイコン等）用の固定フォールバックを返す
-      if (event.request.url.endsWith('/icon.ico')) {
-        // 事前に install イベントでキャッシュしておいたファイルを返すのが理想
-        try {
-          const cache = await caches.open('static-v1');
-          const fallback = await cache.match('/fallback-icon.ico');
-          if (fallback) return fallback;
-        } catch (e) { /* ignore */ }
-      }
+// ② 特定リソース（アイコン等）用の固定フォールバックを返す
+if (event.request.url.endsWith('/icon.ico')) {
+  // ...
+  try {
+    // 修正 2: 'static-v1' を CACHE_NAME に変更
+    const cache = await caches.open(CACHE_NAME);
+    // 補足: /fallback-icon.ico はキャッシュされていないため、キャッシュした './icon.ico' をマッチさせます。
+    const fallback = await cache.match('./icon.ico'); 
+    if (fallback) return fallback;
+  } catch (e) { /* ignore */ }
+}
 
       // ③ 最終的なデフォルトレスポンス（404 や空のレスポンスなど）
       return new Response('', { status: 503, statusText: 'Service Unavailable' });
@@ -119,7 +122,7 @@ self.addEventListener('push', event => {
   }
 
   // title, body, icon, url を抽出
-  let title = '通知', body = '通知内容', icon = '/pushweb/icon.ico', url = null;
+  let title = '通知', body = '通知内容', icon = './icon.ico', url = null;
   if (data.data && typeof data.data === 'object') {
     title = data.data.title || data.type || title;
     body = data.data.body || data.data.title || body;
@@ -155,7 +158,7 @@ self.addEventListener('push', event => {
   // iOS対応: 通知オプションを最適化
   const options = { 
     body, 
-    icon: icon || '/pushweb/icon-192.webp', // iOS用にPNG優先
+    icon: icon || './icon-192.webp', // iOS用にPNG優先
     data: { url, timestamp: now, notificationId: uniqueTag },
     requireInteraction: false,
     tag: uniqueTag,
@@ -184,7 +187,7 @@ self.addEventListener('notificationclick', event => {
   // service-worker.js の 'notificationclick' イベント内
 let notificationData = event.notification.data || {};
 // 'url'プロパティか、または'data.url'プロパティからURLを探す
-let targetUrl = notificationData.url || (notificationData.data && notificationData.data.url) || '/pushweb/';
+let targetUrl = notificationData.url || (notificationData.data && notificationData.data.url) || '/';
   const ua = self.navigator.userAgent;
   const isAndroid = /Android/i.test(ua);
   const isIOS = /iPhone|iPad|iPod/i.test(ua);
@@ -214,7 +217,7 @@ if (isAndroid && targetUrl) {
     // YouTube, X, TwitCasting, Fanbox の場合
     if (shouldOpenPushWeb) {
         // 固定の pushweb URL に書き換え
-        finalUrl = 'https://elza.poitou-mora.ts.net/pushweb/';
+        finalUrl = '/';
         console.log(`[SW ${VERSION}] Info: Target URL is a special domain. Opening fixed pushweb URL -> ${finalUrl}`);
     } else {
         // その他の直リンク
