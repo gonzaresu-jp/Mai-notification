@@ -1,4 +1,4 @@
-// twitter.js（通知送信付き・設定キー対応版） - 修正版（取得ツイートのログ出力を追加）
+// twitter.js（通知送信付き・設定キー対応版） - ブラウザ再利用・ディスク書き込み最適化版
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
@@ -17,8 +17,84 @@ const HEADLESS = true;
 const MAX_AGE_HOURS = 24;
 const CHECK_INTERVAL_MS = 60 * 1000;
 const NOTIFY_ENDPOINT = 'http://localhost:8080/api/notify';
-const ICON_URL = 'https://elza.poitou-mora.ts.net/pushweb/icon.ico';
+const ICON_URL = './icon.ico';
 const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
+
+// 🔧 ブラウザインスタンスを再利用するためのグローバル変数
+let sharedBrowser = null;
+let browserInitPromise = null;
+
+// 🔧 Cookie キャッシュ（メモリ上に保持）
+let cachedCookies = null;
+let lastCookieLoadTime = 0;
+const COOKIE_CACHE_TTL = 10 * 60 * 1000; // 10分間キャッシュ
+
+// ブラウザの初期化（1度だけ起動）
+async function getSharedBrowser() {
+    if (sharedBrowser && sharedBrowser.isConnected()) {
+        return sharedBrowser;
+    }
+
+    // 既に初期化中の場合は待つ
+    if (browserInitPromise) {
+        return await browserInitPromise;
+    }
+
+    browserInitPromise = (async () => {
+        try {
+            console.log('[Puppeteer] Initializing shared Firefox browser instance...');
+            sharedBrowser = await puppeteer.launch({
+                headless: HEADLESS,
+                product: 'firefox',
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox'
+                ]
+            });
+
+            // ブラウザが予期せず終了した場合の処理
+            sharedBrowser.on('disconnected', () => {
+                console.warn('[Puppeteer] Browser disconnected, will reinitialize on next use');
+                sharedBrowser = null;
+                browserInitPromise = null;
+            });
+
+            console.log('[Puppeteer] Shared Firefox browser ready');
+            return sharedBrowser;
+        } catch (e) {
+            console.error('[Puppeteer] Failed to initialize browser:', e);
+            browserInitPromise = null;
+            throw e;
+        }
+    })();
+
+    return await browserInitPromise;
+}
+
+// プロセス終了時にブラウザをクリーンアップ
+process.on('SIGINT', async () => {
+    console.log('\n[Shutdown] Closing browser...');
+    if (sharedBrowser) {
+        await sharedBrowser.close();
+    }
+    // 一時ファイルの削除
+    try {
+        if (fs.existsSync(TMP_DB)) fs.unlinkSync(TMP_DB);
+    } catch (e) { /* ignore */ }
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    console.log('\n[Shutdown] Closing browser...');
+    if (sharedBrowser) {
+        await sharedBrowser.close();
+    }
+    // 一時ファイルの削除
+    try {
+        if (fs.existsSync(TMP_DB)) fs.unlinkSync(TMP_DB);
+    } catch (e) { /* ignore */ }
+    process.exit(0);
+});
 
 // --- seen.json の読み書き ---
 function loadSeen() {
@@ -38,7 +114,66 @@ function saveSeen(state) {
   }
 }
 
-// --- cookie DB コピー ---
+// 🔧 改善: Cookie を直接 SQLite から読み込む（コピー不要）
+async function getCookiesDirect() {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(COOKIE_DB)) return resolve([]);
+    
+    // READ ONLY モードで直接開く（ロック回避）
+    const db = new sqlite3.Database(COOKIE_DB, sqlite3.OPEN_READONLY, err => { 
+      if(err) {
+        console.warn('Cookie DB direct access failed, falling back to copy method:', err.message);
+        return resolve(null); // フォールバック用に null を返す
+      }
+    });
+    
+    db.all("SELECT host, name, value, path, isSecure, expiry FROM moz_cookies WHERE host LIKE '%twitter%' OR host LIKE '%x.com%'", [], (err, rows) => {
+      if(err){ 
+        db.close(); 
+        console.warn('Cookie query failed:', err.message);
+        return resolve(null);
+      }
+      const cookies = rows.map(r => ({
+        name: r.name,
+        value: r.value,
+        domain: r.host.startsWith('.') ? r.host.slice(1) : r.host,
+        path: r.path,
+        secure: r.isSecure === 1,
+        httpOnly: false,
+        expires: r.expiry
+      }));
+      db.close();
+      resolve(cookies);
+    });
+  });
+}
+
+// 🔧 改善: Cookie キャッシュ機能付き取得（ディスク書き込みゼロ）
+async function getCookiesCached() {
+  const now = Date.now();
+  
+  // キャッシュが有効期限内なら再利用
+  if (cachedCookies && (now - lastCookieLoadTime) < COOKIE_CACHE_TTL) {
+    return cachedCookies;
+  }
+
+  // 直接読み込みを試行
+  const cookies = await getCookiesDirect();
+  
+  if (cookies) {
+    // 成功した場合はキャッシュに保存
+    cachedCookies = cookies;
+    lastCookieLoadTime = now;
+    return cookies;
+  }
+
+  // 直接読み込み失敗時のみコピー方式にフォールバック
+  console.warn('[Cookie] Direct access failed, using copy fallback (disk write will occur)');
+  await copyCookieDb();
+  return await getCookiesFromCopy();
+}
+
+// フォールバック用: 従来のコピー方式
 async function copyCookieDb() {
   try {
     fs.copyFileSync(COOKIE_DB, TMP_DB);
@@ -47,12 +182,11 @@ async function copyCookieDb() {
   }
 }
 
-// --- cookie 読み込み ---
-async function getCookies() {
+async function getCookiesFromCopy() {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(TMP_DB)) return resolve([]);
     const db = new sqlite3.Database(TMP_DB, sqlite3.OPEN_READONLY, err => { if(err) reject(err); });
-    db.all("SELECT host, name, value, path, isSecure, expiry FROM moz_cookies", [], (err, rows) => {
+    db.all("SELECT host, name, value, path, isSecure, expiry FROM moz_cookies WHERE host LIKE '%twitter%' OR host LIKE '%x.com%'", [], (err, rows) => {
       if(err){ db.close(); return reject(err); }
       const cookies = rows.map(r => ({
         name: r.name,
@@ -119,7 +253,6 @@ async function sendNotify(username, tweet, settingKey, sendText) {
     }
   };
 
-  // agent を送信先プロトコルに合わせて選択（NOTIFY_ENDPOINT が http/https によって切替）
   let agent;
   try {
     const parsed = new URL(NOTIFY_ENDPOINT);
@@ -138,7 +271,7 @@ async function sendNotify(username, tweet, settingKey, sendText) {
         'X-Notify-Token': NOTIFY_TOKEN
       },
       body: JSON.stringify(payload),
-      agent,                 // protocol に合わせた agent（なければ undefined）
+      agent,
       timeout: 15000
     }), 3, 300);
 
@@ -162,17 +295,14 @@ async function checkOneUser(page, username, seenState) {
       // ページ安定待ち
       await new Promise(r => setTimeout(r, 2500));
       
-      // ▼▼▼【追加部分】ここから ▼▼▼
-      // 2000ピクセルほどスクロールして追加読み込みを誘発
+      // スクロールして追加読み込みを誘発
       await page.evaluate(() => {
         window.scrollBy(0, 2000);
       });
       // 追加読み込み完了まで少し待機（2秒）
       await new Promise(r => setTimeout(r, 2000));
-      // ▲▲▲【追加部分】ここまで ▲▲▲
 
     }, 3, 500);
-
 
     const tweets = await page.evaluate(() => {
       const articles = Array.from(document.querySelectorAll('article'));
@@ -215,21 +345,19 @@ async function checkOneUser(page, username, seenState) {
   }
 }
 
-// --- main check 関数 ---
+// --- main check 関数（ブラウザ再利用・Cookie キャッシュ版） ---
 async function check(username, isRetry = false) {
   const seenState = loadSeen();
-  await copyCookieDb();
-  let browser;
+  
+  let page;
   try {
-    browser = await puppeteer.launch({
-      headless: HEADLESS,
-      product: 'firefox',
-      args: ['--no-sandbox','--disable-setuid-sandbox']
-    });
-    const page = await browser.newPage();
+    // 🔧 ブラウザを再利用（新しいページだけ開く）
+    const browser = await getSharedBrowser();
+    page = await browser.newPage();
 
-    const cookies = await getCookies();
-    if (cookies.length) {
+    // 🔧 改善: キャッシュされた Cookie を使用（ディスク書き込みなし）
+    const cookies = await getCookiesCached();
+    if (cookies && cookies.length) {
       try { await page.setCookie(...cookies); } catch (e) { /* ignore cookie set errors */ }
     }
 
@@ -247,12 +375,12 @@ async function check(username, isRetry = false) {
         
         // ✅ 0件取得かつ初回チェックの場合、5秒後に再チェック
         if (!isRetry) {
-          console.log(`[${username}] ⚠️  0件取得のため5秒後に再チェックします...`);
-          await browser.close();
+          console.log(`[${username}] ⚠️ 0件取得のため5秒後に再チェックします...`);
+          await page.close();
           await new Promise(r => setTimeout(r, 5000));
           return await check(username, true); // 再帰呼び出し（再チェック）
         } else {
-          console.log(`[${username}] ⚠️  再チェックでも0件でした。次の定期チェックまで待機します。`);
+          console.log(`[${username}] ⚠️ 再チェックでも0件でした。次の定期チェックまで待機します。`);
         }
       }
     } catch (e) {
@@ -304,7 +432,14 @@ async function check(username, isRetry = false) {
     console.error(`[${username}] check error:`, e.message);
     return { username, newTweets: [], error: e.message };
   } finally {
-    if (browser) await browser.close();
+    // 🔧 ブラウザは閉じず、ページだけ閉じる
+    if (page) {
+      try {
+        await page.close();
+      } catch (e) {
+        console.warn(`[${username}] Failed to close page:`, e.message);
+      }
+    }
   }
 }
 
