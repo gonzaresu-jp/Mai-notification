@@ -14,7 +14,7 @@ class MilestoneScheduler {
     
     // 記念日の定義
     this.DEBUT_DATE = new Date(2021, 2, 21); // 2021年3月21日
-    this.BIRTHDAY = { month: 12, day: 7 }; // 1月7日（月は0-indexなので11）
+    this.BIRTHDAY = { month: 0, day: 7 }; // 1月7日（月は0-indexなので11）
     this.ANNIVERSARY = { month: 2, day: 21 }; // 3月21日
     
     // 通知済みマイルストーンを記録（重複防止）
@@ -107,8 +107,8 @@ class MilestoneScheduler {
     const payload = {
       title: milestone.title,
       body: milestone.body,
-      url: 'https://elza.poitou-mora.ts.net/pushweb/',
-      icon: 'https://elza.poitou-mora.ts.net/pushweb/icon.ico'
+      url: './',
+      icon: './icon.ico'
     };
 
     // 履歴に保存

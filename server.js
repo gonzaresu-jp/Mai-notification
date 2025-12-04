@@ -15,6 +15,8 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const dbPath = path.join(__dirname, 'data.db');
 const db = new sqlite3.Database(dbPath);
+let hasPlatformColumn = false;
+let hasStatusColumn = false;
 
 const ADMIN_NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
 const NOTIFY_HMAC_SECRET = process.env.NOTIFY_HMAC_SECRET || null;
@@ -121,6 +123,19 @@ db.serialize(() => {
       });
     }
   });
+
+  // 1. subscriptions.client_id (設定取得の高速化 /api/get-platform-settings)
+    db.run(`CREATE INDEX IF NOT EXISTS idx_subscriptions_client_id ON subscriptions (client_id)`, (err) => {
+        if (err) console.error('subscriptions client_id index err:', err.message);
+        else console.log('✅ subscriptions client_id index ensured');
+    });
+
+    // 2. notifications.created_at (履歴取得の高速化 /api/history)
+    // DESC (降順) にすることで、最新のレコードを素早く検索できます。
+    db.run(`CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC)`, (err) => {
+        if (err) console.error('notifications created_at index err:', err.message);
+        else console.log('✅ notifications created_at index ensured');
+    });
 
   // 既存の重複データをクリーンアップ（トランザクションで安全に実行）
   db.all(
@@ -447,6 +462,53 @@ app.get('/api/get-platform-settings', (req, res) => {
   });
 });
 
+// --- 購読者名取得 ---
+app.get('/api/get-name', (req, res) => {
+  const clientId = (req.query.clientId || '').trim();
+  if (!clientId) return res.status(400).json({ error: 'clientId required' });
+
+  db.get('SELECT name FROM subscriptions WHERE client_id = ?', [clientId], (err, row) => {
+    if (err) {
+      console.error('/api/get-name SELECT err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    // row.name may be null
+    return res.json({ name: row.name || null });
+  });
+});
+
+// --- 購読者名保存 ---
+app.post('/api/save-name', (req, res) => {
+  let { clientId, name } = req.body || {};
+  if (!clientId) return res.status(400).json({ error: 'clientId required' });
+  clientId = String(clientId).trim();
+
+  if (typeof name !== 'string') return res.status(400).json({ error: 'name required' });
+  name = name.trim().slice(0, 255); // 長さ制限（任意）
+
+  // 存在する subscription を更新。無ければ 404（安全策）
+  db.get('SELECT 1 FROM subscriptions WHERE client_id = ?', [clientId], (err, row) => {
+    if (err) {
+      console.error('/api/save-name SELECT err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+    if (!row) {
+      // optional: insert new subscription with name（ここでは存在しないと404にする）
+      return res.status(404).json({ error: 'Subscription not found' });
+    }
+
+    db.run('UPDATE subscriptions SET name = ? WHERE client_id = ?', [name || null, clientId], function(updateErr) {
+      if (updateErr) {
+        console.error('/api/save-name UPDATE err:', updateErr.message);
+        return res.status(500).json({ error: 'DB update error', detail: updateErr.message });
+      }
+      return res.json({ success: true, clientId, name: name || null, changes: this.changes });
+    });
+  });
+});
+
+
 
 // --- 単一キー更新（互換性のため） --- (堅牢版)
 app.post('/api/save-platform-setting', (req, res) => {
@@ -630,8 +692,8 @@ app.post('/api/send-test', (req, res) => {
     const payload = {
       title: 'テスト通知',
       body: 'この通知をタップしてURLに飛べるか確認！',
-      url: 'https://elza.poitou-mora.ts.net/pushweb/test/',
-      icon: `${req.protocol}://${req.get('host')}/pushweb/icon.ico`
+      url: './test/',
+      icon: `${req.protocol}://${req.get('host')}/icon.ico`
     };
 
     // 短めの保護（サイズ制限）

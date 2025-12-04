@@ -8,25 +8,96 @@ const path = require('path');
 const axios = require('axios');
 
 const SEEN_PATH = path.join(__dirname, 'twicas_seen.json');
-const CONFIG_PATH = path.join(__dirname, 'twitcasting-token.json'); // トークンファイルパスを定義
-const HEADLESS = true; // 💡 修正: ここを true から false に変更
+const CONFIG_PATH = path.join(__dirname, 'twitcasting-token.json');
+const HEADLESS = true;
 const CHECK_INTERVAL_MS = 5 * 1000;
 const MAX_AGE_HOURS = 24;
 const NOTIFY_ENDPOINT = 'http://localhost:8080/api/notify';
-const ICON_URL = 'https://elza.poitou-mora.ts.net/pushweb/icon.ico';
+const ICON_URL = './icon.ico';
 const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
 
 const API_BASE_URL = 'https://apiv2.twitcasting.tv';
 const CLIENT_ID = process.env.TWITCASTING_CLIENT_ID;
 const CLIENT_SECRET = process.env.TWITCASTING_CLIENT_SECRET;
 
-// --------------------------------------------------------
-// アクセストークンの読み込みロジック (グローバルスコープで即時実行)
-// 1. 環境変数から読み込み
-// 2. なければ twitcasting-token.json から読み込み、 access_token フィールドもチェックする
-let accessToken = process.env.TWITCASTING_ACCESS_TOKEN || null; // グローバルで初期化
+// 🔧 ブラウザインスタンスを再利用するためのグローバル変数
+let sharedBrowser = null;
+let browserInitPromise = null;
 
-// 通知一時無効フラグ（環境変数で制御）
+// ブラウザの初期化（1度だけ起動）
+async function getSharedBrowser() {
+    if (sharedBrowser && sharedBrowser.isConnected()) {
+        return sharedBrowser;
+    }
+
+    // 既に初期化中の場合は待つ
+    if (browserInitPromise) {
+        return await browserInitPromise;
+    }
+
+    browserInitPromise = (async () => {
+        try {
+            console.log('[Puppeteer] Initializing shared browser instance...');
+            sharedBrowser = await puppeteer.launch({
+                headless: HEADLESS,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage', // メモリ節約
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu',
+                    // 🔧 ディスク書き込み抑制
+                    '--disk-cache-size=0',           // ディスクキャッシュを無効化
+                    '--media-cache-size=0',          // メディアキャッシュを無効化
+                    '--disable-application-cache',   // アプリケーションキャッシュを無効化
+                    '--disable-background-networking', // バックグラウンド通信を無効化
+                    '--disable-sync',                // 同期を無効化
+                    '--disable-translate',           // 翻訳機能を無効化
+                    '--disable-extensions',          // 拡張機能を無効化
+                    '--blink-settings=imagesEnabled=false' // 画像読み込みを無効化（軽量化）
+                ]
+            });
+
+            // ブラウザが予期せず終了した場合の処理
+            sharedBrowser.on('disconnected', () => {
+                console.warn('[Puppeteer] Browser disconnected, will reinitialize on next use');
+                sharedBrowser = null;
+                browserInitPromise = null;
+            });
+
+            console.log('[Puppeteer] Shared browser ready');
+            return sharedBrowser;
+        } catch (e) {
+            console.error('[Puppeteer] Failed to initialize browser:', e);
+            browserInitPromise = null;
+            throw e;
+        }
+    })();
+
+    return await browserInitPromise;
+}
+
+// プロセス終了時にブラウザをクリーンアップ
+process.on('SIGINT', async () => {
+    console.log('\n[Shutdown] Closing browser...');
+    if (sharedBrowser) {
+        await sharedBrowser.close();
+    }
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    console.log('\n[Shutdown] Closing browser...');
+    if (sharedBrowser) {
+        await sharedBrowser.close();
+    }
+    process.exit(0);
+});
+
+let accessToken = process.env.TWITCASTING_ACCESS_TOKEN || null;
+
 const DISABLE_NOTIFICATIONS = process.env.DISABLE_NOTIFICATIONS === '1' || process.env.DISABLE_NOTIFICATIONS === 'true';
 if (DISABLE_NOTIFICATIONS) console.log('TwitCasting: notifications disabled via DISABLE_NOTIFICATIONS');
 
@@ -34,24 +105,19 @@ if (!accessToken) {
     try {
         const configText = fs.readFileSync(CONFIG_PATH, 'utf8');
         const config = JSON.parse(configText);
-        // TWITCASTING_ACCESS_TOKEN, access_token (APIレスポンス形式), または accessToken キーを探す
         accessToken = config.TWITCASTING_ACCESS_TOKEN || config.access_token || config.accessToken || null; 
         if (accessToken) {
             console.log('Access token successfully loaded from twitcasting-token.json.');
         }
     } catch (e) {
-        // twitcasting-token.json が存在しない、または無効な場合は警告を出すが、処理は続行
         if (e.code !== 'ENOENT') {
             console.warn(`[Config Load Warning] Error reading twitcasting-token.json: ${e.message}`);
         }
     }
 }
-// --------------------------------------------------------
 
-// 🔴 修正: lastLiveId をアカウントIDごとに管理する Map に変更
 const lastLiveStatus = new Map();
 
-// --- seen.json の読み書き ---
 function loadSeen() {
     try { return JSON.parse(fs.readFileSync(SEEN_PATH, 'utf8')); } catch { return {}; }
 }
@@ -59,7 +125,6 @@ function saveSeen(state) {
     try { fs.writeFileSync(SEEN_PATH, JSON.stringify(state, null, 2)); } catch(e){ console.error('seen.json write error:', e); }
 }
 
-// --- retry ヘルパ ---
 async function retryAsync(fn, retries=3, baseDelay=300) {
     for(let i=0;i<retries;i++){
         try{ return await fn(); } catch(err){
@@ -73,16 +138,12 @@ async function retryAsync(fn, retries=3, baseDelay=300) {
     }
 }
 
-// --- 通知送信 ---
-// --- 通知送信 (no-op にできるように) ---
 async function sendNotify(screenId, movieId, title = '【ツイキャス】ライブ配信', body = '') {
-    // 早期終了: 環境変数で通知を無効化している場合
     if (DISABLE_NOTIFICATIONS) {
         console.log(`[${screenId}] notify suppressed (DISABLE_NOTIFICATIONS) - movie ${movieId}`);
         return;
     }
     
-    // 早期終了: トークンやエンドポイントが設定されていない場合も安全にスキップ
     if (!NOTIFY_TOKEN || !NOTIFY_ENDPOINT) {
         console.log(`[${screenId}] notify skipped (missing token or endpoint) - movie ${movieId}`);
         return;
@@ -132,25 +193,53 @@ async function sendNotify(screenId, movieId, title = '【ツイキャス】ラ�
     }
 }
 
-// --- プライベートライブ判定 ---
+// 🔧 修正: ブラウザを再利用し、新しいページを開いて使い回す
 async function checkPrivateLive(screenId){
     const url = `https://twitcasting.tv/${screenId}/movie/latest`;
-    let browser;
+    let page;
     try{
-        // puppeteer.launch の headless オプションが false になり、ブラウザが見えるようになる
-        browser = await puppeteer.launch({ headless: HEADLESS, args:['--no-sandbox','--disable-setuid-sandbox'] });
-        const page = await browser.newPage();
-        await retryAsync(async()=>{ await page.goto(url,{waitUntil:'domcontentloaded', timeout:60000}); await new Promise(r=>setTimeout(r,2000)); },3,500);
+        const browser = await getSharedBrowser();
+        page = await browser.newPage();
+        
+        // 🔧 ディスク書き込みを最小限に抑える設定
+        await page.setCacheEnabled(false);
+        
+        // リクエストをフィルタリング（不要なリソースをブロック）
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            const resourceType = req.resourceType();
+            // 画像、CSS、フォント、メディアをブロック（HTMLとJSのみ許可）
+            if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
+                req.abort();
+            } else {
+                req.continue();
+            }
+        });
+        
+        await retryAsync(async()=>{ 
+            await page.goto(url, {waitUntil:'domcontentloaded', timeout:60000}); 
+            await new Promise(r=>setTimeout(r,2000)); 
+        }, 3, 500);
+        
         const isPrivate = await page.$eval('.tw-empty-state-text', el=>el.textContent.includes('合言葉')).catch(()=>false);
         const isLiveBadge = await page.$eval('.tw-movie-thumbnail2-badge[data-status="live"]', ()=>true).catch(()=>false);
+        
         return isPrivate && isLiveBadge;
-    }catch(e){ console.error(`[${screenId}] checkPrivateLive error:`,e.stack||e); return false; }
-    finally{ if(browser) await browser.close(); }
+    } catch(e) { 
+        console.error(`[${screenId}] checkPrivateLive error:`, e.stack || e); 
+        return false; 
+    } finally { 
+        // ブラウザは閉じず、ページだけ閉じる
+        if (page) {
+            try {
+                await page.close();
+            } catch (e) {
+                console.warn(`[${screenId}] Failed to close page:`, e.message);
+            }
+        }
+    }
 }
 
-// --- APIライブ判定 ---
-// --- APIライブ判定 (堅牢化版) ---
-// --- ポーリング開始 ---
 function startWatcher(screenId, intervalMs=CHECK_INTERVAL_MS){
     if (!screenId) {
         console.warn('[TwitCasting] startWatcher called with empty screenId — skipping');
@@ -168,14 +257,12 @@ function startWatcher(screenId, intervalMs=CHECK_INTERVAL_MS){
     })();
 }
 
-// --- APIライブ判定（タイトルを body に入れる修正版） ---
 async function checkLiveStatus(screenId){
     if (!screenId) {
         console.warn('[checkLiveStatus] empty screenId provided');
         return null;
     }
 
-    // 前回の状態を参照（null / 'private' / movieId）
     let currentLiveId = lastLiveStatus.get(screenId) || null;
     const prevLiveId = currentLiveId;
 
@@ -194,10 +281,8 @@ async function checkLiveStatus(screenId){
 
         const movie = Array.isArray(res.data?.movies) ? res.data.movies[0] : null;
 
-        // --- APIによるライブ判定 ---
         if (movie) {
             const isLiveFlag = movie.status === 'live' || movie.is_live === true;
-            // started_at の妥当性チェック
             let startedOk = true;
             if (movie.started_at) {
                 const started = new Date(movie.started_at).getTime();
@@ -216,43 +301,32 @@ async function checkLiveStatus(screenId){
                   `[${screenId}] Polling Result: 🟢 Live (ID: ${movie.id}, Title: "${observedTitle}", status=${movie.status}, is_live=${movie.is_live})`
                 );
 
-                // 新規ライブ開始のときだけ通知
                 if (movie.id !== prevLiveId) {
                     currentLiveId = movie.id;
                     lastLiveStatus.set(screenId, currentLiveId);
                     console.log(`🔴 Live started! movie_id: ${currentLiveId}`);
 
                     const notifyTitle = '【ツイキャス】ライブ開始';
-                    const notifyBody  = observedTitle; // ← body にタイトルを入れる
+                    const notifyBody  = observedTitle;
 
-                    // プレビュー用ログ
                     console.log(`[Notify Preview] screenId=${screenId}, movieId=${currentLiveId}, title="${notifyTitle}", body="${notifyBody}"`);
 
                     try {
-                        await sendNotify(
-                          screenId,
-                          currentLiveId,
-                          notifyTitle,
-                          notifyBody
-                        );
+                        await sendNotify(screenId, currentLiveId, notifyTitle, notifyBody);
                     } catch (e) {
                         console.error(`[${screenId}] sendNotify error:`, e && (e.stack || e.message) ? (e.stack || e.message) : e);
                     }
                 } else {
-                    // 既に同じライブIDを保持している場合は状態維持（lastLiveStatus を最新に）
                     lastLiveStatus.set(screenId, movie.id);
                 }
                 return movie.id;
             } else {
-                // API に movie があるがライブ確定できない場合はログにしてフォールバックへ
                 console.log(`[${screenId}] API returned movie but not confirmed live (status=${movie.status}, is_live=${movie.is_live}, started_ok=${startedOk})`);
             }
         } else {
-            // movies 配列が空
             console.log(`[${screenId}] API returned no movies`);
         }
 
-        // --- APIでライブ判定できない場合はプライベート判定（Puppeteer）へフォールバック ---
         const isPrivate = await checkPrivateLive(screenId);
         if (isPrivate) {
             console.log(`[${screenId}] Polling Result: 🔒 Private Live detected (via Puppeteer)`);
@@ -262,7 +336,7 @@ async function checkLiveStatus(screenId){
                 console.log('🔒 プライベートライブ中！');
 
                 const notifyTitle = '【ツイキャス】プライベートライブ';
-                const notifyBody  = '(合言葉あり)'; // checkPrivateLive がタイトルを返すように拡張したらここを置き換える
+                const notifyBody  = '(合言葉あり)';
 
                 console.log(`[Notify Preview] screenId=${screenId}, movieId=private, title="${notifyTitle}", body="${notifyBody}"`);
 
@@ -275,7 +349,6 @@ async function checkLiveStatus(screenId){
             return 'private';
         }
 
-        // --- 最終的にオフライン ---
         if (prevLiveId !== null) {
             console.log(`[${screenId}] Polling Result: ⚪ Offline (No public or private live detected). previous=${prevLiveId}`);
         } else {
@@ -285,7 +358,6 @@ async function checkLiveStatus(screenId){
         return null;
 
     } catch (e) {
-        // transient なエラーはログにして null を返す（監視は継続）
         const msg = e && (e.message || e.stack) || String(e);
         console.error(`[${screenId}] checkLiveStatus error:`, msg);
         console.log(`[${screenId}] Polling Result: ⚠️ Error occurred`);
@@ -293,20 +365,4 @@ async function checkLiveStatus(screenId){
     }
 }
 
-
-
-// --- ポーリング開始 ---
-function startWatcher(screenId, intervalMs=CHECK_INTERVAL_MS){
-    console.log(`[TwitCasting] ${screenId} の監視開始 (間隔: ${intervalMs/1000}秒)`);
-
-    setInterval(async()=>{
-        try{ await checkLiveStatus(screenId); }catch(e){ console.error(`[${screenId}] watcher error:`, e.stack||e.message); }
-    }, intervalMs);
-
-    (async()=>{ 
-        try{ await checkLiveStatus(screenId); }catch(e){ console.error(`[${screenId}] initial check error:`, e.stack||e.message); } 
-    })();
-}
-
-// --- exports ---
 module.exports = { checkLiveStatus, startWatcher, sendNotify, checkPrivateLive };

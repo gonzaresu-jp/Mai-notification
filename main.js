@@ -161,32 +161,50 @@ async function main() {
     console.error('YouTube 起動ハンドルエラー:', e);
   }
 
-  // youtubeCommunity
+// youtubeCommunity
 // 監視対象 YouTube ハンドル
 const MONITOR_YT_COMMUNITY = ['@koinoyamaich', '@koinoyamaisub'];
+
+// モジュール初期化（保存先と自動保存を設定）
+youtubeCommunity.init({ filePath: path.join(__dirname, 'data', 'community.json'), autoSave: true });
 
 if (typeof youtubeCommunity.startPolling === 'function') {
   startPromises.push(
     (async () => {
       try {
         for (const handle of MONITOR_YT_COMMUNITY) {
-  const postUrls = await youtubeCommunity.startPolling(handle);
-  console.log(`[${handle}] 投稿 URL:`, postUrls);
+          // チャンネルページを取得して抽出・保存まで行う（fetchPostsFromHandleAndSave は parse + save を行う想定）
+          const result = await youtubeCommunity.fetchPostsFromHandleAndSave(handle.replace(/^@/, '')); // モジュールは handle を素の名前で期待する場合を考慮
 
-  if (notifyConfig.token && postUrls.length > 0) {
-    const fetch = global.fetch || (await import('node-fetch')).then(mod => mod.default);
-    await fetch(notifyConfig.apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Notify-Token': notifyConfig.token
-      },
-      body: JSON.stringify({ type: 'ytcommunity', channel: handle, data: postUrls })
-    });
-    console.log(`[${handle}] 通知送信完了`);
-  }
-}
+          // 結果のログ
+          const posts = result?.posts || [];
+          const saveResult = result?.saveResult || null;
+          console.log(`[${handle}] 抽出ポスト数:`, posts.length, '保存結果:', saveResult);
 
+          // 通知送信（API が存在する・トークンがある・かつ通知すべきデータがある場合）
+          if (notifyConfig.token && (posts.length > 0 || (saveResult && saveResult.addedCount > 0))) {
+            const fetch = global.fetch || (await import('node-fetch')).then(mod => mod.default);
+            const payload = {
+              type: 'ytcommunity',
+              channel: handle,
+              data: {
+                posts,           // 抽出した生データ（配列）
+                saveResult       // 保存の成否・追加件数など
+              }
+            };
+
+            await fetch(notifyConfig.apiUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Notify-Token': notifyConfig.token
+              },
+              body: JSON.stringify(payload)
+            });
+
+            console.log(`[${handle}] 通知送信完了 (added:${saveResult?.addedCount ?? 0})`);
+          }
+        }
       } catch (e) {
         console.error('youtubeCommunity 起動エラー:', e && e.message ? e.message : e);
         throw e;
@@ -194,6 +212,7 @@ if (typeof youtubeCommunity.startPolling === 'function') {
     })()
   );
 }
+
 
 
 
