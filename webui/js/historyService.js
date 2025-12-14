@@ -1,16 +1,51 @@
-// historyService.js - 履歴表示管理（最適化版）
+// historyService.js - 履歴表示管理（DB準拠・キャッシュは初回だけの補助）
 import { API, PAGING, getClientId, normalizePlatformName } from './config.js';
 
-// キャッシュ機構（初回表示のみ使用）
+// =========================
+// キャッシュ機構（初回表示の体感改善用）
+// - main.js 側で force 更新時は useCache:false を渡す想定
+// =========================
 const historyCache = {
   data: null,
   timestamp: 0,
-  ttl: 5000, // 5秒間のみキャッシュ（短縮）
-  used: false // キャッシュを一度使ったらフラグを立てる
+  ttl: 5000,   // 5秒
+  used: false  // 1回使ったら以降は使わない（初回表示専用）
 };
 
+// =========================
+// SSE（任意）: サーバが対応しているなら UI を自動更新
+// =========================
+export function setupHistorySse($logsEl, $statusEl) {
+  const es = new EventSource('/api/history/stream');
+
+  es.addEventListener('message', (ev) => {
+    try {
+      const payload = JSON.parse(ev.data);
+      if (payload && payload.type === 'history-updated') {
+        // 差分APIが無い前提 -> 全再フェッチ（DB準拠）
+        clearHistoryCache();
+        PAGING.offset = 0;
+        PAGING.hasMore = true;
+        fetchHistory($logsEl, $statusEl, { append: false, useCache: false });
+      }
+    } catch (err) {
+      console.warn('[History SSE] Invalid payload', err);
+    }
+  });
+
+  es.addEventListener('error', () => {
+    // iOS/Safari は裏で切れやすい。リトライはブラウザ任せ。
+    console.warn('[History SSE] disconnected or error');
+  });
+
+  return es; // 呼び元で es.close() できるように返す
+}
+
+// =========================
+// UI生成
+// =========================
 export function createLogItem(log) {
-  const date = new Date(log.timestamp * 1000);
+  const date = new Date((log.timestamp || 0) * 1000);
   const dateStr = date.toLocaleString('ja-JP', {
     year: 'numeric',
     month: '2-digit',
@@ -21,17 +56,18 @@ export function createLogItem(log) {
     hour12: false,
     timeZone: 'Asia/Tokyo'
   });
-  
-  const iconHtml = log.icon ? `<img src="${log.icon}" alt="icon" class="icon" loading="lazy" />` : '';
-  
-  const titleHtml = log.url 
+
+  const iconHtml = log.icon
+    ? `<img src="${log.icon}" alt="icon" class="icon" loading="lazy" />`
+    : '';
+
+  const titleHtml = log.url
     ? `<a href="${log.url}" target="_blank" rel="noopener noreferrer">${log.title || '通知'}</a>`
     : (log.title || '通知');
-  
+
   const statusClass = log.status === 'fail' ? ' status-fail' : '';
-  
   const platformData = normalizePlatformName(log.platform || '不明');
-  
+
   return `
     <div class="card${statusClass}" data-platform="${platformData}">
       ${iconHtml}
@@ -49,14 +85,14 @@ export function createLogItem(log) {
 }
 
 export function applySequentialFadeIn() {
-  const cards = document.querySelectorAll('#logs .card:not([data-fade-applied])'); 
-  
+  const cards = document.querySelectorAll('#logs .card:not([data-fade-applied])');
   const delayIncrement = 0.15;
 
   cards.forEach((card, index) => {
     const delay = index * delayIncrement;
-    card.style.animationDelay = `${delay}s`; 
+    card.style.animationDelay = `${delay}s`;
     card.setAttribute('data-fade-applied', 'true');
+
     card.addEventListener('animationend', function handler() {
       card.style.animation = 'none';
       card.style.opacity = '1';
@@ -66,14 +102,67 @@ export function applySequentialFadeIn() {
   });
 }
 
+// =========================
+// 内部ユーティリティ
+// =========================
+function getCurrentFilterSettingsFallback() {
+  return {
+    twitcasting: document.getElementById('filter-twitcasting')?.classList.contains('is-on') || false,
+    youtube: document.getElementById('filter-youtube')?.classList.contains('is-on') || false,
+    youtubeCommunity: document.getElementById('filter-youtube-community')?.classList.contains('is-on') || false,
+    fanbox: document.getElementById('filter-fanbox')?.classList.contains('is-on') || false,
+    twitterMain: document.getElementById('filter-twitter-main')?.classList.contains('is-on') || false,
+    twitterSub: document.getElementById('filter-twitter-sub')?.classList.contains('is-on') || false,
+    milestone: document.getElementById('filter-milestone')?.classList.contains('is-on') || false
+  };
+}
+
+function shouldIncludeLog(log, settings) {
+  if (!log) return false;
+
+  const platform = normalizePlatformName((log.platform || '').toString());
+  if (!settings) return true;
+
+  if (platform.includes('twitcasting')) return !!settings.twitcasting;
+  if (platform.includes('youtube') && platform.includes('community')) return !!settings.youtubeCommunity;
+  if (platform.includes('youtube')) return !!settings.youtube;
+  if (platform.includes('fanbox') || platform.includes('pixiv')) return !!settings.fanbox;
+  if (platform.includes('twitter') && platform.includes('sub')) return !!settings.twitterSub;
+  if (platform.includes('twitter')) return !!settings.twitterMain;
+  if (platform.includes('milestone')) return !!settings.milestone;
+
+  return true;
+}
+
+async function fetchJsonWithTimeout(url, { timeoutMs = 8000, noStore = false } = {}) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      cache: noStore ? 'no-store' : 'default',
+      headers: { 'Accept': 'application/json' }
+    });
+    return res;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// =========================
+// 履歴取得（append=false は先頭から取り直し）
+// useCache=true は「初回表示」だけの体感改善用。
+// 強制DB同期したい場合は main.js から useCache:false を渡す。
+// =========================
 export async function fetchHistory($logsEl, $statusEl, { append = false, useCache = true } = {}) {
   if (PAGING.loading) {
-    console.log('既にロード中です。');
+    console.log('[fetchHistory] 既にロード中');
     return;
   }
   PAGING.loading = true;
-  
-  const startTime = performance.now(); // パフォーマンス計測開始
+
+  const startTime = performance.now();
 
   if ($statusEl) {
     $statusEl.textContent = append ? '履歴を読み込み中...' : '最新の履歴を取得中...';
@@ -81,121 +170,111 @@ export async function fetchHistory($logsEl, $statusEl, { append = false, useCach
   }
 
   const pageLimit = PAGING.limit || 5;
-  let serverOffset = append ? PAGING.offset : 0;
+  let serverOffset = append ? (PAGING.offset || 0) : 0;
 
   const clientId = getClientId();
   if (!clientId) {
-    console.warn('clientId missing for history fetch');
+    console.warn('[fetchHistory] clientId missing');
   }
 
-  function shouldIncludeLog(log, settings) {
-    if (!log) return false;
-    const platform = normalizePlatformName((log.platform || '').toString());
-    if (!settings) return true;
-
-    if (platform.includes('twitcasting')) return !!settings.twitcasting;
-    if (platform.includes('youtube') && platform.includes('community')) return !!settings.youtubeCommunity;
-    if (platform.includes('youtube')) return !!settings.youtube;
-    if (platform.includes('fanbox') || platform.includes('pixiv')) return !!settings.fanbox;
-    if (platform.includes('twitter') && platform.includes('sub')) return !!settings.twitterSub;
-    if (platform.includes('twitter')) return !!settings.twitterMain;
-    if (platform.includes('milestone')) return !!settings.milestone;
-    return true;
-  }
-
-  const settings = (typeof window.getCurrentFilterSettings === 'function') ? window.getCurrentFilterSettings() : (function(){
-    return {
-      twitcasting: document.getElementById('filter-twitcasting')?.classList.contains('is-on') || false,
-      youtube: document.getElementById('filter-youtube')?.classList.contains('is-on') || false,
-      youtubeCommunity: document.getElementById('filter-youtube-community')?.classList.contains('is-on') || false,
-      fanbox: document.getElementById('filter-fanbox')?.classList.contains('is-on') || false,
-      twitterMain: document.getElementById('filter-twitter-main')?.classList.contains('is-on') || false,
-      twitterSub: document.getElementById('filter-twitter-sub')?.classList.contains('is-on') || false,
-      milestone: document.getElementById('filter-milestone')?.classList.contains('is-on') || false
-    };
-  })();
+  const settings =
+    (typeof window.getCurrentFilterSettings === 'function')
+      ? window.getCurrentFilterSettings()
+      : getCurrentFilterSettingsFallback();
 
   const collectedLogs = [];
   let lastServerResponse = null;
+
   const maxPagesToFetch = 5;
   let pagesFetched = 0;
 
   try {
-    // キャッシュチェック（初回読み込み時のみ、かつ一度も使っていない場合のみ）
-    if (!append && useCache && !historyCache.used && historyCache.data && (Date.now() - historyCache.timestamp < historyCache.ttl)) {
-      console.log('[fetchHistory] キャッシュを使用');
-      historyCache.used = true; // 使用済みフラグ
+    // ----- 初回限定のキャッシュ（append=false のときだけ） -----
+    const cacheValid =
+      !append &&
+      useCache &&
+      !historyCache.used &&
+      historyCache.data &&
+      (Date.now() - historyCache.timestamp < historyCache.ttl);
+
+    if (cacheValid) {
+      console.log('[fetchHistory] cache hit (first paint)');
+      historyCache.used = true;
+
       lastServerResponse = historyCache.data;
-      
+
       if (Array.isArray(lastServerResponse.logs)) {
-        for (const log of lastServerResponse.logs.slice(0, pageLimit)) {
-          if (shouldIncludeLog(log, settings)) {
-            collectedLogs.push(log);
-          }
+        for (const log of lastServerResponse.logs) {
+          if (shouldIncludeLog(log, settings)) collectedLogs.push(log);
+          if (collectedLogs.length >= pageLimit) break;
         }
       }
+
+      // キャッシュを使った場合でも paging を整合させる
+      const cachedCount = Array.isArray(lastServerResponse.logs) ? lastServerResponse.logs.length : 0;
+      serverOffset = append ? serverOffset : cachedCount;
+      PAGING.hasMore = !!lastServerResponse.hasMore;
     } else {
-      // 通常のフェッチ処理
+      // ----- 通常のフェッチ（useCache=false のときは no-store） -----
       while (collectedLogs.length < pageLimit) {
         if (pagesFetched >= maxPagesToFetch) {
-          console.warn('fetchHistory: max pages fetched, breaking to avoid infinite loop');
+          console.warn('[fetchHistory] max pages fetched (break)');
           break;
         }
-        
-        const url = `${API.HISTORY}?clientId=${encodeURIComponent(clientId||'')}&limit=${pageLimit}&offset=${serverOffset}`;
-        
-        let res;
+
+        const url =
+          `${API.HISTORY}?clientId=${encodeURIComponent(clientId || '')}` +
+          `&limit=${encodeURIComponent(pageLimit)}` +
+          `&offset=${encodeURIComponent(serverOffset)}`;
+
+        let res = null;
         let retryCount = 0;
         const maxRetries = 2;
-        
-        // リトライ機構
+
         while (retryCount <= maxRetries) {
           try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒タイムアウト
-            
-            res = await fetch(url, { signal: controller.signal });
-            clearTimeout(timeoutId);
-            
-            if (res.ok) {
-              break; // 成功したらループを抜ける
-            } else if (res.status === 502 && retryCount < maxRetries) {
-              console.warn(`[fetchHistory] 502エラー、リトライ ${retryCount + 1}/${maxRetries}`);
+            res = await fetchJsonWithTimeout(url, {
+              timeoutMs: 8000,
+              noStore: !useCache
+            });
+
+            if (res.ok) break;
+
+            if (res.status === 502 && retryCount < maxRetries) {
               retryCount++;
-              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // 指数バックオフ
+              console.warn(`[fetchHistory] 502 retry ${retryCount}/${maxRetries}`);
+              await new Promise(r => setTimeout(r, 1000 * retryCount));
               continue;
-            } else {
-              throw new Error(`Failed to fetch history: ${res.status}`);
             }
+
+            throw new Error(`Failed to fetch history: ${res.status}`);
           } catch (e) {
-            if (e.name === 'AbortError') {
-              console.warn(`[fetchHistory] タイムアウト、リトライ ${retryCount + 1}/${maxRetries}`);
+            if (e.name === 'AbortError' && retryCount < maxRetries) {
               retryCount++;
-              if (retryCount <= maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-                continue;
-              }
+              console.warn(`[fetchHistory] timeout retry ${retryCount}/${maxRetries}`);
+              await new Promise(r => setTimeout(r, 1000 * retryCount));
+              continue;
             }
             throw e;
           }
         }
-        
+
         if (!res || !res.ok) {
-          throw new Error(`Failed to fetch history after ${maxRetries} retries`);
+          throw new Error(`[fetchHistory] failed after retries`);
         }
-        
+
         const data = await res.json();
         lastServerResponse = data;
         pagesFetched++;
 
-        // 初回読み込み時はキャッシュに保存
-        if (!append && pagesFetched === 1) {
+        // 初回ページだけキャッシュに保存（append=false のときのみ）
+        if (!append && pagesFetched === 1 && useCache) {
           historyCache.data = data;
           historyCache.timestamp = Date.now();
+          // used は「キャッシュヒットした時だけ」立てる（保存だけでは立てない）
         }
 
         if (!Array.isArray(data.logs) || data.logs.length === 0) {
-          serverOffset += data.logs ? data.logs.length : 0;
           break;
         }
 
@@ -208,67 +287,77 @@ export async function fetchHistory($logsEl, $statusEl, { append = false, useCach
 
         serverOffset += data.logs.length;
 
-        if (!data.hasMore) {
-          break;
-        }
+        if (!data.hasMore) break;
       }
     }
 
+    // ----- 描画 -----
     const html = collectedLogs.map(createLogItem).join('');
 
     if ($logsEl) {
       if (!append) {
-        // スケルトンローディングを削除し、loadedクラスを追加
+        // スケルトン除去
         const skeletons = $logsEl.querySelectorAll('.skeleton-card');
         skeletons.forEach(s => s.remove());
-        
+
         $logsEl.innerHTML = html;
-        $logsEl.classList.add('loaded'); // モバイル対応のクラス追加
+        $logsEl.classList.add('loaded');
       } else {
         $logsEl.insertAdjacentHTML('beforeend', html);
       }
-      
-      // requestAnimationFrameで次のフレームまで遅延
+
       requestAnimationFrame(() => {
         applySequentialFadeIn();
       });
     }
 
-    const visibleCards = $logsEl ? $logsEl.querySelectorAll('.card:not(.filtered-out)').length : 0;
-    PAGING.displayedCount = visibleCards;
+    const visibleCards = $logsEl
+      ? $logsEl.querySelectorAll('.card:not(.filtered-out)').length
+      : 0;
 
+    PAGING.displayedCount = visibleCards;
     PAGING.offset = serverOffset;
     PAGING.hasMore = lastServerResponse ? !!lastServerResponse.hasMore : false;
 
     const $btnMore = document.getElementById('more-logs-button');
     if ($btnMore) $btnMore.style.display = PAGING.hasMore ? 'block' : 'none';
 
-    const totalReported = lastServerResponse && typeof lastServerResponse.total !== 'undefined' ? lastServerResponse.total : '?';
+    const totalReported =
+      (lastServerResponse && typeof lastServerResponse.total !== 'undefined')
+        ? lastServerResponse.total
+        : '?';
+
     if ($statusEl) {
-      const loadTime = ((performance.now() - startTime) / 1000).toFixed(2);
-      $statusEl.textContent = `表示中: ${PAGING.displayedCount} / サーバ総数: ${totalReported} (${loadTime}秒)`;
+      const loadTimeSec = (performance.now() - startTime) / 1000;
+      $statusEl.textContent = `表示中: ${PAGING.displayedCount} / サーバ総数: ${totalReported} (${loadTimeSec.toFixed(2)}秒)`;
       $statusEl.className = 'status-message success-message';
-      
-      // 5秒以上かかった場合は警告
-      if (loadTime > 5) {
-        console.warn(`[fetchHistory] 読み込みに${loadTime}秒かかりました（サーバー応答が遅い可能性があります）`);
+
+      if (loadTimeSec > 5) {
+        console.warn(`[fetchHistory] slow: ${loadTimeSec.toFixed(2)}s`);
       }
     }
 
-    if (typeof window.applyLogFiltering === 'function') window.applyLogFiltering();
+    if (typeof window.applyLogFiltering === 'function') {
+      window.applyLogFiltering();
+    }
 
   } catch (e) {
-    console.error('Failed to fetch history:', e);
+    console.error('[fetchHistory] failed:', e);
+
     if ($statusEl) {
       let errorMessage = '履歴の取得に失敗しました';
-      if (e.message && e.message.includes('502')) {
+
+      const msg = (e && e.message) ? e.message : '';
+      if (msg.includes('502')) {
         errorMessage = 'サーバーが一時的に応答していません。しばらくしてから再度お試しください。';
-      } else if (e.name === 'AbortError' || e.message.includes('timeout')) {
+      } else if (e.name === 'AbortError' || msg.toLowerCase().includes('timeout')) {
         errorMessage = '通信がタイムアウトしました。インターネット接続を確認してください。';
       }
+
       $statusEl.textContent = errorMessage;
       $statusEl.className = 'status-message error-message';
     }
+
   } finally {
     PAGING.loading = false;
   }
@@ -280,7 +369,7 @@ export function fetchHistoryMore($logsEl, $statusEl) {
   }
 }
 
-// キャッシュをクリアする関数（手動更新時に使用）
+// キャッシュをクリアする関数（手動更新・強制同期時に使用）
 export function clearHistoryCache() {
   historyCache.data = null;
   historyCache.timestamp = 0;
