@@ -22,10 +22,12 @@ let NOTIFY_CONFIG = {
     hmacSecret: null
 };
 
-const ICON_URL = 'https://elza.poitou-mora.ts.net/pushweb/icon.ico';
+const ICON_URL = './icon.ico';
 
 // 閾値（使用箇所あり）
 const RECENT_VIDEO_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours (既存値を維持)
+// ライブ予定通知の判定を緩和するための閾値（3分）
+const PLANNED_ASSUMPTION_THRESHOLD_MS = 3 * 60 * 1000; 
 
 const API_KEY = process.env.YOUTUBE_API_KEY || ''; // 必ず環境変数で提供する事
 
@@ -222,7 +224,8 @@ function startWebhook(port = 3001) {
             title = title || 'YouTube動画';
 
             // 判定フラグ
-            const isUpcoming = live && live.scheduledStartTime && !live.actualStartTime;
+            // 既存の isUpcoming は使用しません
+            // const isUpcoming = live && live.scheduledStartTime && !live.actualStartTime;
             const isLive = live && live.actualStartTime && !live.actualEndTime;
             const isArchivedFromLive = live && live.actualEndTime; // ライブ終了してアーカイブ化済み or 処理中
             const isNonLiveVideo = !live && (status.uploadStatus === 'processed' || status.uploadStatus === 'uploaded' || status.uploadStatus === 'completed');
@@ -230,8 +233,12 @@ function startWebhook(port = 3001) {
             const rec = records[videoId] || {};
             const recIsEmpty = Object.keys(rec).length === 0;
 
+            // Publishedから5分以内かどうかの判定 (新しいロジックで使用)
+            const isVeryRecent = diffMs <= PLANNED_ASSUMPTION_THRESHOLD_MS;
+
             // 1) 予定 (Upcoming) -> タイトルに【予定】付与して notify。一度だけ送る（plannedSent）
-            if (isUpcoming) {
+            // 判定ロジックを緩和: ライブ情報があり、かつPublishedから5分以内で、ライブ中でなければ【予定】として扱う
+            if (live && isVeryRecent && !isLive) {
                 if (!rec.plannedSent) {
                     const payload = {
                         type: 'youtube',
@@ -247,7 +254,7 @@ function startWebhook(port = 3001) {
                     const ok = await sendNotifyApi(payload);
                     if (ok) {
                         records[videoId] = { ...rec, plannedSent: true, plannedAt: new Date().toISOString() };
-                        console.log(`Planned notify sent for ${videoId}`);
+                        console.log(`Planned notify (using 5min-threshold) sent for ${videoId}`);
                     } else {
                         console.error(`Failed to send planned notify for ${videoId}`);
                     }
