@@ -1,5 +1,10 @@
-// service-worker.js (iOS対応版 v3.4)
-const VERSION = 'v3.4';
+// service-worker.js (iOS対応版 v3.43 - 履歴Invalidate/互換メッセージ付き)
+// 方針:
+// - UI更新は main.js 側が「DB再取得」で行う（Push依存にしない）
+// - SWは「履歴が更新された可能性」をクライアントに通知するだけ（HISTORY_INVALIDATE）
+// - 旧実装互換として CLEAR_HISTORY_CACHE / CLEAR_AND_RELOAD_HISTORY も送る
+
+const VERSION = 'v3.43';
 const ALWAYS_OPEN_NEW_TAB = false;
 
 // iOS対応: キャッシュ設定
@@ -22,329 +27,371 @@ let isProcessingPush = false;
 const processedNotifications = new Map();
 const NOTIFICATION_CACHE_TIME = 60000; // 60秒
 
-// --- install & activate ---
-self.addEventListener('install', event => {
-    console.log('[SW] install start');
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => {
-                console.log('[SW] caching files:', urlsToCache);
-                return cache.addAll(urlsToCache);
-            })
-            .then(() => {
-                console.log('[SW] install success');
-                return self.skipWaiting();
-            })
-            .catch(err => {
-                console.error('[SW] install failed:', err);
-            })
-    );
-});
+// ---------- 共通ユーティリティ ----------
+async function broadcastMessage(message) {
+  const windowClients = await self.clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true
+  });
+  for (const client of windowClients) {
+    client.postMessage(message);
+  }
+  return windowClients.length;
+}
 
+function cleanupProcessedNotifications(now) {
+  const cutoff = now - NOTIFICATION_CACHE_TIME;
+  for (const [hash, ts] of processedNotifications.entries()) {
+    if (ts < cutoff) processedNotifications.delete(hash);
+  }
+}
+
+async function focusOrOpen(url) {
+  const windowClients = await self.clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true
+  });
+
+  // 既存タブがあればフォーカスし、必要ならナビゲート指示
+  for (const client of windowClients) {
+    try {
+      if ('focus' in client) {
+        await client.focus();
+        client.postMessage({ type: 'NAVIGATE', url });
+        return;
+      }
+    } catch (e) {
+      // 失敗しても次へ
+    }
+  }
+
+  // タブが無ければ新規オープン
+  if (self.clients.openWindow) {
+    await self.clients.openWindow(url);
+  }
+}
+
+function safeMakeAbsoluteUrl(targetUrl) {
+  try {
+    return new URL(targetUrl, self.location.origin).href;
+  } catch {
+    return self.location.origin + '/';
+  }
+}
+
+// ---------- install & activate ----------
+self.addEventListener('install', event => {
+  console.log(`[SW ${VERSION}] install start (non-blocking)`);
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+
+    // 1) 必須最小セット
+    const critical = ['/', './index.html', './style.css', './main.js'];
+    try {
+      await cache.addAll(critical);
+      console.log(`[SW ${VERSION}] cached critical assets`);
+    } catch (e) {
+      console.warn(`[SW ${VERSION}] cache critical failed`, e);
+      // インストール継続（堅牢性優先）
+    }
+
+    // 2) 残りはベストエフォート
+    const rest = urlsToCache.filter(u => !critical.includes(u));
+    const promises = rest.map(async (u) => {
+      try {
+        const r = await fetch(u, { cache: 'no-store' });
+        if (r.ok) {
+          await cache.put(u, r.clone());
+          return;
+        }
+        throw new Error('fetch failed: ' + u);
+      } catch (err) {
+        console.warn(`[SW ${VERSION}] noncritical cache failed`, u, err);
+      }
+    });
+    await Promise.allSettled(promises);
+
+    await self.skipWaiting();
+    console.log(`[SW ${VERSION}] install finished (skipWaiting)`);
+  })());
+});
 
 self.addEventListener('activate', event => {
   console.log(`[SW ${VERSION}] ⚡ Activating...`);
-  
-  // iOS対応: 古いキャッシュ削除
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log(`[SW ${VERSION}] 🗑️ Deleting old cache: ${cacheName}`);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    // 古いキャッシュ削除
+    const cacheNames = await caches.keys();
+    await Promise.all(
+      cacheNames.map(name => {
+        if (name !== CACHE_NAME) {
+          console.log(`[SW ${VERSION}] 🗑️ Deleting old cache: ${name}`);
+          return caches.delete(name);
+        }
+      })
+    );
+
+    await self.clients.claim();
+  })());
 });
 
-// iOS対応: オフライン対応のフェッチイベント
+// ---------- fetch (オフライン対応) ----------
+// 注意点:
+// - 非GETはSWが横取りしない（POST等で壊れる）
+// - /api は原則ネットワーク（オフライン時のキャッシュは混乱の元）
 self.addEventListener('fetch', event => {
-  // すぐに非同期関数を作ってその Promise を渡す（reject を絶対に外に出さない）
+  const req = event.request;
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+
+  // APIはネットワーク優先（失敗ならそのまま503）
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith((async () => {
+      try {
+        return await fetch(req);
+      } catch (e) {
+        return new Response('', { status: 503, statusText: 'Service Unavailable' });
+      }
+    })());
+    return;
+  }
+
+  // それ以外はネットワーク優先、落ちたらキャッシュ
   event.respondWith((async () => {
     try {
-      // まず通常のネットワークフェッチを試みる
-      const networkResponse = await fetch(event.request);
-      // 成功ならそのまま返す（必要ならキャッシュへ保存する処理をここに追加）
+      const networkResponse = await fetch(req);
       return networkResponse;
     } catch (err) {
-      // ネットワーク失敗時のフォールバック処理
-      console.warn('SW fetch failed for', event.request.url, err);
+      console.warn(`[SW ${VERSION}] fetch failed for`, req.url, err);
 
-// ① キャッシュにフォールバックがあれば返す（推奨）
-try {
-  // 修正 1: 'static-v1' を CACHE_NAME に変更
-  const cache = await caches.open(CACHE_NAME); 
-  const cached = await cache.match(event.request);
-  if (cached) return cached;
-} catch (cacheErr) {
-  // ...
-}
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(req);
+        if (cached) return cached;
+      } catch {
+        // ignore
+      }
 
-// ② 特定リソース（アイコン等）用の固定フォールバックを返す
-if (event.request.url.endsWith('/icon.ico')) {
-  // ...
-  try {
-    // 修正 2: 'static-v1' を CACHE_NAME に変更
-    const cache = await caches.open(CACHE_NAME);
-    // 補足: /fallback-icon.ico はキャッシュされていないため、キャッシュした './icon.ico' をマッチさせます。
-    const fallback = await cache.match('./icon.ico'); 
-    if (fallback) return fallback;
-  } catch (e) { /* ignore */ }
-}
+      // iconのフォールバック
+      if (url.pathname.endsWith('/icon.ico') || url.pathname.endsWith('icon.ico')) {
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          const fallback = await cache.match('./icon.ico');
+          if (fallback) return fallback;
+        } catch {
+          // ignore
+        }
+      }
 
-      // ③ 最終的なデフォルトレスポンス（404 や空のレスポンスなど）
       return new Response('', { status: 503, statusText: 'Service Unavailable' });
     }
   })());
 });
 
-// --- push event ---
+// ---------- push ----------
 self.addEventListener('push', event => {
   console.log(`[SW ${VERSION}] ========== PUSH EVENT RECEIVED ==========`);
-  
+
   if (isProcessingPush) {
     console.warn(`[SW ${VERSION}] ⚠️ Already processing push, ignoring duplicate`);
     return;
   }
   isProcessingPush = true;
 
-  let data = {};
-  if (event.data) {
+  event.waitUntil((async () => {
     try {
-      data = event.data.json();
-    } catch(e) {
-      const textData = event.data.text ? event.data.text() : null;
-      data = { title: textData || '通知' };
-    }
-  }
+      let data = {};
+      if (event.data) {
+        try {
+          data = event.data.json();
+        } catch (e) {
+          // event.data.text() は Promise
+          try {
+            const textData = await event.data.text();
+            data = { title: textData || '通知' };
+          } catch {
+            data = {};
+          }
+        }
+      }
 
-  // title, body, icon, url を抽出
-  let title = '通知', body = '通知内容', icon = './icon.ico', url = null;
-  if (data.data && typeof data.data === 'object') {
-    title = data.data.title || data.type || title;
-    body = data.data.body || data.data.title || body;
-    icon = data.data.icon || icon;
-    url = data.data.url || null;
-  } else {
-    title = data.title || title;
-    body = data.body || body;
-    icon = data.icon || icon;
-    url = data.url || null;
-  }
+      // title, body, icon, url を抽出
+      let title = '通知';
+      let body = '通知内容';
+      let icon = './icon.ico';
+      let url = null;
 
-  // 重複チェック用ハッシュ
-  const now = Date.now();
-  const notificationHash = `${title}:${url}:${Math.floor(now/1000)}`;
-  
-  if (processedNotifications.has(notificationHash)) {
-    console.warn(`[SW ${VERSION}] ⚠️ DUPLICATE DETECTED, ignoring`);
-    isProcessingPush = false;
-    return;
-  }
-  
-  processedNotifications.set(notificationHash, now);
+      if (data?.data && typeof data.data === 'object') {
+        title = data.data.title || data.type || title;
+        body = data.data.body || data.data.title || body;
+        icon = data.data.icon || icon;
+        url = data.data.url || null;
+      } else {
+        title = data.title || title;
+        body = data.body || body;
+        icon = data.icon || icon;
+        url = data.url || null;
+      }
 
-  // 古いキャッシュ削除
-  const cutoff = now - NOTIFICATION_CACHE_TIME;
-  for (const [hash, ts] of processedNotifications.entries()) {
-    if (ts < cutoff) processedNotifications.delete(hash);
-  }
+      const now = Date.now();
 
-  const uniqueTag = 'mai-push-' + now;
-  
-  // iOS対応: 通知オプションを最適化
-  const options = { 
-    body, 
-    icon: icon || './icon-192.webp', // iOS用にPNG優先
-    data: { url, timestamp: now, notificationId: uniqueTag },
-    requireInteraction: false,
-    tag: uniqueTag,
-    renotify: false,
-    vibrate: [200, 100, 200],
-    timestamp: now, // iOS対応: タイムスタンプ追加
-    silent: false // iOS対応: サイレント通知を防ぐ
-  };
+      // 重複チェック（秒単位でまとめる：短時間の同一通知連打を抑止）
+      const notificationHash = `${title}:${url}:${Math.floor(now / 1000)}`;
+      if (processedNotifications.has(notificationHash)) {
+        console.warn(`[SW ${VERSION}] ⚠️ DUPLICATE DETECTED, ignoring`);
+        return;
+      }
+      processedNotifications.set(notificationHash, now);
+      cleanupProcessedNotifications(now);
 
-  event.waitUntil(
-    self.registration.showNotification(title, options).then(() => {
+      const uniqueTag = 'mai-push-' + now;
+
+      // iOS/各ブラウザ差異があるので、オプションは安全側に倒す
+      const options = {
+        body,
+        icon: icon || './icon-192.webp',
+        data: { url, timestamp: now, notificationId: uniqueTag, raw: data },
+        requireInteraction: false,
+        tag: uniqueTag,
+        renotify: false,
+        timestamp: now,
+        silent: false
+        // vibrate は非対応環境が多い（特にiOS）。入れても害は少ないがログのノイズになるので外す。
+      };
+
+      await self.registration.showNotification(title, options);
       console.log(`[SW ${VERSION}] ✅ Notification shown`);
-      setTimeout(() => { isProcessingPush = false; }, 1000);
-    }).catch(err => {
-      console.error(`[SW ${VERSION}] ❌ Failed to show notification`, err);
+
+      // ★核心：履歴が更新された可能性 -> UI側へ無効化通知
+      // 新main.jsは HISTORY_INVALIDATE を優先して扱える
+      const sent = await broadcastMessage({
+        type: 'HISTORY_INVALIDATE',
+        timestamp: now,
+        notification: { title, body, url }
+      });
+      console.log(`[SW ${VERSION}] 📢 HISTORY_INVALIDATE sent to ${sent} clients`);
+
+      // 旧互換（既存main.js向け）
+      await broadcastMessage({
+        type: 'CLEAR_HISTORY_CACHE',
+        timestamp: now,
+        notification: { title, body, url }
+      });
+
+    } catch (err) {
+      console.error(`[SW ${VERSION}] ❌ push handler failed`, err);
+    } finally {
+      // 連続push対策のロック解除
       isProcessingPush = false;
-    })
-  );
+    }
+  })());
 });
 
-// --- notificationclick ---
+// ---------- notificationclick ----------
 self.addEventListener('notificationclick', event => {
   console.log(`[SW ${VERSION}] 🖱️ Notification clicked`);
   event.notification.close();
 
-  // service-worker.js の 'notificationclick' イベント内
-let notificationData = event.notification.data || {};
-// 'url'プロパティか、または'data.url'プロパティからURLを探す
-let targetUrl = notificationData.url || (notificationData.data && notificationData.data.url) || '/';
-  const ua = self.navigator.userAgent;
-  const isAndroid = /Android/i.test(ua);
-  const isIOS = /iPhone|iPad|iPod/i.test(ua);
-  
-  // 🌟 デバッグログ 1: 変換前のURLとデバイス判定の確認 🌟
-  console.log(`[SW ${VERSION}] Debug 1: Target URL (Pre-conversion): ${targetUrl}`);
-  console.log(`[SW ${VERSION}] Debug 1: Is Android: ${isAndroid}, Is iOS: ${isIOS}`);
+  event.waitUntil((async () => {
+    const notificationData = event.notification?.data || {};
+    let targetUrl =
+      notificationData.url ||
+      (notificationData.data && notificationData.data.url) ||
+      '/';
 
-// --- Android 用: ドメインに基づいて開くURLを決定 ---
-if (isAndroid && targetUrl) {
-    // pushweb を開くべきドメインのリスト
-    const pushWebDomains = [
+    // UA判定（SW環境でも navigator.userAgent は参照可能なことが多い）
+    const ua = (self.navigator && self.navigator.userAgent) ? self.navigator.userAgent : '';
+    const isAndroid = /Android/i.test(ua);
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+    console.log(`[SW ${VERSION}] Debug: targetUrl(pre)=${targetUrl} android=${isAndroid} ios=${isIOS}`);
+
+    // クリック時は「確実に最新」へ寄せる（新/旧両方送る）
+    await broadcastMessage({ type: 'HISTORY_INVALIDATE' });
+    await broadcastMessage({ type: 'CLEAR_AND_RELOAD_HISTORY', url: targetUrl });
+
+    // --- Android 用: ドメインに基づいて開くURLを決定 ---
+    if (isAndroid && targetUrl) {
+      const pushWebDomains = [
         'youtube.com',
-        'youtu.be', // YouTubeの短縮URL用
-        'x.com', 
+        'youtu.be',
+        'x.com',
         'twitter.com',
         'twitcasting.tv',
         'fanbox.cc'
-    ];
-    
-    // 開くべき最終的なURLを決定する変数
-    let finalUrl = targetUrl;
-    
-    // ターゲットURLが pushWebDomains のいずれかに含まれているかチェック
-    const shouldOpenPushWeb = pushWebDomains.some(domain => targetUrl.includes(domain));
-    
-    // YouTube, X, TwitCasting, Fanbox の場合
-    if (shouldOpenPushWeb) {
-        // 固定の pushweb URL に書き換え
-        finalUrl = '/';
-        console.log(`[SW ${VERSION}] Info: Target URL is a special domain. Opening fixed pushweb URL -> ${finalUrl}`);
-    } else {
-        // その他の直リンク
-        console.log(`[SW ${VERSION}] Info: Target URL is direct. Opening original URL -> ${finalUrl}`);
+      ];
+
+      const shouldOpenPushWeb = pushWebDomains.some(domain => targetUrl.includes(domain));
+      const finalUrl = shouldOpenPushWeb ? '/' : targetUrl;
+
+      console.log(`[SW ${VERSION}] Android: opening -> ${finalUrl}`);
+      // Androidは通常URLとして開く
+      const abs = safeMakeAbsoluteUrl(finalUrl);
+      await focusOrOpen(abs);
+      return;
     }
 
-    event.waitUntil(
-        (async () => {
-            try {
-                // 決定した finalUrl を開く
-                console.log(`[SW ${VERSION}] Debug: opening Android URL -> ${finalUrl}`);
-                await clients.openWindow(finalUrl);
-                console.log(`[SW ${VERSION}] Debug: URL open requested for: ${finalUrl}`);
-            } catch (e) {
-                console.warn(`[SW ${VERSION}] openWindow failed, attempting client messaging fallback:`, e);
-
-                // フォールバックロジックはそのまま維持
-                try {
-                    const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-                    if (windowClients && windowClients.length > 0) {
-                        const sameOrigin = windowClients.find(c => {
-                            try { return new URL(c.url).origin === self.location.origin; } catch(e){ return false; }
-                        }) || windowClients[0];
-
-                        try {
-                            await sameOrigin.focus();
-                            // フォールバックでも finalUrl を使用
-                            sameOrigin.postMessage({ type: 'OPEN_URL', url: finalUrl });
-                            console.log(`[SW ${VERSION}] Debug: posted OPEN_URL to client for: ${finalUrl}`);
-                        } catch (e) {
-                            console.warn(`[SW ${VERSION}] client messaging fallback failed:`, e);
-                        }
-                    }
-                } catch (e) {
-                    console.warn(`[SW ${VERSION}] matchAll fallback failed:`, e);
-                }
-            }
-        })()
-    );
-
-    return; // Android ブロック終了
-}
-
-  // 🌟 Debug 2 が出力されなかった場合、targetUrl は https:// のままです
-
-
-  // --- 2. iOSの場合 (アプリ起動スキームへ変換) ---
-  else if (isIOS) {
-     if (targetUrl.includes('twitter.com') || targetUrl.includes('x.com')) {
-        const match = targetUrl.match(/\/status\/(\d+)/);
-        if (match) targetUrl = `x://status?id=${match[1]}`;
-     }
-     else if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
-        let vId = null;
-        if (targetUrl.includes('v=')) vId = new URL(targetUrl).searchParams.get('v');
-        else if (targetUrl.includes('youtu.be/')) vId = targetUrl.split('youtu.be/')[1]?.split('?')[0];
-        
-        if (vId) targetUrl = `youtube://${vId}`;
-     }
-  }
-
-  // --- 3. 開く処理 ---
-  
-  // Intent(Android) や アプリスキーム(iOS) の場合
-  if (targetUrl.startsWith('intent://') || targetUrl.startsWith('x://') || targetUrl.startsWith('youtube://')) {
-    // 🌟 デバッグログ 3: Intent/Schemeで開くロジックに進んだ 🌟
-    console.log(`[SW ${VERSION}] Debug 3: Opening Intent/Scheme URL: ${targetUrl}`);
-    event.waitUntil(clients.openWindow(targetUrl));
-    return;
-  }
-
-  // PCや通常のWebリンクの場合
-  const fullUrl = new URL(targetUrl, self.location.origin).href;
-  // 🌟 デバッグログ 4: 通常のWeb URLで開くロジックに進んだ 🌟
-  console.log(`[SW ${VERSION}] Debug 4: Opening Full Web URL: ${fullUrl}`);
-  if (ALWAYS_OPEN_NEW_TAB) {
-      event.waitUntil(clients.openWindow(fullUrl));
-      return;
-  }
-
-  if (ALWAYS_OPEN_NEW_TAB) {
-    event.waitUntil(clients.openWindow(fullUrl));
-    return;
-  }
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-      // 既存のタブを探す
-      for (const client of windowClients) {
-        try {
-          const clientUrl = new URL(client.url);
-          if (clientUrl.origin === new URL(fullUrl).origin) {
-            // iOS対応: メッセージ送信とフォーカス
-            client.postMessage({ type: 'NAVIGATE', url: fullUrl });
-            return client.focus().then(() => {
-              console.log(`[SW ${VERSION}] ✅ Focused existing tab`);
-            });
+    // --- iOS の場合 (アプリ起動スキームへ変換) ---
+    if (isIOS && typeof targetUrl === 'string') {
+      try {
+        if (targetUrl.includes('twitter.com') || targetUrl.includes('x.com')) {
+          const match = targetUrl.match(/\/status\/(\d+)/);
+          if (match) targetUrl = `x://status?id=${match[1]}`;
+        } else if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
+          let vId = null;
+          if (targetUrl.includes('v=')) {
+            // new URL が失敗する可能性があるのでガード
+            try { vId = new URL(targetUrl).searchParams.get('v'); } catch {}
+          } else if (targetUrl.includes('youtu.be/')) {
+            vId = targetUrl.split('youtu.be/')[1]?.split('?')[0] || null;
           }
-        } catch(e) {
-          console.error(`[SW ${VERSION}] ❌ Error focusing tab:`, e);
+          if (vId) targetUrl = `youtube://${vId}`;
         }
+      } catch (e) {
+        // 変換失敗は無視して通常URLで開く
       }
-      // タブがない場合は新規作成
-      return clients.openWindow(fullUrl).then(client => {
-        console.log(`[SW ${VERSION}] ✅ Opened new tab`);
-        return client;
-      });
-    })
-  );
+    }
+
+    // --- Intent(Android) や アプリスキーム(iOS) の場合 ---
+    if (
+      typeof targetUrl === 'string' &&
+      (targetUrl.startsWith('intent://') || targetUrl.startsWith('x://') || targetUrl.startsWith('youtube://'))
+    ) {
+      console.log(`[SW ${VERSION}] Opening scheme/intent: ${targetUrl}`);
+      await self.clients.openWindow(targetUrl);
+      return;
+    }
+
+    // --- PCや通常のWebリンクの場合 ---
+    const fullUrl = safeMakeAbsoluteUrl(targetUrl);
+    console.log(`[SW ${VERSION}] Opening web url: ${fullUrl}`);
+
+    if (ALWAYS_OPEN_NEW_TAB) {
+      await self.clients.openWindow(fullUrl);
+      return;
+    }
+
+    // 既存タブを優先してフォーカス＆遷移
+    await focusOrOpen(fullUrl);
+  })());
 });
 
-// iOS対応: メッセージ受信（フォアグラウンド通知用）
+// ---------- message ----------
 self.addEventListener('message', event => {
   console.log(`[SW ${VERSION}] 📨 Message received:`, event.data);
-  
+
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });
 
-// iOS対応: バックグラウンド同期（将来的な拡張用）
+// ---------- sync (将来拡張用) ----------
 self.addEventListener('sync', event => {
   console.log(`[SW ${VERSION}] 🔄 Background sync:`, event.tag);
-  
+
   if (event.tag === 'sync-notifications') {
     event.waitUntil(
-      fetch('/api/history?limit=5')
+      fetch('/api/history?limit=5', { cache: 'no-store' })
         .then(response => response.json())
         .then(data => {
           console.log(`[SW ${VERSION}] ✅ Synced notifications:`, data);
@@ -357,3 +404,4 @@ self.addEventListener('sync', event => {
 });
 
 console.log(`[SW ${VERSION}] ========== Service Worker ready ==========`);
+
