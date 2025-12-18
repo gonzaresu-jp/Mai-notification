@@ -10,7 +10,8 @@ export function initLogFilterSettings($toggleNotify) {
     fanbox: document.getElementById('filter-fanbox'),
     twitterMain: document.getElementById('filter-twitter-main'),
     twitterSub: document.getElementById('filter-twitter-sub'),
-    milestone: document.getElementById('filter-milestone')
+    milestone: document.getElementById('filter-milestone'),
+    gipt: document.getElementById('filter-gipt')
   };
 
   function loadFilterSettings() {
@@ -30,7 +31,8 @@ export function initLogFilterSettings($toggleNotify) {
       fanbox: true,
       twitterMain: true,
       twitterSub: true,
-      milestone: true
+      milestone: true,
+      gipt: true
     };
   }
 
@@ -52,7 +54,8 @@ export function initLogFilterSettings($toggleNotify) {
       fanbox: filterButtons.fanbox?.classList.contains('is-on') || false,
       twitterMain: filterButtons.twitterMain?.classList.contains('is-on') || false,
       twitterSub: filterButtons.twitterSub?.classList.contains('is-on') || false,
-      milestone: filterButtons.milestone?.classList.contains('is-on') || false
+      milestone: filterButtons.milestone?.classList.contains('is-on') || false,
+      gipt: filterButtons.gipt?.classList.contains('is-on') || false
     };
   }
 
@@ -86,7 +89,8 @@ export function initLogFilterSettings($toggleNotify) {
       fanbox: platformSettings.fanbox || false,
       twitterMain: platformSettings.twitterMain || false,
       twitterSub: platformSettings.twitterSub || false,
-      milestone: platformSettings.milestone || false
+      milestone: platformSettings.milestone || false,
+      gipt: platformSettings.gipt || false
     };
   }
 
@@ -121,6 +125,9 @@ export function initLogFilterSettings($toggleNotify) {
           break;
         case 'milestone':
           shouldShow = settings.milestone;
+          break;
+        case 'gipt':
+          shouldShow = settings.gipt;
           break;
         default:
           shouldShow = true;
