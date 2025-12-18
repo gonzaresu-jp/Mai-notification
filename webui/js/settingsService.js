@@ -10,6 +10,7 @@ export function getPlatformSettings() {
     twitterMain: document.getElementById('toggle-twitter-main')?.classList.contains('is-on') || false,
     twitterSub: document.getElementById('toggle-twitter-sub')?.classList.contains('is-on') || false,
     milestone: document.getElementById('toggle-milestone')?.classList.contains('is-on') || false,
+    gipt: document.getElementById('toggle-gipt')?.classList.contains('is-on') || false
   };
 }
 
@@ -158,7 +159,8 @@ export function applySettingsToUI(settings) {
     fanbox: 'toggle-fanbox',
     twitterMain: 'toggle-twitter-main',
     twitterSub: 'toggle-twitter-sub',
-    milestone: 'toggle-milestone'
+    milestone: 'toggle-milestone',
+    gipt: 'toggle-gipt'
   };
   for (const [key, value] of Object.entries(settings)) {
     const btnId = keyMap[key];

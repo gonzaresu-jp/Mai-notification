@@ -43,6 +43,7 @@ export function normalizePlatformName(platform) {
     return 'twitter-main';
   }
   if (normalized.includes('milestone') || normalized.includes('記念日')) return 'milestone';
+  if (normalized.includes('gipt')) return 'gipt';
   
   return 'unknown';
 }
