@@ -21,6 +21,57 @@ let hasStatusColumn = false;
 const ADMIN_NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
 const NOTIFY_HMAC_SECRET = process.env.NOTIFY_HMAC_SECRET || null;
 
+// 起動時 PRAGMA チューニング（db を作った直後に実行）
+db.serialize(() => {
+  // タイムアウト：ロック待ちを短時間でエラーにしない
+  db.run("PRAGMA busy_timeout = 5000"); // ms
+
+  // WAL にすることで「読み取りは書き込み中でも可能」かつ並行性が改善
+  db.run("PRAGMA journal_mode = WAL");
+
+  // 書き込みの同期度合い（パフォーマンスと安全性のバランス）
+  db.run("PRAGMA synchronous = NORMAL");
+
+  // 一時領域をメモリにする（大きい一時テーブルが多い場合）
+  db.run("PRAGMA temp_store = MEMORY");
+
+  // 別途必要なら page_size, cache_size なども調整可能
+});
+
+// SSE クライアント集合
+const sseClients = new Set();
+
+// SSE送信ユーティリティ（モジュールスコープ）
+function sendSseEvent(payload, eventName = 'message') {
+  const lines = [];
+  if (eventName && eventName !== 'message') lines.push(`event: ${eventName}`);
+  // data は複数行でもOKだが here we send single JSON line
+  lines.push(`data: ${JSON.stringify(payload)}`);
+  const msg = lines.join('\n') + '\n\n';
+
+  for (const res of Array.from(sseClients)) {
+    try {
+      res.write(msg);
+    } catch (e) {
+      // 書き込みに失敗したら切断として扱う
+      try { res.end(); } catch (_) {}
+      sseClients.delete(res);
+    }
+  }
+}
+
+// 定期 ping（全クライアント保持に有効）
+const SSE_PING_INTERVAL_MS = 25_000; // 25秒推奨（LBタイムアウトより短めに）
+setInterval(() => {
+  for (const res of Array.from(sseClients)) {
+    try {
+      res.write(': ping\n\n'); // コメント行はクライアントで無視される
+    } catch (e) {
+      try { res.end(); } catch (_) {}
+      sseClients.delete(res);
+    }
+  }
+}, SSE_PING_INTERVAL_MS);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -432,7 +483,8 @@ app.get('/api/get-platform-settings', (req, res) => {
       youtubeCommunity: true,
       fanbox: true,
       twitterMain: true,
-      twitterSub: true
+      twitterSub: true,
+      gipt: false
     };
 
     // row が無い場合は既定値を返す（存在確認したいなら 404 を返す方針も検討）
@@ -605,9 +657,10 @@ app.get('/api/history', (req, res) => {
   if (isNaN(offset) || offset < 0) offset = 0;
   const MAX_LIMIT = 100;
   if (limit > MAX_LIMIT) limit = MAX_LIMIT;
-
+const tStart = Date.now();
   // 件数取得
   db.get('SELECT COUNT(*) AS cnt FROM notifications', [], (countErr, countRow) => {
+const tAfterCount = Date.now()
     if (countErr) {
       console.error('/api/history COUNT err:', countErr.message);
       return res.status(500).json({ error: 'DB error', detail: countErr.message });
@@ -619,9 +672,11 @@ app.get('/api/history', (req, res) => {
     if (!total) {
       return res.json({ logs: [], total: 0, hasMore: false });
     }
-
+const tBeforePragma = Date.now();
     // カラム存在チェック（堅牢に）
     db.all("PRAGMA table_info(notifications)", [], (pragmaErr, columns) => {
+const tAfterPragma = Date.now();
+console.log('/api/history timing after PRAGMA:', tAfterPragma - tBeforePragma, 'ms');
       if (pragmaErr) {
         console.error('/api/history PRAGMA err:', pragmaErr.message);
         return res.status(500).json({ error: 'DB error', detail: pragmaErr.message });
@@ -636,8 +691,11 @@ app.get('/api/history', (req, res) => {
       if (hasStatus) selectFields += ', status';
 
       const sql = `SELECT ${selectFields} FROM notifications ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-
+const tBeforeSelect = Date.now();
       db.all(sql, [limit, offset], (err, rows) => {
+const tAfterSelect = Date.now();
+console.log('/api/history timing after SELECT:', tAfterSelect - tBeforeSelect, 'ms');
+console.log('/api/history total server time:', Date.now() - tStart, 'ms');
         if (err) {
           console.error('/api/history SELECT err:', err.message);
           return res.status(500).json({ error: 'DB error', detail: err.message });
@@ -665,6 +723,37 @@ app.get('/api/history', (req, res) => {
   });
 });
 
+// SSE エンドポイント: クライアントは EventSource('/api/history/stream')
+app.get('/api/history/stream', (req, res) => {
+  // 任意認証や clientId パラメータを受け取りたい場合はここで処理可能
+  // const clientId = req.query.clientId;
+
+  // SSE ヘッダ
+  res.set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    // CORS が必要なら適宜追加
+    // 'Access-Control-Allow-Origin': '*'
+  });
+  res.flushHeaders && res.flushHeaders();
+
+  // 初回イベント（握手）
+  res.write(`:ok\n\n`); // コメント行で接続保持を促す
+  sseClients.add(res);
+  console.log('[SSE] client connected (total=%d)', sseClients.size);
+
+  // 切断時のクリーンアップ
+  req.on('close', () => {
+    sseClients.delete(res);
+    try { res.end(); } catch (e) {}
+    console.log('[SSE] client disconnected (total=%d)', sseClients.size);
+  });
+
+  // --- オプション: ping（コネクション維持） ---
+  // keepAliveInterval はグローバルで1つだけにするか、ここで個別にセットする
+  // ここでは個別に setInterval を使わない（単純化）。必要なら実装可能。
+});
 
 // --- テスト通知 (改善版) ---
 app.post('/api/send-test', (req, res) => {
@@ -863,6 +952,17 @@ app.post('/api/notify', notifyLimiter, requireNotifyToken, verifyNotifyHmac, (re
         console.error('[/api/notify] 履歴保存エラー:', insertErr.message);
       } else {
         console.log('[/api/notify] 履歴保存成功 (ID:', this.lastID, ')');
+              // ← ここに SSE 通知を追加
+      try {
+        sendSseEvent({
+          type: 'history-updated',
+          lastUpdated: Math.floor(Date.now() / 1000),
+          added: [this.lastID] // 追加された行のID
+          // 必要なら changed/removed フィールドを追加
+        });
+      } catch (e) {
+        console.warn('sendSseEvent error:', e && e.message);
+      }
       }
     }
   );
@@ -1067,6 +1167,17 @@ app.post('/api/admin/notify', adminAuth.requireAuth, async (req, res) => {
           console.error('[Admin Notification] 履歴保存エラー:', insertErr.message);
         } else {
           console.log('[Admin Notification] 履歴保存成功 (ID:', this.lastID, ')');
+                // ← ここに SSE 通知を追加
+      try {
+        sendSseEvent({
+          type: 'history-updated',
+          lastUpdated: Math.floor(Date.now() / 1000),
+          added: [this.lastID] // 追加された行のID
+          // 必要なら changed/removed フィールドを追加
+        });
+      } catch (e) {
+        console.warn('sendSseEvent error:', e && e.message);
+      }
         }
       }
     );

@@ -13,6 +13,7 @@ const twitcasting = require('./twitcasting');
 const twitter = require('./twitter');
 const fanbox = require('./fanbox');
 const MilestoneScheduler = require('./milestone');
+const gipt = require('./gipt');
 
 const app = express();
 app.use(express.json());
@@ -129,6 +130,29 @@ async function main() {
   try { if (typeof twitcasting.init === 'function') twitcasting.init(notifyConfig); } catch(e){ console.error('twitcasting.init err', e && e.message ? e.message : e); }
   try { if (typeof twitter.init === 'function') twitter.init(notifyConfig); } catch(e){ console.error('twitter.init err', e && e.message ? e.message : e); }
   try { if (typeof fanbox.init === 'function') fanbox.init(notifyConfig); } catch(e){ console.error('fanbox.init err', e && e.message ? e.message : e); }
+  try {
+  if (typeof gipt.init === 'function') {
+    gipt.init({
+      statePath: path.join(__dirname, 'gipt_state.json'),
+      debugDir: path.join(__dirname, 'gipt_debug'),
+      notifyFn: async (payload) => {
+        const fetch = global.fetch || (await import('node-fetch')).then(m => m.default);
+        const res = await fetch(notifyConfig.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Notify-Token': notifyConfig.token
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`notify api failed: ${res.status} ${await res.text()}`);
+      }
+    });
+    console.log('gipt.init 完了');
+  }
+} catch (e) {
+  console.error('gipt.init err', e && e.message ? e.message : e);
+}
 
   const startPromises = [];
 
@@ -353,6 +377,31 @@ if (typeof twitcasting.startWatcher === 'function') {
   } catch (e) {
     console.error('Fanbox watcher 起動エラー:', e && e.message ? e.message : e);
   }
+
+/*
+  // Gipt
+startPromises.push((async () => {
+  try {
+    // 起動時に一回
+    await gipt.pollAndNotify({ waitMs: 1200 });
+    console.log('Gipt poll 初回実行 完了');
+
+    // 以降は定期実行（例: 60秒）
+    setInterval(async () => {
+      try {
+        await gipt.pollAndNotify({ waitMs: 1200 });
+      } catch (e) {
+        console.error('Gipt poll error:', e && e.message ? e.message : e);
+      }
+    }, 5 * 1000).unref();
+
+    console.log('Gipt polling 起動 (5s)');
+  } catch (e) {
+    console.error('Gipt 起動エラー:', e && e.message ? e.message : e);
+    throw e;
+  }
+})());
+*/
 
   // マイルストーンスケジューラー起動
   try {
