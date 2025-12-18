@@ -153,6 +153,11 @@
                                 </button>
                             </li>
                             <li>
+                                <button id="toggle-gipt" class="platform-setting-button is-on">
+                                    Gipt: OFF
+                                </button>
+                            </li>
+                            <li>
                                 <button id="toggle-milestone" class="platform-setting-button is-on">
                                     記念日通知: ON
                                 </button>
@@ -171,6 +176,12 @@
     </header>
 
     <main>
+        <div class="stats-card">
+            <h2>お知らせ</h2>
+            <div class="stat-item">
+                <p>まさかのnode.js公式のパッチリリースが12/19予定が延期されたので、1/8にメンテナンスを行います。</p>
+            </div>
+        </div>
         <div class="stats-card">
             <h2 style="margin-top: 0; font-size: 1.5rem;" class="fade-in">カウント</h2>
             <div class="stats-grid">
@@ -198,11 +209,7 @@
             
             <div class="controls">
                 <div class="controls-left">
-                    <button id="btn-refresh" class="fade d2">手動更新</button>
-                    <label class="fade d2">
-                        自動更新
-                        <input id="auto-refresh" class="plain-checkbox" type="checkbox" />
-                    </label>
+                    <button id="btn-refresh" class="fade d2">更新</button>
                 </div>
                 <button id="btn-log-settings" class="fade d2" aria-expanded="false" aria-controls="log-settings-container">表示設定</button>
                 <div id="log-settings-container" class="log-settings-container" aria-hidden="true">
@@ -240,6 +247,11 @@
                         <li>
                             <button id="filter-twitter-sub" class="filter-button is-on" disabled>
                                 Twitter(@koinoyamai17): ON
+                            </button>
+                        </li>
+                        <li>
+                            <button id="filter-gipt" class="filter-button is-on" disabled>
+                                Gipt: ON
                             </button>
                         </li>
                         <li>
@@ -377,6 +389,18 @@
       <picture>
         <source srcset="./logo/mashumaro.webp" type="image/webp">
         <img src="./logo/mashumaro.svg" alt="">
+      </picture>
+    </a>
+
+    <!-- Gipt -->
+    <a class="icon-link"
+       href="https://gi-pt.com/main/wishlist/fan-view/3a0fdc24-209e-d962-896b-cdd7d7828943"
+       target="_blank" rel="noopener noreferrer"
+       aria-label="Gipt"
+       data-tooltip="Gipt">
+      <picture>
+        <source srcset="./logo/gipt.ico" type="image/ico">
+        <img src="./logo/gipt.ico" alt="">
       </picture>
     </a>
 

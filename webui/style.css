@@ -132,6 +132,12 @@ header h1 {
 .menu-open .hamburger-icon span:nth-child(2) { opacity: 0; }
 .menu-open .hamburger-icon span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
 
+.menu-open .hamburger-icon {
+  position: fixed;
+  right: 17px;        /* 好みで調整 */
+  z-index: 1002;      /* #nav-menu(1000)より上 */
+}
+
 #nav-menu {
     position: fixed;
     top: 0;
