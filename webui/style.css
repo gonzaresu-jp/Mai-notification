@@ -64,6 +64,9 @@ main {
   transition: background-color .18s ease, box-shadow .18s ease;
 }
 
+#header-slot{z-index: 5;}
+#footer-slot{z-index: 5;}
+
 /* --- ヘッダー --- */
 header {
     /* メインカラーを背景に設定 */
@@ -583,6 +586,9 @@ footer {
 .footer-links a:hover {
     color: var(--color-highlight-bg);
 }
+
+footer p a{color: white; text-decoration: none;}
+
 @supports not (backdrop-filter: blur(1px)) and not (-webkit-backdrop-filter: blur(1px)) {
   main {
     position: relative;
@@ -853,6 +859,11 @@ body.menu-transitions-disabled #nav-menu .nav-list li {
   pointer-events: none;
   transition: none; /* ロード時は遷移なし */
 }
+body.menu-open{
+  overflow: hidden;
+  touch-action: none;
+}
+
 /* リストアイテムの初期状態（確実に li に適用されていることを確認） */
 #nav-menu > .nav-list > li {
     opacity: 0;
@@ -865,6 +876,14 @@ body.menu-transitions-disabled #nav-menu .nav-list li {
     transform: translateX(0);
 }
 
+/* ハンバーガーで開く nav を画面内スクロールにする */
+#nav-menu{
+  max-height: calc(100dvh); /* 72px は header 高さ想定。適宜調整 */
+  overflow-y: auto;
+  overscroll-behavior: contain;    /* 背景へのスクロール伝播を止める */
+  -webkit-overflow-scrolling: touch; /* iOS 慣性スクロール */
+}
+
  :root {
     --icon-gap: 10px;
     --tooltip-bg: rgba(0,0,0,0.85);
@@ -873,7 +892,7 @@ body.menu-transitions-disabled #nav-menu .nav-list li {
   }
 
   footer { padding: 12px 16px; text-align:center; font-size:14px;}
-  footer p { margin:0 0 17px 0; font-weight:600; }
+  footer p { font-weight:600; }
 
   .icon-row { display:inline-flex; gap:var(--icon-gap); align-items:center; justify-content:center; flex-wrap:wrap; }
   .icon-link {

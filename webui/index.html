@@ -40,140 +40,7 @@
     <link rel="preconnect" href="https://elza.poitou-mora.ts.net">
 </head>
 <body id="app-body" class="menu-transitions-disabled">
-    <header>
-        <div class="header-left">
-            <a href="/" rel="noopener noreferrer" style="text-decoration: none; color: inherit;"><h2 class="fade">通知ダッシュボード</h2></a>
-        </div>
-        
-        <div class="hamburger-icon fade" id="hamburger-toggle" aria-controls="nav-menu" aria-expanded="false">
-            <span></span>
-            <span></span>
-            <span></span>
-        </div>
-        
-        <nav id="nav-menu" aria-label="メインメニュー">
-            <ul class="nav-list">
-                <li><button id="btn-send-test">テスト通知を送信</button></li>
-                
-                <li class="menu-notification-toggle">
-                    <!-- 画像切り替えコンテナ -->
-                    <div class="toggle-image-container">
-                        <img src="./off.webp" alt="" class="toggle-image off" />
-                        <img src="./on.webp" alt="" class="toggle-image on" />
-                    </div>
-                    
-                    <div class="toggle-controls-wrapper">
-                        <span>通知を受信する</span>
-                        <label class="toggle-notify">
-                            <input id="toggle-notify" type="checkbox" />
-                            <span class="slider" aria-hidden="true"></span>
-                        </label>
-                    </div>
-                </li>
-<li class="nav-setting-item">
-  <div id="subscriber-name-settings" class="platform-subscriber-name-section">
-    
-    <!-- ラベル + チェックマーク -->
-    <div class="platform-name-row">
-      <div class="platform-name-label">
-        ユーザー名
-      </div>
-    </div>
-
-<!-- 入力欄 + 送信ボタン -->
-<div class="platform-name-controls">
-  
-  <div class="subscriber-input-wrapper">
-    <input id="subscriber-name-input" type="text" class="platform-name-input" placeholder="ユーザー名を入力">
-
-    <!-- ここに PNG のチェックアイコンを配置 -->
-    <img id="subscriber-linked-icon"
-         class="subscriber-linked"
-         src="https://img.icons8.com/?size=100&id=sz8cPVwzLrMP&format=png&color=000000"
-         alt="linked"
-         style="display:none;">
-  </div>
-
-  <button id="subscriber-name-submit" class="platform-setting-button">
-    保存
-  </button>
-
-</div>
-<li class="nav-setting-item">
-    <div class="platform-name-row">推し始め</div>
-    <div class="subscriber-input-wrapper" style="margin-block-end: 10px;"> 
-        <input
-      type="date"
-      id="start"
-      name="trip-start"
-      value="2020-01-07"
-      min="2020-01-01"
-      max="2099-12-31" />
-    </div>
-</li>
-<div id="subscriber-name-status" class="platform-name-status"></div>
-
-
-  </div>
-</li>
-
-
-
-                <li class="nav-setting-item">
-                    <div id="platform-settings">
-                        <ul class="platform-settings-list">
-                            <li>
-                                <button id="toggle-twitcasting" class="platform-setting-button is-on">
-                                    TwitCasting: ON
-                                </button>
-                            </li>
-                            <li>
-                                <button id="toggle-youtube" class="platform-setting-button is-on">
-                                    YouTube: ON
-                                </button>
-                            </li>
-                            <li>
-                                <button id="toggle-youtube-community" class="platform-setting-button is-on">
-                                    YouTube Community: ON
-                                </button>
-                            </li>
-                            <li>
-                                <button id="toggle-fanbox" class="platform-setting-button is-on">
-                                    Pixiv Fanbox: ON
-                                </button>
-                            </li>
-                            <li>
-                                <button id="toggle-twitter-main" class="platform-setting-button is-on">
-                                    Twitter(@koinoya_mai): ON
-                                </button>
-                            </li>
-                            <li>
-                                <button id="toggle-twitter-sub" class="platform-setting-button is-on">
-                                    Twitter(@koinoyamai17): ON
-                                </button>
-                            </li>
-                            <li>
-                                <button id="toggle-gipt" class="platform-setting-button is-on">
-                                    Gipt: OFF
-                                </button>
-                            </li>
-                            <li>
-                                <button id="toggle-milestone" class="platform-setting-button is-on">
-                                    記念日通知: ON
-                                </button>
-                            </li>
-                        </ul>
-                    </div>
-                </li>
-                
-                <li><a href="https://github.com/gonzaresu-jp/Mai-notification" target="_blank" rel="noopener noreferrer">GitHubページ</a></li>
-                <li><a href="./info/" rel="noopener noreferrer">このサービスについて</a></li>
-                <li><a href="https://form.jotform.com/253191048959063" target="_blank" rel="noopener noreferrer">不具合報告</a></li>
-            </ul>
-        </nav>
-        
-        <div id="menu-overlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; display: none;"></div>
-    </header>
+    <div id="header-slot"></div>
 
     <main>
         <div class="stats-card">
@@ -249,11 +116,11 @@
                                 Twitter(@koinoyamai17): ON
                             </button>
                         </li>
-                        <li>
+                        <!--<li>
                             <button id="filter-gipt" class="filter-button is-on" disabled>
                                 Gipt: ON
                             </button>
-                        </li>
+                        </li>-->
                         <li>
                             <button id="filter-milestone" class="filter-button is-on" disabled>
                                 記念日通知: ON
@@ -316,100 +183,11 @@
             <div id="status" class="muted"></div>
         </div>
     </main>
-<footer>
-  <p>Mai's Platform</p>
-
-  <div class="footer-links icon-row">
-
-    <!-- YouTube (main) -->
-    <a class="icon-link"
-       href="https://www.youtube.com/@koinoyamaich"
-       target="_blank" rel="noopener noreferrer"
-       aria-label="YouTube (main)"
-       data-tooltip="YouTube (main)">
-      <picture>
-        <source srcset="./logo/yt-main.webp" type="image/webp">
-        <img src="/assets/icons/youtube-sub.svg" alt="">
-      </picture>
-    </a>
-
-    <!-- YouTube (sub) -->
-    <a class="icon-link"
-       href="https://www.youtube.com/@koinoyamaich"
-       target="_blank" rel="noopener noreferrer"
-       aria-label="YouTube (sub)"
-       data-tooltip="YouTube (sub)">
-      <picture>
-        <source srcset="./logo/yt-sub.webp" type="image/webp">
-        <img src="/assets/icons/youtube-sub.svg" alt="">
-      </picture>
-    </a>
-
-    <!-- X -->
-    <a class="icon-link"
-       href="https://x.com/koinoya_mai"
-       target="_blank" rel="noopener noreferrer"
-       aria-label="X (Twitter)"
-       data-tooltip="X (Twitter)">
-      <picture>
-        <img src="./logo/twitter.svg" alt="twitter">
-      </picture>
-    </a>
-
-    <!-- Fanbox -->
-    <a class="icon-link"
-       href="https://www.fanbox.cc/@koinoya-mai"
-       target="_blank" rel="noopener noreferrer"
-       aria-label="Pixiv Fanbox"
-       data-tooltip="Pixiv Fanbox">
-      <picture>
-        <source srcset="./logo/fanbox.webp" type="image/webp">
-        <img src="/assets/icons/fanbox.svg" alt="">
-      </picture>
-    </a>
-
-    <!-- TwitCasting -->
-    <a class="icon-link"
-       href="https://twitcasting.tv/c:koinoya_mai"
-       target="_blank" rel="noopener noreferrer"
-       aria-label="TwitCasting"
-       data-tooltip="TwitCasting">
-      <picture>
-        <source srcset="./logo/twitcasting.webp" type="image/webp">
-        <img src="/assets/icons/twitcasting.svg" alt="">
-      </picture>
-    </a>
-
-    <!-- マシュマロ -->
-    <a class="icon-link"
-       href="https://marshmallow-qa.com/koinoya_mai?t=HBJBYN"
-       target="_blank" rel="noopener noreferrer"
-       aria-label="マシュマロ"
-       data-tooltip="マシュマロ">
-      <picture>
-        <source srcset="./logo/mashumaro.webp" type="image/webp">
-        <img src="./logo/mashumaro.svg" alt="">
-      </picture>
-    </a>
-
-    <!-- Gipt -->
-    <a class="icon-link"
-       href="https://gi-pt.com/main/wishlist/fan-view/3a0fdc24-209e-d962-896b-cdd7d7828943"
-       target="_blank" rel="noopener noreferrer"
-       aria-label="Gipt"
-       data-tooltip="Gipt">
-      <picture>
-        <source srcset="./logo/gipt.ico" type="image/ico">
-        <img src="./logo/gipt.ico" alt="">
-      </picture>
-    </a>
-
-  </div>
-</footer>
+    <div id="footer-slot"></div>
 
     <!-- iOS Helper を main.js より先に読み込む -->
-    <script src="./ios-helper.js" defer></script>
-    <script type="module" src="./js/main.js" defer></script>
+    <script src="/ios-helper.js" defer></script>
+    <script type="module" src="/js/main.js" defer></script>
     <script>
 const btn = document.getElementById('btn-log-settings');
 const menu = document.getElementById('log-settings-container');
@@ -432,115 +210,99 @@ document.addEventListener('click', (e) => {
 </script>
 
 <script>
-(() => {
-  const STORAGE_KEY = 'maistart_date';
-  const DEFAULT_DATE = '2020-01-07';
+function initOshiDays() {
+  const STORAGE_KEY = "maistart_date";
+  const DEFAULT_DATE = "2020-01-07";
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-  // DOM 要素
-  const dateInput = document.getElementById('start');
-  const meetValueEl = document.getElementById('days-to-meet');
-  const meetStatItem = document.querySelector('#days-to-meet')?.closest('.stat-item');
+  const dateInput = document.getElementById("start");              // header内
+  const meetValueEl = document.getElementById("days-to-meet");     // main内
+  const meetStatItem = meetValueEl?.closest(".stat-item");
 
-  // 日付を YYYY-MM-DD 形式の文字列から Date に変換（ローカルタイムで 00:00）
+  if (!meetValueEl || !meetStatItem) return; // 表示側がないなら何もしない
+  if (!dateInput) return;                    // headerが未挿入なら何もしない（待つ側で保証する）
+
   function parseYMD(ymd) {
     if (!ymd) return null;
-    const parts = ymd.split('-').map(Number);
-    if (parts.length !== 3 || parts.some(isNaN)) return null;
-    // month は 0 始まり
+    const parts = ymd.split("-").map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
     return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
   }
-
   function stripTime(d) {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
   }
-
-  // 指定日から今日までの経過日数（負にならない）
   function daysSinceLocal(date) {
-    if (!date) return null;
     const now = stripTime(new Date()).getTime();
     const then = stripTime(date).getTime();
     return Math.max(0, Math.floor((now - then) / MS_PER_DAY));
   }
 
-  // localStorage から値を読み込み、UI を初期化
   function loadAndApply() {
     const stored = localStorage.getItem(STORAGE_KEY);
-    // 優先順: localStorage -> input の現在値 -> 未設定
-    let effective = stored || (dateInput ? dateInput.value : null);
+    let effective = stored || dateInput.value || null;
 
-    // treat DEFAULT_DATE (2020-01-07) as "未設定"
+    // DEFAULT_DATE を「未設定扱い」
     if (!effective || effective === DEFAULT_DATE) {
-      // 非表示にする
-      if (meetStatItem) meetStatItem.style.display = 'none';
-      if (meetValueEl) meetValueEl.textContent = '0 日';
-      // input はデフォルト値を残すか、空にするかは要件次第。
-      // ここでは input に保存がない場合は空にする（視認性向上）
-      if (dateInput && !stored) dateInput.value = '';
+      meetStatItem.style.display = "none";
+      meetValueEl.textContent = "0 日";
+      if (!stored) dateInput.value = "";
       return;
     }
 
-    // 有効な日付なら表示して日数を更新
     const parsed = parseYMD(effective);
     if (!parsed) {
-      if (meetStatItem) meetStatItem.style.display = 'none';
+      meetStatItem.style.display = "none";
       return;
     }
 
     const since = daysSinceLocal(parsed);
-    if (meetValueEl) meetValueEl.textContent = String(since) + ' 日';
-    if (meetStatItem) meetStatItem.style.display = ''; // 再表示
-    // reflect stored value into input if different
-    if (dateInput && dateInput.value !== effective) dateInput.value = effective;
+    meetValueEl.textContent = `${since} 日`;
+    meetStatItem.style.display = "";
+    if (dateInput.value !== effective) dateInput.value = effective;
   }
 
-  // 保存処理
   function saveDate(value) {
-    if (!value || value === DEFAULT_DATE) {
-      // treat as unset -> remove from storage
-      localStorage.removeItem(STORAGE_KEY);
-    } else {
-      localStorage.setItem(STORAGE_KEY, value);
-    }
+    if (!value || value === DEFAULT_DATE) localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, value);
     loadAndApply();
   }
 
-  // イベント登録
-  document.addEventListener('DOMContentLoaded', () => {
-    // 初期適用（DOMContentLoaded の二重呼び出しでも安全）
+  // 多重登録防止
+  if (dateInput.dataset.boundOshiDays === "1") {
     loadAndApply();
+    return;
+  }
+  dateInput.dataset.boundOshiDays = "1";
 
-    if (dateInput) {
-      // 日付が変わったら即保存
-      dateInput.addEventListener('change', (e) => {
-        const v = e.target.value;
-        saveDate(v);
-      });
-    }
+  loadAndApply();
+  dateInput.addEventListener("change", (e) => saveDate(e.target.value));
 
-    // 「保存」ボタンがあるなら紐づけ（既にある #subscriber-name-submit を利用）
-    const saveBtn = document.getElementById('subscriber-name-submit');
-    if (saveBtn && dateInput) {
-      saveBtn.addEventListener('click', (e) => {
-        // 既存の username 保存処理に追加で日付も保存する
-        const v = dateInput.value;
-        saveDate(v);
-        // 既存の保存処理がある場合はそれが動く想定。ここでは割り込みしない。
-      });
-    }
+  // 「保存」ボタン（ユーザー名保存と共用）でも保存したいなら
+  const saveBtn = document.getElementById("subscriber-name-submit");
+  if (saveBtn && !saveBtn.dataset.boundOshiDays) {
+    saveBtn.dataset.boundOshiDays = "1";
+    saveBtn.addEventListener("click", () => saveDate(dateInput.value));
+  }
 
-    // 定期更新（真夜中を跨いで日数が変わるので毎分チェック）
-    // 既にページに setInterval があるなら重複するが影響は小さい。
-    setInterval(loadAndApply, 60 * 1000);
-  });
+  // 日付跨ぎ対策
+  setInterval(loadAndApply, 60 * 1000);
+}
 
-  // 即時初期化（DOMContentLoaded より前にスクリプトが実行された場合に備える）
-  if (document.readyState !== 'loading') loadAndApply();
+
+(async () => {
+  const load = async (id, url) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const res = await fetch(url, { cache: 'no-cache' });
+    el.innerHTML = await res.text();
+  };
+
+  await load('header-slot', '/header.html');
+  initOshiDays();               // ← ここが重要：header 注入後に初期化
+  await load('footer-slot', '/footer.html');
 })();
 </script>
-
-
-    <script>
+<script>
 // メニューアイテムに遅延を適用する関数
 function applyHamburgerSequentialFadeIn() {
     const menuItems = document.querySelectorAll('#nav-menu > .nav-list > li');
@@ -562,7 +324,7 @@ function applyHamburgerSequentialFadeIn() {
     <script>
 (() => {
     const DEBUT_DATE = new Date(2021, 2, 21);
-    const BIRTHDAY = { month: 12, day: 7 };
+    const BIRTHDAY = { month: 0, day: 7 };
     const ANNIVERSARY = { month: 2, day: 21 };
     const UPDATE_INTERVAL = 60 * 1000;
     const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -810,5 +572,20 @@ function applyHamburgerSequentialFadeIn() {
 });
 
 </script>
+<script type="module">
+  window.__layoutReady = (async () => {
+    const load = async (id, url) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const res = await fetch(url, { cache: 'no-cache' });
+      el.innerHTML = await res.text();
+    };
+
+    await load('header-slot', '/header.html');
+    window.initHeader?.();
+    await load('footer-slot', '/footer.html');
+  })();
+</script>
+
 </body>
 </html>

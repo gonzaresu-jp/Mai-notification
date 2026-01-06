@@ -1,0 +1,135 @@
+<header>
+        <div class="header-left">
+            <a href="/" rel="noopener noreferrer" style="text-decoration: none; color: inherit;"><h2 class="fade">通知ダッシュボード</h2></a>
+        </div>
+        
+        <div class="hamburger-icon fade" id="hamburger-toggle" aria-controls="nav-menu" aria-expanded="false">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        
+        <nav id="nav-menu" aria-label="メインメニュー">
+            <ul class="nav-list">
+                <li><button id="btn-send-test">テスト通知を送信</button></li>
+                
+                <li class="menu-notification-toggle">
+                    <!-- 画像切り替えコンテナ -->
+                    <div class="toggle-image-container">
+                        <img src="./off.webp" alt="" class="toggle-image off" />
+                        <img src="./on.webp" alt="" class="toggle-image on" />
+                    </div>
+                    
+                    <div class="toggle-controls-wrapper">
+                        <span>通知を受信する</span>
+                        <label class="toggle-notify">
+                            <input id="toggle-notify" type="checkbox" />
+                            <span class="slider" aria-hidden="true"></span>
+                        </label>
+                    </div>
+                </li>
+<li class="nav-setting-item">
+  <div id="subscriber-name-settings" class="platform-subscriber-name-section">
+    
+    <!-- ラベル + チェックマーク -->
+    <div class="platform-name-row">
+      <div class="platform-name-label">
+        ユーザー名
+      </div>
+    </div>
+
+<!-- 入力欄 + 送信ボタン -->
+<div class="platform-name-controls">
+  
+  <div class="subscriber-input-wrapper">
+    <input id="subscriber-name-input" type="text" class="platform-name-input" placeholder="ユーザー名を入力">
+
+    <!-- ここに PNG のチェックアイコンを配置 -->
+    <img id="subscriber-linked-icon"
+         class="subscriber-linked"
+         src="https://img.icons8.com/?size=100&id=sz8cPVwzLrMP&format=png&color=000000"
+         alt="linked"
+         style="display:none;">
+  </div>
+
+  <button id="subscriber-name-submit" class="platform-setting-button">
+    保存
+  </button>
+
+</div>
+<li class="nav-setting-item">
+    <div class="platform-name-row">推し始め</div>
+    <div class="subscriber-input-wrapper" style="margin-block-end: 10px;"> 
+        <input
+      type="date"
+      id="start"
+      name="trip-start"
+      value="2020-01-07"
+      min="2020-01-01"
+      max="2099-12-31" />
+    </div>
+</li>
+<div id="subscriber-name-status" class="platform-name-status"></div>
+
+
+  </div>
+</li>
+
+
+
+                <li class="nav-setting-item">
+                    <div id="platform-settings">
+                        <ul class="platform-settings-list">
+                            <li>
+                                <button id="toggle-twitcasting" class="platform-setting-button is-on">
+                                    TwitCasting: ON
+                                </button>
+                            </li>
+                            <li>
+                                <button id="toggle-youtube" class="platform-setting-button is-on">
+                                    YouTube: ON
+                                </button>
+                            </li>
+                            <li>
+                                <button id="toggle-youtube-community" class="platform-setting-button is-on">
+                                    YouTube Community: ON
+                                </button>
+                            </li>
+                            <li>
+                                <button id="toggle-fanbox" class="platform-setting-button is-on">
+                                    Pixiv Fanbox: ON
+                                </button>
+                            </li>
+                            <li>
+                                <button id="toggle-twitter-main" class="platform-setting-button is-on">
+                                    Twitter(@koinoya_mai): ON
+                                </button>
+                            </li>
+                            <li>
+                                <button id="toggle-twitter-sub" class="platform-setting-button is-on">
+                                    Twitter(@koinoyamai17): ON
+                                </button>
+                            </li>
+                            <!--<li>
+                                <button id="toggle-gipt" class="platform-setting-button is-on">
+                                    Gipt: OFF
+                                </button>
+                            </li>-->
+                            <li>
+                                <button id="toggle-milestone" class="platform-setting-button is-on">
+                                    記念日通知: ON
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </li>
+                
+                <li><a href="https://github.com/gonzaresu-jp/Mai-notification" target="_blank" rel="noopener noreferrer">GitHubページ</a></li>
+                <li><a href="/info/" rel="noopener noreferrer">このサービスについて</a></li>
+                <li><a href="/logs/" rel="noopener noreferrer">Update logs</a></li>
+                <li><a href="https://form.jotform.com/253191048959063" target="_blank" rel="noopener noreferrer">不具合報告</a></li>
+            </ul>
+        </nav>
+        
+        <div id="menu-overlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; display: none;"></div>
+    </header>
