@@ -1,4 +1,4 @@
-// main.js - メイン初期化処理
+// main.js - メイン初期化処理（header.html fetch 挿入対応版）
 import { PAGING, getClientId } from './config.js';
 import { initPush, unsubscribePush, sendTestToMe, sendSubscriptionToServer } from './pushService.js';
 import { savePlatformSettings, getPlatformSettings } from './settingsService.js';
@@ -9,6 +9,7 @@ import {
   updateToggleImage,
   updatePlatformSettingsVisibility,
   initPlatformSettingsUI,
+  initHeaderDependentUI,
   loadPlatformSettingsUIFromServer
 } from './uiController.js';
 
@@ -18,12 +19,31 @@ function areAllPlatformsDisabled(settings) {
   return Object.values(settings).every(v => !v);
 }
 
+// header/footer 挿入完了待ち
+async function waitLayoutReady() {
+  if (window.__layoutReady && typeof window.__layoutReady.then === "function") {
+    await window.__layoutReady;
+    return;
+  }
+  // 保険: #nav-menu or #toggle-notify が出るまで短時間待つ
+  for (let i = 0; i < 80; i++) {
+    if (document.getElementById("nav-menu") || document.getElementById("toggle-notify")) return;
+    await new Promise(r => setTimeout(r, 50));
+  }
+}
+
+function areAllPlatformsDisabledSafe() {
+  try {
+    const s = getPlatformSettings();
+    return areAllPlatformsDisabled(s);
+  } catch {
+    return true;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-  const $toggleNotify = document.getElementById('toggle-notify');
   const $logs = document.getElementById('logs');
   const $status = document.getElementById('status');
-  const $btnSendTest = document.getElementById('btn-send-test');
-  const $autoRefreshCheckbox = document.getElementById('auto-refresh');
 
   console.log('[Main] 初期化開始');
 
@@ -39,7 +59,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function refreshHistory({ reason = 'manual', force = false } = {}) {
     if (!$logs || !$status) return;
 
-    // 過剰リクエスト抑制（force のときは無視）
     const now = Date.now();
     if (!force && (now - lastHistoryRefreshAt) < 1500) return;
     lastHistoryRefreshAt = now;
@@ -51,12 +70,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     PAGING.offset = 0;
     PAGING.hasMore = true;
 
-    // force のときは必ずDB準拠（キャッシュ無視）
     fetchHistory($logs, $status, { append: false, useCache: !force });
   }
 
   // =========================
-  // ServiceWorker メッセージリスナー
+  // ServiceWorker メッセージリスナー（ヘッダー有無に依存しないので先に登録OK）
   // =========================
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', event => {
@@ -67,22 +85,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // 新方式: Push側は「更新が起きたかも」という通知だけ投げる
       if (event.data?.type === 'HISTORY_INVALIDATE') {
-        // 表示中ならDB準拠で即反映
         if (document.visibilityState === 'visible') {
           refreshHistory({ reason: 'sw_invalidate', force: true });
         }
         return;
       }
 
-      // 互換: 既存のキャッシュクリア通知（旧実装）
       if (event.data?.type === 'CLEAR_HISTORY_CACHE') {
         console.log('[Main] 履歴キャッシュをクリアします（通知受信）');
         clearHistoryCache();
 
         if (document.visibilityState === 'visible') {
-          // 少し遅延（通知UIと競合しにくくする）
           setTimeout(() => {
             refreshHistory({ reason: 'sw_clear_cache', force: true });
           }, 800);
@@ -90,7 +104,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // 互換: キャッシュクリア＋リロード指示（通知クリック）
       if (event.data?.type === 'CLEAR_AND_RELOAD_HISTORY') {
         console.log('[Main] 履歴をクリア＆リロードします（通知クリック）');
         refreshHistory({ reason: 'sw_clear_and_reload', force: true });
@@ -100,11 +113,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // =========================
+  // ★重要: header/footer 注入完了を待つ
+  // =========================
+  await waitLayoutReady();
+
+  // uiController 側の「ヘッダー依存UI初期化」を確実に走らせる
+  // （ハンバーガー、通知トグルUI、推し日数、プラットフォームボタンのデリゲーション等）
+  try {
+    await initHeaderDependentUI();
+  } catch (e) {
+    console.warn('[Main] initHeaderDependentUI error', e);
+  }
+
+  // ここから先は、ヘッダー内要素が存在する前提で取得してOK
+  const $toggleNotify = document.getElementById('toggle-notify');
+  const $btnSendTest = document.getElementById('btn-send-test');
+  const $autoRefreshCheckbox = document.getElementById('auto-refresh');
+
+  // =========================
   // プラットフォーム設定UIの初期化
   // =========================
+  // initPlatformSettingsUI は（あなたの最新版 uiController なら）デリゲーションで動くが、
+  // 旧版でもここで確実に bind できるようにしておく
   initPlatformSettingsUI($toggleNotify);
+
   const serverResult = await loadPlatformSettingsUIFromServer($toggleNotify);
-  if (serverResult && serverResult.applied && serverResult.settings) {
+  if (serverResult && serverResult.applied && serverResult.settings && $toggleNotify) {
     const settings = serverResult.settings;
     const anyOn = Object.values(settings).some(v => !!v);
     $toggleNotify.checked = anyOn;
@@ -112,10 +146,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateToggleImage();
   }
 
-  // ログフィルター設定の初期化
+  // ログフィルター設定の初期化（通知トグル参照するので header 後）
   initLogFilterSettings($toggleNotify);
 
-  // 購読者名UIの初期化（非同期で実行、完了を待たない）
+  // 購読者名UIの初期化（input/button が header 内なので header 後）
   let showLinked = () => {};
   initSubscriberNameUI()
     .then(subscriberUI => {
@@ -129,15 +163,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
   // =========================
-  // 通知トグルの初期化
+  // 通知トグルの初期化（Push処理）
   // =========================
   if ($toggleNotify) {
     let enabled = false;
+
     try {
       if ('serviceWorker' in navigator && 'PushManager' in window) {
         const sw = await navigator.serviceWorker.ready;
         let sub = await sw.pushManager.getSubscription();
 
+        // 互換: localStorage に保持していた購読情報がある場合
         if (!sub) {
           const localSubRaw = localStorage.getItem('pushSubscription');
           if (localSubRaw) {
@@ -163,8 +199,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.warn('購読チェック失敗', e);
     }
 
-    const settings = getPlatformSettings();
-    if (areAllPlatformsDisabled(settings)) {
+    // 全プラットフォームOFFなら通知は強制OFF
+    if (areAllPlatformsDisabledSafe()) {
       enabled = false;
       showLinked(false);
     }
@@ -237,7 +273,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // =========================
-  // テスト送信ボタン
+  // テスト送信ボタン（header 内なので header 後）
   // =========================
   if ($btnSendTest) {
     $btnSendTest.addEventListener('click', async () => {
@@ -248,7 +284,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // =========================
-  // もっと読み込むボタン
+  // もっと読み込むボタン（main 側）
   // =========================
   const $btnMoreLogs = document.getElementById('more-logs-button');
   if ($btnMoreLogs && $logs && $status) {
@@ -266,7 +302,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // =========================
-  // 自動更新（DB準拠で回す）
+  // 自動更新（header/本文どっちにあっても、取得は header 後なので安全）
   // =========================
   if ($autoRefreshCheckbox && $logs && $status) {
     $autoRefreshCheckbox.addEventListener('change', e => {
@@ -290,7 +326,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 初回履歴読み込み（リロード時は必ずDB準拠）
   // =========================
   if ($logs && $status) {
-    // 初回表示を優先しつつ、DB準拠で確実に同期
     setTimeout(() => {
       refreshHistory({ reason: 'initial_load', force: true });
     }, 100);
@@ -310,7 +345,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (document.visibilityState === 'visible') {
       const sleptMs = backgroundSince ? (Date.now() - backgroundSince) : 0;
 
-      // すぐ復帰でも更新して良いが、最低限のスロットリングだけ掛ける
       if (sleptMs > 1000) {
         refreshHistory({ reason: 'resume', force: true });
       }
