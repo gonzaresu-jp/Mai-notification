@@ -1,14 +1,14 @@
-// subscriberService.js - 購読者名管理
+// subscriberService.js - 購読者名管理（統合API版）
 import { API, getClientId } from './config.js';
 import { getPlatformSettings } from './settingsService.js';
 
 export async function saveNameToServer(clientId, name) {
   if (!clientId) {
-    console.error('[saveNameToServer] clientId がありません');
+    console.error('[saveNameToServer] clientIdがありません');
     return false;
   }
   if (!name || typeof name !== 'string') {
-    console.error('[saveNameToServer] name が不正です');
+    console.error('[saveNameToServer] nameが不正です');
     return false;
   }
 
@@ -20,7 +20,7 @@ export async function saveNameToServer(clientId, name) {
       if (swSub) sub = swSub;
     }
   } catch (e) {
-    console.warn('[saveNameToServer] ServiceWorker から subscription 取得に失敗', e);
+    console.warn('[saveNameToServer] ServiceWorkerからsubscription取得に失敗', e);
   }
   if (!sub) {
     const subRaw = localStorage.getItem('pushSubscription');
@@ -44,13 +44,13 @@ export async function saveNameToServer(clientId, name) {
       catch (e) { console.log('[saveNameToServer] /api/save-name response (text):', text); }
       return true;
     } else if (res.status === 404) {
-      console.log('[saveNameToServer] /api/save-name が存在しないためフォールバックします');
+      console.log('[saveNameToServer] /api/save-nameが存在しないためフォールバックします');
     } else {
       const text = await res.text();
-      console.warn('[saveNameToServer] /api/save-name 失敗:', res.status, text);
+      console.warn('[saveNameToServer] /api/save-name失敗:', res.status, text);
     }
   } catch (e) {
-    console.warn('[saveNameToServer] /api/save-name へのネットワークエラー:', e);
+    console.warn('[saveNameToServer] /api/save-nameへのネットワークエラー:', e);
   }
 
   try {
@@ -60,7 +60,7 @@ export async function saveNameToServer(clientId, name) {
       subscription: sub,
       settings: platformSettings
     };
-    console.log('[saveNameToServer] フォールバックで /api/save-platform-settings POST', body);
+    console.log('[saveNameToServer] フォールバックで/api/save-platform-settings POST', body);
     const res2 = await fetch(API.SAVE_SETTINGS, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -85,73 +85,47 @@ export async function saveNameToServer(clientId, name) {
   }
 }
 
+// 🚀 統合API版：1回のリクエストで name + settings を取得
 export async function fetchNameFromServer(clientId, retries = 2) {
-  // まず /api/get-name を試す
-  for (let i = 0; i <= retries; i++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒タイムアウト
-      
-      const res = await fetch(`/api/get-name?clientId=${clientId}`, {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      
-      console.log('[fetchNameFromServer] /api/get-name HTTP', res.status);
-      if (res.ok) {
-        const data = await res.json();
-        console.log('[fetchNameFromServer] /api/get-name body', data);
-        if (typeof data.name !== 'undefined' && data.name !== null) {
-          return data.name;
-        }
-      }
-      if (res.status === 502 && i < retries) {
-        console.warn(`[fetchNameFromServer] 502エラー、リトライ ${i + 1}/${retries}`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // 指数バックオフ
-        continue;
-      }
-      break; // 502以外のエラーはリトライしない
-    } catch (e) {
-      if (e.name === 'AbortError') {
-        console.warn('[fetchNameFromServer] /api/get-name タイムアウト');
-      } else {
-        console.warn('[fetchNameFromServer] /api/get-name 失敗:', e);
-      }
-      if (i < retries) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-        continue;
-      }
-    }
-  }
-
-  // フォールバック: /api/get-platform-settings から取得
   for (let i = 0; i <= retries; i++) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const res = await fetch(`/api/get-platform-settings?clientId=${clientId}`, {
+      // ✅ 統合API使用（1リクエストで完結）
+      const res = await fetch(`/api/get-user-data?clientId=${clientId}`, {
         signal: controller.signal
       });
+      
       clearTimeout(timeoutId);
       
-      console.log('[fetchNameFromServer] /api/get-platform-settings HTTP', res.status);
+      console.log('[fetchNameFromServer] /api/get-user-data HTTP', res.status);
+      
       if (res.ok) {
         const data = await res.json();
-        console.log('[fetchNameFromServer] /api/get-platform-settings body', data);
-        return typeof data.name !== 'undefined' && data.name !== null ? data.name : null;
+        console.log('[fetchNameFromServer] /api/get-user-data body', data);
+        
+        // name を返す（settings も取得されているが、ここでは name のみ使用）
+        if (typeof data.name !== 'undefined' && data.name !== null) {
+          return data.name;
+        }
+        return null;
       }
+      
+      // 502エラーの場合のみリトライ
       if (res.status === 502 && i < retries) {
-        console.warn(`[fetchNameFromServer] フォールバックで502エラー、リトライ ${i + 1}/${retries}`);
+        console.warn(`[fetchNameFromServer] 502エラー、リトライ ${i + 1}/${retries}`);
         await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
         continue;
       }
+      
       break;
+      
     } catch (e) {
       if (e.name === 'AbortError') {
-        console.warn('[fetchNameFromServer] /api/get-platform-settings タイムアウト');
+        console.warn('[fetchNameFromServer] タイムアウト');
       } else {
-        console.warn('[fetchNameFromServer] /api/get-platform-settings 失敗:', e);
+        console.warn('[fetchNameFromServer] 失敗:', e);
       }
       if (i < retries) {
         await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
@@ -227,7 +201,7 @@ export async function initSubscriberNameUI() {
       showLinked(false);
     }
   }).catch(e => {
-    console.warn('[initSubscriberNameUI] name 取得エラー', e);
+    console.warn('[initSubscriberNameUI] name取得エラー', e);
     input.value = '';
     showLinked(false);
   });
@@ -254,10 +228,9 @@ export async function initSubscriberNameUI() {
       if (ok) {
         status.textContent = '名前を保存しました';
         status.className = 'status-message success-message';
-        currentNameValue = name; // 現在の値を更新
+        currentNameValue = name;
         showLinked(true);
         
-        // 保存後に確認のため再取得（0.5秒後）
         setTimeout(async () => {
           try {
             const savedName = await fetchNameFromServer(clientId);
