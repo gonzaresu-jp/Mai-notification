@@ -378,7 +378,7 @@ if (typeof twitcasting.startWatcher === 'function') {
     console.error('Fanbox watcher 起動エラー:', e && e.message ? e.message : e);
   }
 
-/*
+
   // Gipt
 startPromises.push((async () => {
   try {
@@ -401,7 +401,7 @@ startPromises.push((async () => {
     throw e;
   }
 })());
-*/
+
 
   // マイルストーンスケジューラー起動
   try {

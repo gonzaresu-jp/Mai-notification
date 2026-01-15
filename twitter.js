@@ -17,7 +17,7 @@ const HEADLESS = true;
 const MAX_AGE_HOURS = 24;
 const CHECK_INTERVAL_MS = 60 * 1000;
 const NOTIFY_ENDPOINT = 'http://localhost:8080/api/notify';
-const ICON_URL = './icon.ico';
+const ICON_URL = './icon.webp';
 const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
 
 // 🔧 ブラウザインスタンスを再利用するためのグローバル変数

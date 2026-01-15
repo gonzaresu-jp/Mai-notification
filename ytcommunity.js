@@ -15,7 +15,7 @@ let debugDirDefault = path.join(__dirname, 'ytcommunity_debug');
 let sharedBrowser = null;
 let browserInitPromise = null;
 
-const ICON_URL = './icon.ico';
+const ICON_URL = './icon.webp';
 
 // 二重実行抑止（同一プロセス内）
 const inFlight = new Set();

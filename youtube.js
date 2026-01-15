@@ -22,7 +22,7 @@ let NOTIFY_CONFIG = {
     hmacSecret: null
 };
 
-const ICON_URL = './icon.ico';
+const ICON_URL = './icon.webp';
 
 // 閾値（使用箇所あり）
 const RECENT_VIDEO_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours (既存値を維持)

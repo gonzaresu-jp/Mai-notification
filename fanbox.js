@@ -7,7 +7,7 @@ const cheerio = require('cheerio');
 
 const LOCAL_API_URL = 'http://127.0.0.1:8080/api/notify';
 const FANBOX_USER = 'koinoya-mai';
-const ICON_URL = './icon.ico';
+const ICON_URL = './icon.webp';
 const PUBLIC_URL = `https://www.fanbox.cc/@${FANBOX_USER}`;
 const POLL_INTERVAL = 3 * 60 * 1000;
 const STATE_FILE = path.resolve(__dirname, 'fanbox-state.json');
