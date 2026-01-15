@@ -1,19 +1,13 @@
-// service-worker.js (iOS対応版 v3.43 - 履歴Invalidate/互換メッセージ付き)
-// 方針:
-// - UI更新は main.js 側が「DB再取得」で行う（Push依存にしない）
-// - SWは「履歴が更新された可能性」をクライアントに通知するだけ（HISTORY_INVALIDATE）
-// - 旧実装互換として CLEAR_HISTORY_CACHE / CLEAR_AND_RELOAD_HISTORY も送る
+// service-worker.js (iOS対応版 v3.49 - 履歴Invalidate/互換メッセージ付き)
 
-const VERSION = 'v3.43';
+const VERSION = 'v3.49';
+const CACHE_NAME = `mai-notification-${VERSION}`;
 const ALWAYS_OPEN_NEW_TAB = false;
 
 // iOS対応: キャッシュ設定
-const CACHE_NAME = 'mai-notification-v1';
 const urlsToCache = [
   '/',
-  './index.html',
-  './style.css',
-  './main.js',
+  './js/main.js',
   './ios-helper.js',
   './icon.ico',
   './icon-192.webp',
@@ -138,18 +132,58 @@ self.addEventListener('activate', event => {
 // 注意点:
 // - 非GETはSWが横取りしない（POST等で壊れる）
 // - /api は原則ネットワーク（オフライン時のキャッシュは混乱の元）
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
 
-  // APIはネットワーク優先（失敗ならそのまま503）
+  // 同一オリジン以外は触らない（CDN等を勝手にキャッシュしない）
+  if (url.origin !== self.location.origin) return;
+
+  // APIはネットワーク優先（失敗なら503）
   if (url.pathname.startsWith('/api/')) {
     event.respondWith((async () => {
       try {
         return await fetch(req);
-      } catch (e) {
+      } catch {
+        return new Response('', { status: 503, statusText: 'Service Unavailable' });
+      }
+    })());
+    return;
+  }
+
+  // 画像は Cache First + 裏で更新（Stale-While-Revalidate）
+  // → 一度見た画像は次回から即キャッシュで出る。ネットワークが生きてれば更新も走る。
+  const isImage = req.destination === 'image'
+    || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(url.pathname);
+
+  if (isImage) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+
+      // まずキャッシュがあれば即返す
+      const cached = await cache.match(req);
+      if (cached) {
+        // 裏で更新（失敗しても無視）
+        event.waitUntil((async () => {
+          try {
+            const fresh = await fetch(req);
+            if (fresh && fresh.ok) await cache.put(req, fresh.clone());
+          } catch {
+            // ignore
+          }
+        })());
+        return cached;
+      }
+
+      // キャッシュが無ければネットワーク→成功なら保存
+      try {
+        const fresh = await fetch(req);
+        if (fresh && fresh.ok) await cache.put(req, fresh.clone());
+        return fresh;
+      } catch (err) {
+        console.warn(`[SW ${VERSION}] image fetch failed`, req.url, err);
         return new Response('', { status: 503, statusText: 'Service Unavailable' });
       }
     })());
@@ -159,8 +193,7 @@ self.addEventListener('fetch', event => {
   // それ以外はネットワーク優先、落ちたらキャッシュ
   event.respondWith((async () => {
     try {
-      const networkResponse = await fetch(req);
-      return networkResponse;
+      return await fetch(req);
     } catch (err) {
       console.warn(`[SW ${VERSION}] fetch failed for`, req.url, err);
 
@@ -187,6 +220,7 @@ self.addEventListener('fetch', event => {
     }
   })());
 });
+
 
 // ---------- push ----------
 self.addEventListener('push', event => {
@@ -299,10 +333,10 @@ self.addEventListener('notificationclick', event => {
       (notificationData.data && notificationData.data.url) ||
       '/';
 
-    // UA判定（SW環境でも navigator.userAgent は参照可能なことが多い）
     const ua = (self.navigator && self.navigator.userAgent) ? self.navigator.userAgent : '';
     const isAndroid = /Android/i.test(ua);
     const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isPC = !isAndroid && !isIOS;
 
     console.log(`[SW ${VERSION}] Debug: targetUrl(pre)=${targetUrl} android=${isAndroid} ios=${isIOS}`);
 
@@ -310,7 +344,31 @@ self.addEventListener('notificationclick', event => {
     await broadcastMessage({ type: 'HISTORY_INVALIDATE' });
     await broadcastMessage({ type: 'CLEAR_AND_RELOAD_HISTORY', url: targetUrl });
 
-    // --- Android 用: ドメインに基づいて開くURLを決定 ---
+    // ===== 共通：まずURLを絶対化 =====
+    const fullUrl = safeMakeAbsoluteUrl(targetUrl);
+
+    // ===== PCだけ：外部リンクは別タブ =====
+    if (isPC) {
+      let isExternal = false;
+      try {
+        const u = new URL(fullUrl);
+        isExternal = u.origin !== self.location.origin;
+      } catch {
+        isExternal = false;
+      }
+
+      if (isExternal) {
+        console.log(`[SW ${VERSION}] PC external -> open new tab: ${fullUrl}`);
+        await self.clients.openWindow(fullUrl);
+        return;
+      }
+      // PC内部リンクは従来通り（既存タブ優先）
+      console.log(`[SW ${VERSION}] PC internal -> focusOrOpen: ${fullUrl}`);
+      await focusOrOpen(fullUrl);
+      return;
+    }
+
+    // ===== Android =====
     if (isAndroid && targetUrl) {
       const pushWebDomains = [
         'youtube.com',
@@ -325,13 +383,11 @@ self.addEventListener('notificationclick', event => {
       const finalUrl = shouldOpenPushWeb ? '/' : targetUrl;
 
       console.log(`[SW ${VERSION}] Android: opening -> ${finalUrl}`);
-      // Androidは通常URLとして開く
-      const abs = safeMakeAbsoluteUrl(finalUrl);
-      await focusOrOpen(abs);
+      await focusOrOpen(safeMakeAbsoluteUrl(finalUrl));
       return;
     }
 
-    // --- iOS の場合 (アプリ起動スキームへ変換) ---
+    // ===== iOS（アプリ起動スキームへ変換）=====
     if (isIOS && typeof targetUrl === 'string') {
       try {
         if (targetUrl.includes('twitter.com') || targetUrl.includes('x.com')) {
@@ -340,19 +396,16 @@ self.addEventListener('notificationclick', event => {
         } else if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
           let vId = null;
           if (targetUrl.includes('v=')) {
-            // new URL が失敗する可能性があるのでガード
             try { vId = new URL(targetUrl).searchParams.get('v'); } catch {}
           } else if (targetUrl.includes('youtu.be/')) {
             vId = targetUrl.split('youtu.be/')[1]?.split('?')[0] || null;
           }
           if (vId) targetUrl = `youtube://${vId}`;
         }
-      } catch (e) {
-        // 変換失敗は無視して通常URLで開く
-      }
+      } catch {}
     }
 
-    // --- Intent(Android) や アプリスキーム(iOS) の場合 ---
+    // ===== intent / scheme =====
     if (
       typeof targetUrl === 'string' &&
       (targetUrl.startsWith('intent://') || targetUrl.startsWith('x://') || targetUrl.startsWith('youtube://'))
@@ -362,16 +415,8 @@ self.addEventListener('notificationclick', event => {
       return;
     }
 
-    // --- PCや通常のWebリンクの場合 ---
-    const fullUrl = safeMakeAbsoluteUrl(targetUrl);
-    console.log(`[SW ${VERSION}] Opening web url: ${fullUrl}`);
-
-    if (ALWAYS_OPEN_NEW_TAB) {
-      await self.clients.openWindow(fullUrl);
-      return;
-    }
-
-    // 既存タブを優先してフォーカス＆遷移
+    // ===== その他（iOSで通常URLに落ちた場合など）=====
+    console.log(`[SW ${VERSION}] Non-PC web url -> focusOrOpen: ${fullUrl}`);
     await focusOrOpen(fullUrl);
   })());
 });
