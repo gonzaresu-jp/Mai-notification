@@ -1,4 +1,4 @@
-// settingsService.js - プラットフォーム設定管理
+// settingsService.js - プラットフォーム設定管理（統合API対応版）
 import { API, getClientId, fetchWithTimeout, mergeSettings } from './config.js';
 
 export function getPlatformSettings() {
@@ -59,11 +59,56 @@ export async function savePlatformSettings() {
   }
 }
 
+// 🚀 統合API版：settings + name を1回で取得（オプション）
+export async function fetchUserDataFromServer({ timeoutMs = 5000 } = {}) {
+  try {
+    const clientId = await Promise.resolve(getClientId());
+    if (!clientId) {
+      console.log('[fetchUserData] clientIdがないため取得をスキップ');
+      return { ok: false, reason: 'no-clientId' };
+    }
+
+    const url = `/api/get-user-data?clientId=${encodeURIComponent(clientId)}`;
+    const fetchOpts = {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      credentials: 'same-origin',
+      cache: 'no-store'
+    };
+
+    const res = await fetchWithTimeout(url, fetchOpts, timeoutMs);
+
+    if (!res.ok) {
+      console.warn(`[fetchUserData] HTTP status=${res.status} ${res.statusText}`);
+      return { ok: false, status: res.status, statusText: res.statusText };
+    }
+
+    const data = await res.json();
+    console.log('[fetchUserData] 統合データ取得成功:', data);
+
+    return { 
+      ok: true, 
+      settings: data.settings || {},
+      name: data.name || null,
+      exists: data.exists || false
+    };
+
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      console.error('[fetchUserData] タイムアウト/中断', err);
+      return { ok: false, reason: 'timeout' };
+    }
+    console.error('[fetchUserData] 取得失敗', err);
+    return { ok: false, reason: 'exception', error: String(err) };
+  }
+}
+
+// 既存の fetchPlatformSettingsFromServer（後方互換用）
 export async function fetchPlatformSettingsFromServer({ timeoutMs = 5000 } = {}) {
   try {
     const clientId = await Promise.resolve(getClientId());
     if (!clientId) {
-      console.log('[fetchPlatformSettings] clientId がないため設定取得をスキップ');
+      console.log('[fetchPlatformSettings] clientIdがないため設定取得をスキップ');
       return { ok: false, reason: 'no-clientId' };
     }
 

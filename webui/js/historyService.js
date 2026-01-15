@@ -1,15 +1,14 @@
-// historyService.js - 履歴表示管理（DB準拠・キャッシュは初回だけの補助）
+// historyService.js - 履歴表示管理(JSON優先版)
 import { API, PAGING, getClientId, normalizePlatformName } from './config.js';
 
 // =========================
-// キャッシュ機構（初回表示の体感改善用）
-// - main.js 側で force 更新時は useCache:false を渡す想定
+// JSONキャッシュ
 // =========================
-const historyCache = {
+const jsonCache = {
   data: null,
   timestamp: 0,
-  ttl: 5000,   // 5秒
-  used: false  // 1回使ったら以降は使わない（初回表示専用）
+  ttl: 5000, // 5秒
+  limit: 20  // JSONの最大件数
 };
 
 // =========================
@@ -22,8 +21,7 @@ export function setupHistorySse($logsEl, $statusEl) {
     try {
       const payload = JSON.parse(ev.data);
       if (payload && payload.type === 'history-updated') {
-        // 差分APIが無い前提 -> 全再フェッチ（DB準拠）
-        clearHistoryCache();
+        clearJsonCache();
         PAGING.offset = 0;
         PAGING.hasMore = true;
         fetchHistory($logsEl, $statusEl, { append: false, useCache: false });
@@ -34,11 +32,10 @@ export function setupHistorySse($logsEl, $statusEl) {
   });
 
   es.addEventListener('error', () => {
-    // iOS/Safari は裏で切れやすい。リトライはブラウザ任せ。
     console.warn('[History SSE] disconnected or error');
   });
 
-  return es; // 呼び元で es.close() できるように返す
+  return es;
 }
 
 // =========================
@@ -120,9 +117,13 @@ function getCurrentFilterSettingsFallback() {
 
 function shouldIncludeLog(log, settings) {
   if (!log) return false;
+  if (!settings) return true;
+
+  // すべて false → フィルタ未適用
+  const anyEnabled = Object.values(settings).some(Boolean);
+  if (!anyEnabled) return true;
 
   const platform = normalizePlatformName((log.platform || '').toString());
-  if (!settings) return true;
 
   if (platform.includes('twitcasting')) return !!settings.twitcasting;
   if (platform.includes('youtube') && platform.includes('community')) return !!settings.youtubeCommunity;
@@ -153,31 +154,94 @@ async function fetchJsonWithTimeout(url, { timeoutMs = 8000, noStore = false } =
 }
 
 // =========================
-// 履歴取得（append=false は先頭から取り直し）
-// useCache=true は「初回表示」だけの体感改善用。
-// 強制DB同期したい場合は main.js から useCache:false を渡す。
+// JSONファイルから履歴取得
+// =========================
+async function fetchHistoryFromJson(settings, pageLimit) {
+  const now = Date.now();
+  
+  // キャッシュチェック
+  if (jsonCache.data && (now - jsonCache.timestamp < jsonCache.ttl)) {
+    console.log('[fetchHistoryFromJson] JSONキャッシュヒット');
+    return jsonCache.data;
+  }
+
+  console.log('[fetchHistoryFromJson] JSONファイル取得開始');
+  
+  try {
+    const res = await fetchJsonWithTimeout('/history.json', {
+      timeoutMs: 5000,
+      noStore: true
+    });
+
+    if (!res.ok) {
+      throw new Error(`JSON fetch failed: ${res.status}`);
+    }
+
+    const data = await res.json();
+    
+    if (!Array.isArray(data.logs)) {
+      throw new Error('Invalid JSON format');
+    }
+
+    // キャッシュに保存
+    jsonCache.data = data;
+    jsonCache.timestamp = now;
+
+    console.log(`[fetchHistoryFromJson] JSON取得成功 (${data.logs.length}件)`);
+    return data;
+
+  } catch (e) {
+    console.warn('[fetchHistoryFromJson] JSON取得失敗:', e.message);
+    return null;
+  }
+}
+
+// =========================
+// 履歴取得のメイン関数（修正版）
 // =========================
 export async function fetchHistory($logsEl, $statusEl, { append = false, useCache = true } = {}) {
   if (PAGING.loading) {
     console.log('[fetchHistory] 既にロード中');
     return;
   }
-  PAGING.loading = true;
 
   const startTime = performance.now();
 
-  if ($statusEl) {
-    $statusEl.textContent = append ? '履歴を読み込み中...' : '最新の履歴を取得中...';
-    $statusEl.className = 'status-message info-message';
+  // =========================
+  // 初回：HTML / history.json 先行表示
+  // =========================
+  const existingCards = $logsEl.querySelectorAll('.card:not(.skeleton-card)').length;
+  if (!append && useCache && $logsEl?.dataset.source === 'html') {
+    console.log('[fetchHistory] HTML/JSON先行表示を採用');
+
+    PAGING.initialized = true;
+    PAGING.loading = false;
+
+    const visibleCards = $logsEl.querySelectorAll('.card:not(.filtered-out)').length;
+
+    PAGING.displayedCount = visibleCards;
+    PAGING.offset = visibleCards;
+    PAGING.hasMore = visibleCards >= (PAGING.limit || 5);
+
+    const $btnMore = document.getElementById('more-logs-button');
+    if ($btnMore) $btnMore.style.display = PAGING.hasMore ? 'block' : 'none';
+
+    if ($statusEl) {
+      $statusEl.textContent = `表示中: ${PAGING.displayedCount}`;
+      $statusEl.className = 'status-message success-message';
+    }
+
+    return;
   }
+
+  // =========================
+  // 通常ロード開始
+  // =========================
+  PAGING.loading = true;
+  PAGING.initialized = true;
 
   const pageLimit = PAGING.limit || 5;
-  let serverOffset = append ? (PAGING.offset || 0) : 0;
-
   const clientId = getClientId();
-  if (!clientId) {
-    console.warn('[fetchHistory] clientId missing');
-  }
 
   const settings =
     (typeof window.getCurrentFilterSettings === 'function')
@@ -185,158 +249,111 @@ export async function fetchHistory($logsEl, $statusEl, { append = false, useCach
       : getCurrentFilterSettingsFallback();
 
   const collectedLogs = [];
-  let lastServerResponse = null;
-
-  const maxPagesToFetch = 5;
-  let pagesFetched = 0;
+  let totalCount = 0;
+  let hasMore = false;
 
   try {
-    // ----- 初回限定のキャッシュ（append=false のときだけ） -----
-    const cacheValid =
-      !append &&
-      useCache &&
-      !historyCache.used &&
-      historyCache.data &&
-      (Date.now() - historyCache.timestamp < historyCache.ttl);
+    // =========================
+    // JSON キャッシュ範囲
+    // =========================
+    if (!append || PAGING.offset < jsonCache.limit) {
+      const jsonData = await fetchHistoryFromJson(settings, pageLimit);
 
-    if (cacheValid) {
-      console.log('[fetchHistory] cache hit (first paint)');
-      historyCache.used = true;
+      if (jsonData && Array.isArray(jsonData.logs)) {
+        const startIdx = append ? PAGING.offset : 0;
 
-      lastServerResponse = historyCache.data;
-
-      if (Array.isArray(lastServerResponse.logs)) {
-        for (const log of lastServerResponse.logs) {
-          if (shouldIncludeLog(log, settings)) collectedLogs.push(log);
-          if (collectedLogs.length >= pageLimit) break;
-        }
-      }
-
-      // キャッシュを使った場合でも paging を整合させる
-      const cachedCount = Array.isArray(lastServerResponse.logs) ? lastServerResponse.logs.length : 0;
-      serverOffset = append ? serverOffset : cachedCount;
-      PAGING.hasMore = !!lastServerResponse.hasMore;
-    } else {
-      // ----- 通常のフェッチ（useCache=false のときは no-store） -----
-      while (collectedLogs.length < pageLimit) {
-        if (pagesFetched >= maxPagesToFetch) {
-          console.warn('[fetchHistory] max pages fetched (break)');
-          break;
-        }
-
-        const url =
-          `${API.HISTORY}?clientId=${encodeURIComponent(clientId || '')}` +
-          `&limit=${encodeURIComponent(pageLimit)}` +
-          `&offset=${encodeURIComponent(serverOffset)}`;
-
-        let res = null;
-        let retryCount = 0;
-        const maxRetries = 2;
-
-        while (retryCount <= maxRetries) {
-          try {
-            res = await fetchJsonWithTimeout(url, {
-              timeoutMs: 8000,
-              noStore: !useCache
-            });
-
-            if (res.ok) break;
-
-            if (res.status === 502 && retryCount < maxRetries) {
-              retryCount++;
-              console.warn(`[fetchHistory] 502 retry ${retryCount}/${maxRetries}`);
-              await new Promise(r => setTimeout(r, 1000 * retryCount));
-              continue;
-            }
-
-            throw new Error(`Failed to fetch history: ${res.status}`);
-          } catch (e) {
-            if (e.name === 'AbortError' && retryCount < maxRetries) {
-              retryCount++;
-              console.warn(`[fetchHistory] timeout retry ${retryCount}/${maxRetries}`);
-              await new Promise(r => setTimeout(r, 1000 * retryCount));
-              continue;
-            }
-            throw e;
-          }
-        }
-
-        if (!res || !res.ok) {
-          throw new Error(`[fetchHistory] failed after retries`);
-        }
-
-        const data = await res.json();
-        lastServerResponse = data;
-        pagesFetched++;
-
-        // 初回ページだけキャッシュに保存（append=false のときのみ）
-        if (!append && pagesFetched === 1 && useCache) {
-          historyCache.data = data;
-          historyCache.timestamp = Date.now();
-          // used は「キャッシュヒットした時だけ」立てる（保存だけでは立てない）
-        }
-
-        if (!Array.isArray(data.logs) || data.logs.length === 0) {
-          break;
-        }
-
-        for (const log of data.logs) {
+        for (let i = startIdx; i < jsonData.logs.length; i++) {
+          const log = jsonData.logs[i];
           if (shouldIncludeLog(log, settings)) {
             collectedLogs.push(log);
             if (collectedLogs.length >= pageLimit) break;
           }
         }
 
-        serverOffset += data.logs.length;
+        totalCount = jsonData.total ?? jsonData.logs.length;
 
-        if (!data.hasMore) break;
+        const nextOffset = startIdx + collectedLogs.length;
+        hasMore = nextOffset < totalCount;
+
+        console.log(`[fetchHistory] JSON使用: ${collectedLogs.length}件取得`);
       }
     }
 
-    // ----- 描画 -----
-    const html = collectedLogs.map(createLogItem).join('');
+    // =========================
+    // DB API フォールバック
+    // =========================
+    if (append && PAGING.offset >= jsonCache.limit && collectedLogs.length < pageLimit) {
+      console.log('[fetchHistory] JSON範囲超過 → DB APIへ切り替え');
 
-    if ($logsEl) {
+      const dbOffset = PAGING.offset - jsonCache.limit;
+      const url =
+        `${API.HISTORY}?clientId=${encodeURIComponent(clientId || '')}` +
+        `&limit=${encodeURIComponent(pageLimit)}` +
+        `&offset=${encodeURIComponent(dbOffset)}`;
+
+      const res = await fetchJsonWithTimeout(url, {
+        timeoutMs: 8000,
+        noStore: true
+      });
+
+      if (!res.ok) {
+        throw new Error(`DB fetch failed: ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      if (Array.isArray(data.logs)) {
+        for (const log of data.logs) {
+          if (shouldIncludeLog(log, settings)) {
+            collectedLogs.push(log);
+            if (collectedLogs.length >= pageLimit) break;
+          }
+        }
+      }
+
+      totalCount = data.total ?? totalCount;
+      hasMore = true;
+
+      console.log(`[fetchHistory] DB使用: ${collectedLogs.length}件取得`);
+    }
+
+    // =========================
+    // 描画
+    // =========================
+    if ($logsEl && collectedLogs.length > 0) {
+      const html = collectedLogs.map(createLogItem).join('');
+
       if (!append) {
-        // スケルトン除去
-        const skeletons = $logsEl.querySelectorAll('.skeleton-card');
-        skeletons.forEach(s => s.remove());
-
+        $logsEl.querySelectorAll('.skeleton-card').forEach(s => s.remove());
         $logsEl.innerHTML = html;
         $logsEl.classList.add('loaded');
       } else {
         $logsEl.insertAdjacentHTML('beforeend', html);
       }
 
-      requestAnimationFrame(() => {
-        applySequentialFadeIn();
-      });
+      requestAnimationFrame(() => applySequentialFadeIn());
     }
+
+    // =========================
+    // 状態更新
+    // =========================
+    PAGING.offset += collectedLogs.length;
 
     const visibleCards = $logsEl
       ? $logsEl.querySelectorAll('.card:not(.filtered-out)').length
       : 0;
 
     PAGING.displayedCount = visibleCards;
-    PAGING.offset = serverOffset;
-    PAGING.hasMore = lastServerResponse ? !!lastServerResponse.hasMore : false;
+    PAGING.hasMore = hasMore;
 
     const $btnMore = document.getElementById('more-logs-button');
     if ($btnMore) $btnMore.style.display = PAGING.hasMore ? 'block' : 'none';
 
-    const totalReported =
-      (lastServerResponse && typeof lastServerResponse.total !== 'undefined')
-        ? lastServerResponse.total
-        : '?';
-
     if ($statusEl) {
       const loadTimeSec = (performance.now() - startTime) / 1000;
-      $statusEl.textContent = `表示中: ${PAGING.displayedCount} / サーバ総数: ${totalReported} (${loadTimeSec.toFixed(2)}秒)`;
+      $statusEl.textContent =
+        `表示中: ${PAGING.displayedCount} / サーバ総数: ${totalCount} (${loadTimeSec.toFixed(2)}秒)`;
       $statusEl.className = 'status-message success-message';
-
-      if (loadTimeSec > 5) {
-        console.warn(`[fetchHistory] slow: ${loadTimeSec.toFixed(2)}s`);
-      }
     }
 
     if (typeof window.applyLogFiltering === 'function') {
@@ -347,16 +364,15 @@ export async function fetchHistory($logsEl, $statusEl, { append = false, useCach
     console.error('[fetchHistory] failed:', e);
 
     if ($statusEl) {
-      let errorMessage = '履歴の取得に失敗しました';
+      let msg = '履歴の取得に失敗しました';
 
-      const msg = (e && e.message) ? e.message : '';
-      if (msg.includes('502')) {
-        errorMessage = 'サーバーが一時的に応答していません。しばらくしてから再度お試しください。';
-      } else if (e.name === 'AbortError' || msg.toLowerCase().includes('timeout')) {
-        errorMessage = '通信がタイムアウトしました。インターネット接続を確認してください。';
+      if (e?.message?.includes('502')) {
+        msg = 'サーバーが一時的に応答していません。';
+      } else if (e?.name === 'AbortError' || e?.message?.toLowerCase().includes('timeout')) {
+        msg = '通信がタイムアウトしました。';
       }
 
-      $statusEl.textContent = errorMessage;
+      $statusEl.textContent = msg;
       $statusEl.className = 'status-message error-message';
     }
 
@@ -365,16 +381,23 @@ export async function fetchHistory($logsEl, $statusEl, { append = false, useCach
   }
 }
 
+// =========================
+// more ボタン
+// =========================
 export function fetchHistoryMore($logsEl, $statusEl) {
-  if (PAGING.hasMore) {
+  if (PAGING.hasMore && !PAGING.loading) {
     fetchHistory($logsEl, $statusEl, { append: true, useCache: false });
   }
 }
 
-// キャッシュをクリアする関数（手動更新・強制同期時に使用）
-export function clearHistoryCache() {
-  historyCache.data = null;
-  historyCache.timestamp = 0;
-  historyCache.used = false;
-  console.log('[clearHistoryCache] キャッシュをクリアしました');
+// =========================
+// JSON キャッシュ制御
+// =========================
+export function clearJsonCache() {
+  jsonCache.data = null;
+  jsonCache.timestamp = 0;
+  console.log('[clearJsonCache] JSONキャッシュをクリア');
 }
+
+// 後方互換
+export const clearHistoryCache = clearJsonCache;

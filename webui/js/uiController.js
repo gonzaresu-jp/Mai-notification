@@ -142,16 +142,25 @@ function initOshiDays() {
 // =========================
 // ハンバーガーメニュー初期化
 // =========================
+// ハンバーガーメニュー初期化の修正版
 function initHamburgerMenu() {
   const body = document.getElementById("app-body") || document.body;
   const toggle = document.getElementById("hamburger-toggle");
   const overlay = document.getElementById("menu-overlay");
   const navMenu = document.getElementById("nav-menu");
 
-  if (!toggle || !overlay || !navMenu) return false;
+  if (!toggle || !overlay || !navMenu) {
+    console.warn('[initHamburgerMenu] 必要な要素が見つかりません');
+    return false;
+  }
 
-  // 二重バインド防止
-  if (toggle.dataset.bound === "1") return true;
+  // 二重バインド防止 - しかし、return前にログを出す
+  if (toggle.dataset.bound === "1") {
+    console.log('[initHamburgerMenu] 既にバインド済み');
+    return true;
+  }
+  
+  console.log('[initHamburgerMenu] ハンバーガーメニューを初期化中...');
   toggle.dataset.bound = "1";
 
   // 初回描画で transition が暴発するのを避ける（既存仕様踏襲）
@@ -176,6 +185,7 @@ function initHamburgerMenu() {
   }
 
   function toggleMenu(isOpen) {
+    console.log('[toggleMenu] メニューを', isOpen ? '開く' : '閉じる');
     const items = menuItems();
     if (isOpen) {
       items.forEach((i) => i.classList.remove("is-faded-in"));
@@ -191,12 +201,21 @@ function initHamburgerMenu() {
     }
   }
 
-  toggle.addEventListener("click", () => {
+  // クリックイベントを登録
+  toggle.addEventListener("click", (e) => {
+    console.log('[hamburger-toggle] クリックイベント発火');
+    e.preventDefault();
+    e.stopPropagation();
     const isExpanded = toggle.getAttribute("aria-expanded") === "true";
     toggleMenu(!isExpanded);
   });
 
-  overlay.addEventListener("click", () => toggleMenu(false));
+  overlay.addEventListener("click", () => {
+    console.log('[menu-overlay] クリックイベント発火');
+    toggleMenu(false);
+  });
+
+  console.log('[initHamburgerMenu] イベントリスナー登録完了');
 
   // 右端スワイプ（既存実装の移植：挿入順依存を排除）
   (function installRightEdgeSwipeMenu() {
@@ -206,8 +225,7 @@ function initHamburgerMenu() {
     const MAX_VERTICAL_DELTA = 30;
 
     let pointerActive = false;
-    let startX = 0,
-      startY = 0;
+    let startX = 0, startY = 0;
     let trackingForOpen = false;
     let trackingForClose = false;
 
@@ -284,7 +302,7 @@ function initHamburgerMenu() {
 
     if ("ontouchstart" in window) {
       document.addEventListener("touchstart", onPointerDown, { passive: true });
-      document.addEventListener("touchmove", onPointerMove, { passive: false }); // 重要
+      document.addEventListener("touchmove", onPointerMove, { passive: false });
       document.addEventListener("touchend", onPointerUp, { passive: true });
       document.addEventListener("touchcancel", onPointerUp, { passive: true });
     } else if (window.PointerEvent) {
@@ -475,6 +493,15 @@ export async function initHeaderDependentUI() {
   // 4) 推し始め（日数）
   // header の input#start が存在する前に initOshiDays が走ると無効化されるので、ここで確実に呼ぶ
   initOshiDays();
+}
+
+// ハンバーガーメニューのロック制御
+export function lockHamburger(lock) {
+  const btn = document.getElementById("hamburger-toggle");
+  if (!btn) return;
+
+  btn.classList.toggle("is-locked", !!lock);
+  btn.setAttribute("aria-disabled", lock ? "true" : "false");
 }
 
 // =========================
