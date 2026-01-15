@@ -9,7 +9,7 @@
             <span></span>
         </div>
         
-        <nav id="nav-menu" aria-label="メインメニュー">
+        <nav id="nav-menu" aria-label="ハンバーガーメニュー">
             <ul class="nav-list">
                 <li><button id="btn-send-test">テスト通知を送信</button></li>
                 
@@ -22,58 +22,41 @@
                     
                     <div class="toggle-controls-wrapper">
                         <span>通知を受信する</span>
-                        <label class="toggle-notify">
+                        <div class="toggle-notify">
                             <input id="toggle-notify" type="checkbox" />
                             <span class="slider" aria-hidden="true"></span>
-                        </label>
+                        </div>
                     </div>
                 </li>
 <li class="nav-setting-item">
   <div id="subscriber-name-settings" class="platform-subscriber-name-section">
-    
-    <!-- ラベル + チェックマーク -->
+
     <div class="platform-name-row">
-      <div class="platform-name-label">
-        ユーザー名
+      <div class="platform-name-label">ユーザー名</div>
+    </div>
+
+    <div class="platform-name-controls">
+      <div class="subscriber-input-wrapper">
+        <input id="subscriber-name-input" type="text" class="platform-name-input" placeholder="ユーザー名を入力">
+
+        <img id="subscriber-linked-icon" class="subscriber-linked"
+             src="https://img.icons8.com/?size=100&id=sz8cPVwzLrMP&format=png&color=000000"
+             alt="linked" style="display:none;">
       </div>
+
+      <button id="subscriber-name-submit" class="platform-setting-button">保存</button>
     </div>
 
-<!-- 入力欄 + 送信ボタン -->
-<div class="platform-name-controls">
-  
-  <div class="subscriber-input-wrapper">
-    <input id="subscriber-name-input" type="text" class="platform-name-input" placeholder="ユーザー名を入力">
-
-    <!-- ここに PNG のチェックアイコンを配置 -->
-    <img id="subscriber-linked-icon"
-         class="subscriber-linked"
-         src="https://img.icons8.com/?size=100&id=sz8cPVwzLrMP&format=png&color=000000"
-         alt="linked"
-         style="display:none;">
-  </div>
-
-  <button id="subscriber-name-submit" class="platform-setting-button">
-    保存
-  </button>
-
-</div>
-<li class="nav-setting-item">
     <div class="platform-name-row">推し始め</div>
-    <div class="subscriber-input-wrapper" style="margin-block-end: 10px;"> 
-        <input
-      type="date"
-      id="start"
-      name="trip-start"
-      value="2020-01-07"
-      min="2020-01-01"
-      max="2099-12-31" />
+    <div class="subscriber-input-wrapper" style="margin-block-end: 10px;">
+      <input type="date" id="start" name="trip-start"
+             value="2020-01-07" min="2020-01-01" max="2099-12-31" />
     </div>
-</li>
-<div id="subscriber-name-status" class="platform-name-status"></div>
 
-
+    <div id="subscriber-name-status" class="platform-name-status"></div>
   </div>
 </li>
+
 
 
 
@@ -110,11 +93,11 @@
                                     Twitter(@koinoyamai17): ON
                                 </button>
                             </li>
-                            <!--<li>
+                            <li>
                                 <button id="toggle-gipt" class="platform-setting-button is-on">
-                                    Gipt: OFF
+                                    Gipt: ON
                                 </button>
-                            </li>-->
+                            </li>
                             <li>
                                 <button id="toggle-milestone" class="platform-setting-button is-on">
                                     記念日通知: ON
