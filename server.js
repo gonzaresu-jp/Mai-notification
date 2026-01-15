@@ -18,6 +18,11 @@ const db = new sqlite3.Database(dbPath);
 let hasPlatformColumn = false;
 let hasStatusColumn = false;
 
+const HISTORY_JSON_PATH = path.join(__dirname, 'webui', 'history.json');
+const HISTORY_JSON_LIMIT = 20;
+const HISTORY_HTML_PATH = path.join(__dirname, 'webui', 'history.html');
+const HISTORY_HTML_LIMIT = 5;
+
 const ADMIN_NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
 const NOTIFY_HMAC_SECRET = process.env.NOTIFY_HMAC_SECRET || null;
 
@@ -36,6 +41,10 @@ db.serialize(() => {
   db.run("PRAGMA temp_store = MEMORY");
 
   // 別途必要なら page_size, cache_size なども調整可能
+
+  setTimeout(() => {
+    updateHistoryJson();
+  }, 1000);
 });
 
 // SSE クライアント集合
@@ -78,6 +87,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/pushweb', express.static(path.join(__dirname, 'pushweb')));
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
 app.set('trust proxy', true);
+app.use('/webui', express.static(path.join(__dirname, 'webui')));
 
 
 // --- VAPID設定 ---
@@ -782,7 +792,7 @@ app.post('/api/send-test', (req, res) => {
       title: 'テスト通知',
       body: 'この通知をタップしてURLに飛べるか確認！',
       url: './test/',
-      icon: `${req.protocol}://${req.get('host')}/icon.ico`
+      icon: `${req.protocol}://${req.get('host')}/icon.webp`
     };
 
     // 短めの保護（サイズ制限）
@@ -801,6 +811,70 @@ app.post('/api/send-test', (req, res) => {
       return res.status(500).json({ error: 'Send error', detail: e && e.message });
     }
   });
+});
+
+// --- ユーザーデータ統合取得（設定+名前を一度に） ---
+app.get('/api/get-user-data', (req, res) => {
+  let clientId = req.query.clientId;
+  if (!clientId) return res.status(400).json({ error: 'clientId required' });
+
+  clientId = String(clientId).trim();
+  if (clientId.length === 0 || clientId.length > 256) {
+    return res.status(400).json({ error: 'invalid clientId' });
+  }
+
+  // デフォルト設定
+  const defaultSettings = {
+    twitcasting: true,
+    youtube: true,
+    youtubeCommunity: true,
+    fanbox: true,
+    twitterMain: true,
+    twitterSub: true,
+    gipt: false
+  };
+
+  db.get(
+    'SELECT settings_json, name FROM subscriptions WHERE client_id = ?',
+    [clientId],
+    (err, row) => {
+      if (err) {
+        console.error('/api/get-user-data SELECT err:', err.message);
+        return res.status(500).json({ error: 'DB error', detail: err.message });
+      }
+
+      // デフォルトレスポンス
+      const response = {
+        settings: defaultSettings,
+        name: null,
+        exists: !!row
+      };
+
+      if (!row) {
+        return res.json(response);
+      }
+
+      // 名前を設定
+      response.name = row.name || null;
+
+      // 設定をパース
+      if (row.settings_json) {
+        const raw = row.settings_json;
+        if (typeof raw === 'string' && raw.length <= 10 * 1024) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+              response.settings = { ...defaultSettings, ...parsed };
+            }
+          } catch (e) {
+            console.error('/api/get-user-data parse err:', e.message);
+          }
+        }
+      }
+
+      return res.json(response);
+    }
+  );
 });
 
 // 重複通知防止用キャッシュ（メモリ上）
@@ -914,6 +988,146 @@ function verifyNotifyHmac(req, res, next) {
   next();
 }
 
+// history.json を更新する関数
+function updateHistoryJson() {
+  // =========================
+  // ① JSON 用
+  // =========================
+  db.all(
+    `SELECT id, title, body, url, icon, platform, status,
+            strftime('%s', created_at) AS timestamp
+     FROM notifications
+     ORDER BY created_at DESC
+     LIMIT ?`,
+    [HISTORY_JSON_LIMIT],
+    (err, jsonRows) => {
+      if (err) {
+        console.error('[updateHistoryJson] JSON SELECT error:', err.message);
+        return;
+      }
+
+      const jsonLogs = (jsonRows || []).map(r => ({
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        url: r.url,
+        icon: r.icon,
+        platform: r.platform || '不明',
+        status: r.status || 'success',
+        timestamp: r.timestamp ? Number(r.timestamp) : 0
+      }));
+
+      const jsonData = {
+        logs: jsonLogs,
+        total: jsonLogs.length,
+        limit: HISTORY_JSON_LIMIT,
+        lastUpdated: Math.floor(Date.now() / 1000)
+      };
+
+      try {
+        const dir = path.dirname(HISTORY_JSON_PATH);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+
+        fs.writeFileSync(
+          HISTORY_JSON_PATH,
+          JSON.stringify(jsonData, null, 2),
+          'utf8'
+        );
+      } catch (e) {
+        console.error('[updateHistoryJson] JSON write error:', e.message);
+      }
+    }
+  );
+
+  // =========================
+  // ② HTML 用（初期描画）
+  // =========================
+  db.all(
+    `SELECT id, title, body, url, icon, platform, status,
+            strftime('%s', created_at) AS timestamp
+     FROM notifications
+     ORDER BY created_at DESC
+     LIMIT ?`,
+    [HISTORY_HTML_LIMIT],
+    (err, htmlRows) => {
+      if (err) {
+        console.error('[updateHistoryJson] HTML SELECT error:', err.message);
+        return;
+      }
+
+      const htmlLogs = (htmlRows || []).map(r => ({
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        url: r.url,
+        icon: r.icon,
+        platform: r.platform || '不明',
+        status: r.status || 'success',
+        timestamp: r.timestamp ? Number(r.timestamp) : 0
+      }));
+
+      try {
+        const html = renderHistoryHtml(htmlLogs);
+        fs.writeFileSync(
+          HISTORY_HTML_PATH,
+          html,
+          'utf8'
+        );
+
+        console.log(
+          `[updateHistoryJson] ✅ JSON(${HISTORY_JSON_LIMIT}) / HTML(${HISTORY_HTML_LIMIT}) 更新完了`
+        );
+      } catch (e) {
+        console.error('[updateHistoryJson] HTML write error:', e.message);
+      }
+    }
+  );
+}
+
+// 起動時に初回生成
+db.serialize(() => {
+  // ... 既存のDB初期化コード ...
+  
+  // 初回のhistory.json生成
+  setTimeout(() => {
+    updateHistoryJson();
+  }, 1000);
+});
+
+function renderHistoryHtml(logs) {
+  return logs.map(log => {
+    const date = new Date(log.timestamp * 1000).toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Tokyo'
+    });
+
+    return `
+<div class="card" data-log-id="${log.id}">
+  ${log.icon ? `<img src="${log.icon}" alt="icon" class="icon" loading="lazy">` : ''}
+  <div class="card-content">
+    <div class="title">
+      ${log.url
+        ? `<a href="${log.url}" target="_blank" rel="noopener noreferrer">${log.title}</a>`
+        : log.title}
+    </div>
+    <p class="body">${log.body || ''}</p>
+    <div class="meta">
+      <span class="platform">${log.platform}</span>
+      <span class="time">${date}</span>
+      ${log.status === 'fail' ? '<span class="status-badge">送信失敗</span>' : ''}
+    </div>
+  </div>
+</div>`;
+  }).join('\n');
+}
 
 // --- 通知受信（外部サービスから） --- (改善版、並列送信かつ同時上限あり)
 app.post('/api/notify', notifyLimiter, requireNotifyToken, verifyNotifyHmac, (req, res) => {
@@ -944,28 +1158,34 @@ app.post('/api/notify', notifyLimiter, requireNotifyToken, verifyNotifyHmac, (re
   }
 
   // 履歴保存は非同期で行う（失敗しても通知送信には影響させない）
-  db.run(
-    'INSERT INTO notifications (title, body, url, icon, platform, status) VALUES (?, ?, ?, ?, ?, ?)',
-    [data.title, data.body, data.url, data.icon, settingKey || type, 'success'],
-    function(insertErr) {
-      if (insertErr) {
-        console.error('[/api/notify] 履歴保存エラー:', insertErr.message);
-      } else {
-        console.log('[/api/notify] 履歴保存成功 (ID:', this.lastID, ')');
-              // ← ここに SSE 通知を追加
-      try {
-        sendSseEvent({
-          type: 'history-updated',
-          lastUpdated: Math.floor(Date.now() / 1000),
-          added: [this.lastID] // 追加された行のID
-          // 必要なら changed/removed フィールドを追加
-        });
-      } catch (e) {
-        console.warn('sendSseEvent error:', e && e.message);
-      }
-      }
+db.run(
+  'INSERT INTO notifications (title, body, url, icon, platform, status) VALUES (?, ?, ?, ?, ?, ?)',
+  [data.title, data.body, data.url, data.icon, settingKey || type, 'success'],
+  function (insertErr) {
+    if (insertErr) {
+      console.error('[/api/notify] 履歴保存エラー:', insertErr.message);
+      return;
     }
-  );
+
+    console.log('[/api/notify] 履歴保存成功 (ID:', this.lastID, ')');
+
+    try {
+      // ① JSON + HTML を先に更新（状態確定）
+      updateHistoryJson();
+
+      // ② その後に SSE 通知
+      sendSseEvent({
+        type: 'history-updated',
+        lastUpdated: Math.floor(Date.now() / 1000),
+        added: [this.lastID]
+      });
+
+    } catch (e) {
+      console.warn('history update / SSE error:', e && e.message);
+    }
+  }
+);
+
 
   // 取得して送信（同時実行上限あり）
   db.all('SELECT client_id, subscription_json, settings_json FROM subscriptions', [], async (err, rows) => {

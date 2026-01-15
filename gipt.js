@@ -8,7 +8,7 @@ const puppeteer = require('puppeteer');
 // ====== 固定設定 ======
 const TARGET_URL = 'https://gi-pt.com/main/wishlist/fan-view/3a0fdc24-209e-d962-896b-cdd7d7828943';
 const PLATFORM_ID = 'gipt';
-const ICON_URL = './icon.ico';
+const ICON_URL = './icon.webp';
 
 // 保存先（必要なら init() で上書き）
 let stateFilePath = path.join(__dirname, 'gipt_state.json');

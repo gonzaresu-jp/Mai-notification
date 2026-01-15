@@ -108,7 +108,7 @@ class MilestoneScheduler {
       title: milestone.title,
       body: milestone.body,
       url: './',
-      icon: './icon.ico'
+      icon: './icon.webp'
     };
 
     // 履歴に保存
