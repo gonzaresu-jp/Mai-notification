@@ -41,10 +41,6 @@ db.serialize(() => {
   db.run("PRAGMA temp_store = MEMORY");
 
   // 別途必要なら page_size, cache_size なども調整可能
-
-  setTimeout(() => {
-    updateHistoryJson();
-  }, 1000);
 });
 
 // SSE クライアント集合
@@ -139,129 +135,131 @@ db.serialize(() => {
     else console.log('subscriptions table ensured');
   });
 
+  db.run(`CREATE TABLE IF NOT EXISTS scheduled_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_at INTEGER NOT NULL,        -- UnixTime(ms)
+    payload_json TEXT NOT NULL,     -- data/type/settingKey/clientId を丸ごと保存
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    sent INTEGER DEFAULT 0,
+    sent_at INTEGER
+  )`);
+
   // notifications テーブルに platform / status カラムが無ければ追加
+  // ============================================
+// DB Schema Migration / Startup Maintenance
+// ============================================
+
+// ----------------------------
+// notifications
+// ----------------------------
+function ensureNotificationsSchema() {
   db.all("PRAGMA table_info(notifications)", [], (err, columns) => {
     if (err) {
-      console.error('PRAGMA table_info err:', err.message);
-      return;
-    }
-    if (!Array.isArray(columns)) {
-      console.warn('PRAGMA table_info returned non-array:', typeof columns);
+      console.error('PRAGMA notifications err:', err.message);
       return;
     }
 
-    const colNames = columns.map(c => (c && c.name) ? c.name : '');
-    const hasPlatform = colNames.includes('platform');
-    const hasStatus = colNames.includes('status');
+    const colNames = columns.map(c => c.name);
 
-    if (!hasPlatform) {
-      db.run("ALTER TABLE notifications ADD COLUMN platform TEXT", (alterErr) => {
-        if (alterErr) {
-          console.error('ALTER TABLE (platform) err:', alterErr.message);
-        } else {
-          console.log('✅ notifications テーブルに platform カラムを追加しました');
-        }
-      });
+    if (!colNames.includes('platform')) {
+      db.run("ALTER TABLE notifications ADD COLUMN platform TEXT");
+      console.log('✅ notifications.platform 追加');
     }
 
-    if (!hasStatus) {
-      // add column（既存行はNULLのままになるため、追加後に既存行へデフォルトをセット）
-      db.run("ALTER TABLE notifications ADD COLUMN status TEXT", (alterErr) => {
-        if (alterErr) {
-          console.error('ALTER TABLE (status) err:', alterErr.message);
-        } else {
-          console.log('✅ notifications テーブルに status カラムを追加しました');
-
-          // 既存行の status を 'success' に設定（失敗してもログ）
-          db.run("UPDATE notifications SET status = 'success' WHERE status IS NULL", (updErr) => {
-            if (updErr) {
-              console.error('UPDATE notifications set default status err:', updErr.message);
-            } else {
-              console.log('✅ 既存 notifications 行の status を success に設定しました');
-            }
-          });
-        }
-      });
+    if (!colNames.includes('status')) {
+      db.run("ALTER TABLE notifications ADD COLUMN status TEXT");
+      db.run("UPDATE notifications SET status='success' WHERE status IS NULL");
+      console.log('✅ notifications.status 追加 + default設定');
     }
   });
+}
 
-  // 1. subscriptions.client_id (設定取得の高速化 /api/get-platform-settings)
-    db.run(`CREATE INDEX IF NOT EXISTS idx_subscriptions_client_id ON subscriptions (client_id)`, (err) => {
-        if (err) console.error('subscriptions client_id index err:', err.message);
-        else console.log('✅ subscriptions client_id index ensured');
-    });
 
-    // 2. notifications.created_at (履歴取得の高速化 /api/history)
-    // DESC (降順) にすることで、最新のレコードを素早く検索できます。
-    db.run(`CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC)`, (err) => {
-        if (err) console.error('notifications created_at index err:', err.message);
-        else console.log('✅ notifications created_at index ensured');
-    });
+// ----------------------------
+// scheduled_notifications
+// ★ sent_at をここで追加（最重要）
+// ----------------------------
+function ensureScheduledSchema() {
+  db.all("PRAGMA table_info(scheduled_notifications)", [], (err, columns) => {
+    if (err) {
+      console.error('PRAGMA scheduled_notifications err:', err.message);
+      return;
+    }
 
-  // 既存の重複データをクリーンアップ（トランザクションで安全に実行）
+    const colNames = columns.map(c => c.name);
+
+    if (!colNames.includes('sent_at')) {
+      db.run("ALTER TABLE scheduled_notifications ADD COLUMN sent_at INTEGER");
+      console.log('✅ scheduled_notifications.sent_at 追加');
+    }
+  });
+}
+
+
+// ----------------------------
+// Indexes
+// ----------------------------
+function ensureIndexes() {
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_subscriptions_client_id 
+     ON subscriptions (client_id)`
+  );
+
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_notifications_created_at 
+     ON notifications (created_at DESC)`
+  );
+
+  console.log('✅ indexes ensured');
+}
+
+
+// ----------------------------
+// 重複クリーンアップ
+// ----------------------------
+function cleanupDuplicates() {
   db.all(
-    `SELECT client_id, COUNT(*) as count FROM subscriptions GROUP BY client_id HAVING count > 1`,
+    `SELECT client_id, COUNT(*) c
+     FROM subscriptions
+     GROUP BY client_id
+     HAVING c > 1`,
     [],
     (err, duplicates) => {
-      if (err) {
-        console.error('重複チェックエラー:', err.message);
-        return;
-      }
+      if (err || !duplicates?.length) return;
 
-      if (!Array.isArray(duplicates) || duplicates.length === 0) {
-        console.log('重複レコードなし');
-        return;
-      }
+      console.log(`⚠️ duplicates: ${duplicates.length}`);
 
-      console.log(`⚠️  重複レコード発見: ${duplicates.length}件`);
+      db.run('BEGIN');
 
-      // トランザクション開始
-      db.run('BEGIN TRANSACTION', (beginErr) => {
-        if (beginErr) {
-          console.error('BEGIN TRANSACTION err:', beginErr.message);
-          // フォールバックで個別削除を試みる
-        }
+      let pending = duplicates.length;
 
-        let pending = duplicates.length;
-        const finish = () => {
-          // commit/rollback はエラーの有無で柔軟に扱う（簡易実装）
-          db.run('COMMIT', (commitErr) => {
-            if (commitErr) {
-              console.error('COMMIT err:', commitErr.message);
-            } else {
-              console.log('✅ 重複削除トランザクションコミット完了');
-            }
-          });
-        };
-
-        duplicates.forEach(dup => {
-          const clientId = dup.client_id;
-          // 最新のID以外を削除
-          db.run(`
-            DELETE FROM subscriptions 
-            WHERE client_id = ? 
-              AND id NOT IN (
-                SELECT MAX(id) FROM subscriptions WHERE client_id = ?
-              )
-          `, [clientId, clientId], function(delErr) {
-            if (delErr) {
-              console.error(`重複削除エラー (${clientId}):`, delErr.message);
-              // エラー時はトランザクションをロールバック
-              db.run('ROLLBACK', (rbErr) => {
-                if (rbErr) console.error('ROLLBACK err:', rbErr.message);
-                else console.log('トランザクションをロールバックしました');
-              });
-            } else {
-              console.log(`✅ 重複削除完了: ${clientId} (deleted ${this.changes} rows)`);
-            }
-
+      duplicates.forEach(d => {
+        db.run(
+          `DELETE FROM subscriptions
+           WHERE client_id = ?
+           AND id NOT IN (
+             SELECT MAX(id) FROM subscriptions WHERE client_id = ?
+           )`,
+          [d.client_id, d.client_id],
+          function () {
             pending--;
-            if (pending === 0) finish();
-          });
-        });
+            if (pending === 0) db.run('COMMIT');
+          }
+        );
       });
     }
   );
+}
+
+
+// ============================================
+// 実行
+// ============================================
+
+ensureNotificationsSchema();
+ensureScheduledSchema();   // ← ★ これが今回の本命
+ensureIndexes();
+cleanupDuplicates();
 });
 
 // プロセス終了時に DB をクローズ（データ破損回避）
@@ -814,6 +812,90 @@ app.post('/api/send-test', (req, res) => {
   });
 });
 
+const SCHEDULE_INTERVAL_MS = 5000; // 5秒毎にチェック
+
+// ============================================
+// Scheduler Worker（堅牢版）
+// ============================================
+setInterval(async () => {
+  const now = Date.now();
+
+  try {
+    // due 一括取得（Promise化）
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, payload_json
+         FROM scheduled_notifications
+         WHERE sent = 0 AND run_at <= ?`,
+        [now],
+        (err, r) => {
+          if (err) reject(err);
+          else resolve(r || []);
+        }
+      );
+    });
+
+    if (!rows.length) return;
+
+    for (const row of rows) {
+      try {
+        // ----------------------------
+        // 送信前ロック（多重防止の最重要ポイント）
+        // ----------------------------
+        const locked = await new Promise((resolve) => {
+          db.run(
+            `UPDATE scheduled_notifications
+             SET sent = 2   -- 2 = processing
+             WHERE id = ? AND sent = 0`,
+            [row.id],
+            function () {
+              resolve(this.changes > 0);
+            }
+          );
+        });
+
+        if (!locked) continue; // 他workerが処理中
+
+        const payload = JSON.parse(row.payload_json);
+
+        // ----------------------------
+        // 実送信
+        // ----------------------------
+        await handleAdminNotify(payload);
+
+        // ----------------------------
+        // 成功確定
+        // ----------------------------
+        db.run(
+          `UPDATE scheduled_notifications
+           SET sent = 1, sent_at = ?
+           WHERE id = ?`,
+          [Date.now(), row.id]
+        );
+
+        console.log('[Scheduler] sent id=', row.id);
+
+      } catch (e) {
+        console.error('[Scheduler] failed id=', row.id, e);
+
+        // ----------------------------
+        // 失敗時は未送信に戻す（再試行可能）
+        // ----------------------------
+        db.run(
+          `UPDATE scheduled_notifications
+           SET sent = 0
+           WHERE id = ?`,
+          [row.id]
+        );
+      }
+    }
+
+  } catch (err) {
+    console.error('[Scheduler] fatal:', err);
+  }
+
+}, SCHEDULE_INTERVAL_MS);
+
 // --- ユーザーデータ統合取得（設定+名前を一度に） ---
 app.get('/api/get-user-data', (req, res) => {
   let clientId = req.query.clientId;
@@ -991,24 +1073,34 @@ function verifyNotifyHmac(req, res, next) {
 }
 
 // history.json を更新する関数
-function updateHistoryJson() {
-  // =========================
-  // ① JSON 用
-  // =========================
-  db.all(
-    `SELECT id, title, body, url, icon, platform, status,
-            strftime('%s', created_at) AS timestamp
-     FROM notifications
-     ORDER BY created_at DESC
-     LIMIT ?`,
-    [HISTORY_JSON_LIMIT],
-    (err, jsonRows) => {
-      if (err) {
-        console.error('[updateHistoryJson] JSON SELECT error:', err.message);
-        return;
-      }
+async function updateHistoryJson() {
+  try {
+    // -------------------------
+    // DB → Promise化
+    // -------------------------
+    const query = (limit) =>
+      new Promise((resolve, reject) => {
+        db.all(
+          `SELECT id, title, body, url, icon, platform, status,
+                  strftime('%s', created_at) AS timestamp
+           FROM notifications
+           ORDER BY created_at DESC
+           LIMIT ?`,
+          [limit],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
 
-      const jsonLogs = (jsonRows || []).map(r => ({
+    const [jsonRows, htmlRows] = await Promise.all([
+      query(HISTORY_JSON_LIMIT),
+      query(HISTORY_HTML_LIMIT)
+    ]);
+
+    const normalize = (rows) =>
+      rows.map(r => ({
         id: r.id,
         title: r.title,
         body: r.body,
@@ -1019,73 +1111,47 @@ function updateHistoryJson() {
         timestamp: r.timestamp ? Number(r.timestamp) : 0
       }));
 
-      const jsonData = {
-        logs: jsonLogs,
-        total: jsonLogs.length,
-        limit: HISTORY_JSON_LIMIT,
-        lastUpdated: Math.floor(Date.now() / 1000)
-      };
+    const jsonLogs = normalize(jsonRows);
+    const htmlLogs = normalize(htmlRows);
 
-      try {
-        const dir = path.dirname(HISTORY_JSON_PATH);
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
-        }
+    // -------------------------
+    // JSON生成
+    // -------------------------
+    const jsonData = {
+      logs: jsonLogs,
+      total: jsonLogs.length,
+      limit: HISTORY_JSON_LIMIT,
+      lastUpdated: Math.floor(Date.now() / 1000)
+    };
 
-        fs.writeFileSync(
-          HISTORY_JSON_PATH,
-          JSON.stringify(jsonData, null, 2),
-          'utf8'
-        );
-      } catch (e) {
-        console.error('[updateHistoryJson] JSON write error:', e.message);
-      }
-    }
-  );
+    // -------------------------
+    // ディレクトリ保証
+    // -------------------------
+    await fs.promises.mkdir(path.dirname(HISTORY_JSON_PATH), { recursive: true });
 
-  // =========================
-  // ② HTML 用（初期描画）
-  // =========================
-  db.all(
-    `SELECT id, title, body, url, icon, platform, status,
-            strftime('%s', created_at) AS timestamp
-     FROM notifications
-     ORDER BY created_at DESC
-     LIMIT ?`,
-    [HISTORY_HTML_LIMIT],
-    (err, htmlRows) => {
-      if (err) {
-        console.error('[updateHistoryJson] HTML SELECT error:', err.message);
-        return;
-      }
+    // -------------------------
+    // 非同期書き込み（★ここが最重要修正）
+    // -------------------------
+    await Promise.all([
+      fs.promises.writeFile(
+        HISTORY_JSON_PATH,
+        JSON.stringify(jsonData, null, 2),
+        'utf8'
+      ),
+      fs.promises.writeFile(
+        HISTORY_HTML_PATH,
+        renderHistoryHtml(htmlLogs),
+        'utf8'
+      )
+    ]);
 
-      const htmlLogs = (htmlRows || []).map(r => ({
-        id: r.id,
-        title: r.title,
-        body: r.body,
-        url: r.url,
-        icon: r.icon,
-        platform: r.platform || '不明',
-        status: r.status || 'success',
-        timestamp: r.timestamp ? Number(r.timestamp) : 0
-      }));
+    console.log(
+      `[updateHistoryJson] ✅ JSON(${HISTORY_JSON_LIMIT}) / HTML(${HISTORY_HTML_LIMIT}) 更新完了`
+    );
 
-      try {
-        const html = renderHistoryHtml(htmlLogs);
-        fs.writeFileSync(
-          HISTORY_HTML_PATH,
-          html,
-          'utf8'
-        );
-
-        console.log(
-          `[updateHistoryJson] ✅ JSON(${HISTORY_JSON_LIMIT}) / HTML(${HISTORY_HTML_LIMIT}) 更新完了`
-        );
-      } catch (e) {
-        console.error('[updateHistoryJson] HTML write error:', e.message);
-      }
-    }
-  );
+  } catch (e) {
+    console.error('[updateHistoryJson] error:', e);
+  }
 }
 
 // 起動時に初回生成
@@ -1094,7 +1160,7 @@ db.serialize(() => {
   
   // 初回のhistory.json生成
   setTimeout(() => {
-    updateHistoryJson();
+    updateHistoryJson().catch(console.error);
   }, 1000);
 });
 
@@ -1173,7 +1239,7 @@ db.run(
 
     try {
       // ① JSON + HTML を先に更新（状態確定）
-      updateHistoryJson();
+      updateHistoryJson().catch(console.error);
 
       // ② その後に SSE 通知
       sendSseEvent({
@@ -1351,139 +1417,191 @@ app.get('/api/admin/verify', adminAuth.requireAuth, (req, res) => {
   res.json({ success: true, user: req.adminUser });
 });
 
-// 管理者通知送信（認証必須、ターゲット送信対応、並列度制御）
-app.post('/api/admin/notify', adminAuth.requireAuth, async (req, res) => {
-  const { data, type, settingKey, clientId: clientIdsString } = req.body;
-  if (!data || !type) return res.status(400).json({ error: 'Missing data or type' });
+// ============================================
+// 共通：実送信ロジック（scheduler からも呼ばれる）
+// ============================================
+async function handleAdminNotify(body, adminUser = 'scheduler') {
+  const { data, type, settingKey, clientId: clientIdsString } = body;
+
+  if (!data || !type) {
+    throw new Error('Missing data or type');
+  }
 
   // clientIds -> array
   const clientIds = clientIdsString
-    ? String(clientIdsString).split(',').map(id => id.trim()).filter(id => id.length > 0)
+    ? String(clientIdsString).split(',').map(id => id.trim()).filter(Boolean)
     : [];
+
   const isTargetedSend = clientIds.length > 0;
 
-  // Safety: limit number of clientIds allowable in one request
   const MAX_TARGET = 500;
   if (clientIds.length > MAX_TARGET) {
-    return res.status(400).json({ error: `Too many clientIds (max ${MAX_TARGET})` });
+    throw new Error(`Too many clientIds (max ${MAX_TARGET})`);
   }
 
-  console.log(`[Admin Notification] ${req.adminUser} => ${isTargetedSend ? `target ${clientIds.length}` : 'broadcast'}:`, data.title);
+  console.log(
+    `[Admin Notification] ${adminUser} => ${
+      isTargetedSend ? `target ${clientIds.length}` : 'broadcast'
+    }:`,
+    data.title
+  );
 
   // 重複チェック
   const notificationHash = getNotificationHash(data, settingKey);
   const now = Date.now();
   const lastSent = recentNotifications.get(notificationHash);
-  if (lastSent && (now - lastSent) < DUPLICATE_WINDOW_MS) {
-    return res.json({ success: true, message: 'Duplicate notification ignored', duplicate: true });
+
+  if (lastSent && now - lastSent < DUPLICATE_WINDOW_MS) {
+    return { duplicate: true, sentCount: 0, totalCount: 0 };
   }
   recentNotifications.set(notificationHash, now);
 
-  // 全員送信時のみ履歴保存（非同期）
+  // 履歴保存（broadcastのみ）
   if (!isTargetedSend) {
     db.run(
       'INSERT INTO notifications (title, body, url, icon, platform, status) VALUES (?, ?, ?, ?, ?, ?)',
       [data.title, data.body, data.url, data.icon, 'admin', 'success'],
       function(insertErr) {
-        if (insertErr) {
-          console.error('[Admin Notification] 履歴保存エラー:', insertErr.message);
-        } else {
-          console.log('[Admin Notification] 履歴保存成功 (ID:', this.lastID, ')');
-                // ← ここに SSE 通知を追加
-      try {
-        sendSseEvent({
-          type: 'history-updated',
-          lastUpdated: Math.floor(Date.now() / 1000),
-          added: [this.lastID] // 追加された行のID
-          // 必要なら changed/removed フィールドを追加
-        });
-      } catch (e) {
-        console.warn('sendSseEvent error:', e && e.message);
-      }
+        if (!insertErr) {
+          updateHistoryJson().catch(console.error);
+          try {
+            sendSseEvent({
+              type: 'history-updated',
+              lastUpdated: Math.floor(Date.now() / 1000),
+              added: [this.lastID]
+            });
+          } catch {}
         }
       }
     );
   }
 
   // build SELECT
-  let selectSql = 'SELECT client_id, subscription_json, settings_json FROM subscriptions';
+  let selectSql =
+    'SELECT client_id, subscription_json, settings_json FROM subscriptions';
   let selectParams = [];
+
   if (isTargetedSend) {
     const placeholders = clientIds.map(() => '?').join(', ');
     selectSql += ` WHERE client_id IN (${placeholders})`;
     selectParams = clientIds;
   }
 
-  db.all(selectSql, selectParams, async (err, rows) => {
-    if (err) {
-      console.error('[Admin Notification] SELECT err:', err.message);
-      return res.status(500).json({ error: 'DB error', detail: err.message });
-    }
+  const rows = await new Promise((resolve, reject) => {
+    db.all(selectSql, selectParams, (err, r) => {
+      if (err) reject(err);
+      else resolve(r || []);
+    });
+  });
 
-    const total = Array.isArray(rows) ? rows.length : 0;
-    console.log(`[Admin Notification] 対象: ${total}人`);
+  const total = rows.length;
 
-    if (!total) return res.json({ success: true, message: 'No subscribers', sentCount: 0, totalCount: 0 });
+  if (!total) {
+    return { sentCount: 0, totalCount: 0 };
+  }
 
-    // 並列度（環境変数で調整可能）
-    const CONCURRENCY = Math.max(1, parseInt(process.env.NOTIFY_CONCURRENCY, 10) || 20);
+  const CONCURRENCY =
+    Math.max(1, parseInt(process.env.NOTIFY_CONCURRENCY, 10) || 20);
 
-    // 内製の mapWithLimit（先に notify mapWithLimit を共通化しても良い）
-    async function mapWithLimit(items, limit, iterator) {
-      const results = new Array(items.length);
-      let idx = 0;
-      const workers = new Array(Math.min(limit, items.length)).fill(null).map(async () => {
+  async function mapWithLimit(items, limit, iterator) {
+    const results = new Array(items.length);
+    let idx = 0;
+
+    const workers = new Array(Math.min(limit, items.length))
+      .fill(null)
+      .map(async () => {
         while (true) {
           const i = idx++;
           if (i >= items.length) break;
+
           try {
             results[i] = await iterator(items[i], i);
           } catch (e) {
-            results[i] = { error: e && e.message ? e.message : String(e) };
+            results[i] = { sent: false };
           }
         }
       });
-      await Promise.all(workers);
-      return results;
+
+    await Promise.all(workers);
+    return results;
+  }
+
+  async function sendForRow(row) {
+    if (!row.subscription_json) return { sent: false };
+
+    try {
+      const subscription = JSON.parse(row.subscription_json);
+      const sent = await sendPushNotification(subscription, data, db, false);
+      return { sent };
+    } catch {
+      return { sent: false };
+    }
+  }
+
+  const results = await mapWithLimit(rows, CONCURRENCY, sendForRow);
+  const sentCount = results.filter(r => r.sent).length;
+
+  console.log(`[Admin Notification] 完了: ${sentCount}/${total}人`);
+
+  return { sentCount, totalCount: total };
+}
+
+
+// ============================================
+// API：即時 or 予約
+// ============================================
+app.post('/api/admin/notify', adminAuth.requireAuth, async (req, res) => {
+  const { scheduleAt } = req.body;
+
+  try {
+    // -------------------------
+    // 予約送信
+    // -------------------------
+    if (scheduleAt) {
+      const runAt = new Date(scheduleAt).getTime();
+
+      if (isNaN(runAt) || runAt <= Date.now()) {
+        return res.status(400).json({
+          error: 'scheduleAt must be future time'
+        });
+      }
+
+      db.run(
+        `INSERT INTO scheduled_notifications (run_at, payload_json)
+         VALUES (?, ?)`,
+        [runAt, JSON.stringify(req.body)],
+        function(err) {
+          if (err) {
+            return res.status(500).json({ error: err.message });
+          }
+
+          return res.json({
+            success: true,
+            scheduled: true,
+            id: this.lastID,
+            runAt
+          });
+        }
+      );
+
+      return;
     }
 
-    // 送信処理（管理通知は設定チェック不要で直接送るか、必要なら設定を考慮）
-    async function sendForRow(row) {
-      const clientId = row.client_id;
-      if (!row.subscription_json) {
-        console.warn(`[Admin Notification] ${clientId}: missing subscription_json`);
-        return { clientId, sent: false, reason: 'no_subscription' };
-      }
-
-      let subscription;
-      try {
-        subscription = JSON.parse(row.subscription_json);
-      } catch (e) {
-        console.error(`[Admin Notification] ${clientId}: subscription parse err`, e.message);
-        return { clientId, sent: false, reason: 'parse_error' };
-      }
-
-      try {
-        const sent = await sendPushNotification(subscription, data, db, false);
-        return { clientId, sent };
-      } catch (e) {
-        console.error(`[Admin Notification] ${clientId}: send error`, e && e.message);
-        return { clientId, sent: false, error: e && e.message };
-      }
-    }
-
-    const results = await mapWithLimit(rows, CONCURRENCY, sendForRow);
-    const sentCount = results.filter(r => r && r.sent).length;
-
-    console.log(`[Admin Notification] 完了: ${sentCount}/${total}人`);
+    // -------------------------
+    // 即時送信
+    // -------------------------
+    const result = await handleAdminNotify(req.body, req.adminUser);
 
     return res.json({
       success: true,
-      message: `Notification sent to ${sentCount} clients`,
-      sentCount,
-      totalCount: total
+      message: `Notification sent to ${result.sentCount} clients`,
+      ...result
     });
-  });
+
+  } catch (e) {
+    console.error('[Admin Notify]', e);
+    return res.status(500).json({ error: e.message });
+  }
 });
 
 /*
