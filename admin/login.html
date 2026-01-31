@@ -178,7 +178,7 @@
                 localStorage.setItem('adminToken', data.token);
                 
                 // 管理画面にリダイレクト
-                window.location.href = '/pushweb/admin.html';
+                window.location.href = 'https://mai.honna-yuzuki.com/admin.html';
                 
             } catch (error) {
                 showError(error.message);
@@ -207,7 +207,7 @@
                     });
                     
                     if (response.ok) {
-                        window.location.href = '/pushweb/admin.html';
+                        window.location.href = 'https://mai.honna-yuzuki.com/admin.html';
                     }
                 } catch (e) {
                     // トークンが無効な場合はログイン画面を表示
