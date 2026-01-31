@@ -46,12 +46,17 @@
 
       <button id="subscriber-name-submit" class="platform-setting-button">保存</button>
     </div>
-
-    <div class="platform-name-row">推し始め</div>
-    <div class="subscriber-input-wrapper" style="margin-block-end: 10px;">
-      <input type="date" id="start" name="trip-start"
-             value="2020-01-07" min="2020-01-01" max="2099-12-31" />
-    </div>
+    
+    <label for="start" class="platform-name-row">推し始め</label>
+    <input
+        type="date"
+        id="start"
+        name="trip-start"
+        value="2020-01-07"
+        min="2020-01-01"
+        max="2099-12-31"
+        title="推し始めの日付を選択してください"
+    />
 
     <div id="subscriber-name-status" class="platform-name-status"></div>
   </div>
@@ -79,6 +84,11 @@
                                 </button>
                             </li>
                             <li>
+                                <button id="toggle-twitch" class="platform-setting-button is-on">
+                                    Twitch: ON
+                                </button>
+                            </li>
+                            <li>
                                 <button id="toggle-fanbox" class="platform-setting-button is-on">
                                     Pixiv Fanbox: ON
                                 </button>
@@ -93,11 +103,11 @@
                                     Twitter(@koinoyamai17): ON
                                 </button>
                             </li>
-                            <li>
+                            <!--<li>
                                 <button id="toggle-gipt" class="platform-setting-button is-on">
                                     Gipt: ON
                                 </button>
-                            </li>
+                            </li>-->
                             <li>
                                 <button id="toggle-milestone" class="platform-setting-button is-on">
                                     記念日通知: ON
