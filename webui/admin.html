@@ -192,13 +192,13 @@
             
             <div class="form-group">
                 <label for="body">メッセージ *</label>
-                <textarea id="body" placeholder="例: 2月12日午前2時にサーバーのメンテナンスを行います！" required></textarea>
+                <textarea id="body" placeholder="例: 1月7日午前17時にサーバーのメンテナンスを行います！" required></textarea>
                 <div class="helper-text">通知の本文（必須）</div>
             </div>
             
             <div class="form-group">
                 <label for="url">リンク先URL</label>
-                <input type="text" id="url" placeholder="例: https://example.com" />
+                <input type="text" id="url" placeholder="例: https://maichandaisuki.com" />
                 <div class="helper-text">通知をクリックした際の遷移先（省略可）</div>
             </div>
             
@@ -207,6 +207,12 @@
                  <input type="text" id="icon" value="./ad.webp" />
                  <div class="helper-text">通知のアイコン画像URL</div>
              </div>
+
+             <div class="form-group">
+                <label for="scheduleAt">予約送信日時</label>
+                <input type="datetime-local" id="scheduleAt" />
+                <div class="helper-text">未指定の場合は即時送信されます</div>
+            </div>
 
              <div class="form-group">
                  <label for="clientId">特定クライアントID (デバッグ用)</label>
@@ -266,6 +272,7 @@
         const statusMessage = document.getElementById('status-message');
         const previewTitle = document.getElementById('preview-title');
         const previewBody = document.getElementById('preview-body');
+        const scheduleAtInput = document.getElementById('scheduleAt');
         
         // プレビュー更新
         function updatePreview() {
@@ -293,6 +300,7 @@
             const url = urlInput.value.trim();
             const icon = iconInput.value.trim();
             const clientId = clientIdInput.value.trim();
+            const scheduleAt = scheduleAtInput.value.trim();
             
             if (!title || !body) {
                 showStatus('タイトルとメッセージは必須です', 'error');
@@ -316,6 +324,7 @@
                         settingKey: 'admin',
                         // 🌟 clientId を API に渡す 🌟
                         clientId: clientId || undefined,
+                        scheduleAt: scheduleAt || undefined,
                         data: {
                             title: title,
                             body: body,
@@ -354,7 +363,9 @@
         });
 
         function updateSendButton() {
-            if (clientIdInput.value.trim()) {
+            if (scheduleAtInput.value) {
+                btnSend.textContent = '⏰ 予約送信';
+            } else if (clientIdInput.value.trim()) {
                 btnSend.textContent = '📤 特定デバイスに送信';
             } else {
                 btnSend.textContent = '📤 全員に送信';
