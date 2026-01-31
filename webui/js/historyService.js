@@ -111,7 +111,8 @@ function getCurrentFilterSettingsFallback() {
     twitterMain: document.getElementById('filter-twitter-main')?.classList.contains('is-on') || false,
     twitterSub: document.getElementById('filter-twitter-sub')?.classList.contains('is-on') || false,
     milestone: document.getElementById('filter-milestone')?.classList.contains('is-on') || false,
-    gipt: document.getElementById('filter-gipt')?.classList.contains('is-on') || false
+    gipt: document.getElementById('filter-gipt')?.classList.contains('is-on') || false,
+    twitch: document.getElementById('filter-twitch')?.classList.contains('is-on') || false
   };
 }
 
@@ -133,6 +134,7 @@ function shouldIncludeLog(log, settings) {
   if (platform.includes('twitter')) return !!settings.twitterMain;
   if (platform.includes('milestone')) return !!settings.milestone;
   if (platform.includes('gipt')) return !!settings.gipt;
+  if (platform.includes('twitch')) return !!settings.twitch;
 
   return true;
 }

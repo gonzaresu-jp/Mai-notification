@@ -44,6 +44,7 @@ export function normalizePlatformName(platform) {
   }
   if (normalized.includes('milestone') || normalized.includes('記念日')) return 'milestone';
   if (normalized.includes('gipt')) return 'gipt';
+  if (normalized.includes('twitch')) return 'twitch';
   
   return 'unknown';
 }
