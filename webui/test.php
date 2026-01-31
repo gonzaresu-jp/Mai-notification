@@ -30,7 +30,7 @@
 
 <div id="animation-container-other">
     <picture>
-        <source srcset="mai.avif" type="image/avif">
+        <source srcset="https://mai.honna-yuzuki.com/mai.avif" type="image/avif">
         <source srcset="mai.png" type="image/png">
         <img src="mai.gif" alt="透過アニメーション">
     </picture>
@@ -302,7 +302,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const video = document.createElement('video');
     video.id = 'video-source';
-    video.src = 'showmai.mp4';
+    video.src = 'https://mai.honna-yuzuki.com/showmai.mp4';
     video.loop = true;
     video.muted = true;
     video.playsInline = true;

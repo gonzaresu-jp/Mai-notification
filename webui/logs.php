@@ -11,6 +11,7 @@
         @media(max-width: 800px){dt{font-size: 16px} .card{display: block;} img{ max-width: 80vw!important;}}
         .bg {background-color:#B11E7C; min-width:3px; }
         img {max-width: 40vw;}
+        #day {white-space: nowrap;}
     </style>
 </head>
 <body id="app-body">
@@ -22,7 +23,16 @@
         <h2 class="history fade">Update logs</h2>
         <div class="card">
             <dl>
-                <dt>2026-01-16</dt>
+                <dt>2026-02-01</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>通知するプラットフォームにTwitchを追加、管理者用ログインページからのリダイレクトを修正</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
+                <dt id="day">2026-01-16</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -31,7 +41,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2026-01-15</dt>
+                <dt id="day">2026-01-15</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -40,7 +50,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2026-01-14</dt>
+                <dt id="day">2026-01-14</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -49,7 +59,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2026-01-13</dt>
+                <dt id="day">2026-01-13</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -58,7 +68,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2026-01-08</dt>
+                <dt id="day">2026-01-08</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -67,7 +77,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2026-01-07</dt>
+                <dt id="day">2026-01-07</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -76,7 +86,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2026-01-06</dt>
+                <dt id="day">2026-01-06</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -85,7 +95,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2025-12-21</dt>
+                <dt id="day">2025-12-21</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -94,7 +104,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2025-11-29</dt>
+                <dt id="day">2025-11-29</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -103,7 +113,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2025-11-26</dt>
+                <dt id="day">2025-11-26</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -112,7 +122,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2025-11-25</dt>
+                <dt id="day">2025-11-25</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -121,7 +131,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2025-11-17</dt>
+                <dt id="day">2025-11-17</dt>
             </dl>
             <div class="bg"></div>
             <dl>
@@ -130,7 +140,7 @@
         </div>
         <div class="card">
             <dl>
-                <dt>2025-11-09</dt>
+                <dt id="day">2025-11-09</dt>
             </dl>
             <div class="bg"></div>
             <dl>

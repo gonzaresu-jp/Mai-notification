@@ -204,7 +204,7 @@
             
             <div class="form-group">
                  <label for="icon">アイコンURL</label>
-                 <input type="text" id="icon" value="./ad.ico" />
+                 <input type="text" id="icon" value="./ad.webp" />
                  <div class="helper-text">通知のアイコン画像URL</div>
              </div>
 
@@ -236,7 +236,7 @@
             const token = localStorage.getItem('adminToken');
             
             if (!token) {
-                window.location.href = '/pushweb/login';
+                window.location.href = './admin/login';
                 return;
             }
             
@@ -250,7 +250,7 @@
                 }
             } catch (error) {
                 localStorage.removeItem('adminToken');
-                window.location.href = '/pushweb/login';
+                window.location.href = './admin/login';
                 return;
             }
         })();
@@ -279,7 +279,7 @@
         // クリアボタン
         btnClear.addEventListener('click', () => {
             form.reset();
-            iconInput.value = './ad.ico';
+            iconInput.value = './ad.webp';
             updatePreview();
             statusMessage.classList.remove('show');
         });
@@ -320,7 +320,7 @@
                             title: title,
                             body: body,
                             url: url || './',
-                            icon: icon || './icon.ico'
+                            icon: icon || './icon.webp'
                         }
                     })
                 });

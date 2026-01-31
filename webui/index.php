@@ -1,4 +1,5 @@
 <!-- まいちゃん愛してる！ -->
+<!doctype html>
 <html lang="ja">
 <head>
     <meta charset="utf-8" />
@@ -128,6 +129,10 @@
                                 </button>
                             </li>
                             <li>
+                                <button id="filter-twitch" class="filter-button is-on" disabled>
+                                    Twitch: ON
+                                </button>
+                            <li>
                                 <button id="filter-fanbox" class="filter-button is-on" disabled>
                                     Pixiv Fanbox: ON
                                 </button>
@@ -142,11 +147,11 @@
                                     Twitter(@koinoyamai17): ON
                                 </button>
                             </li>
-                            <li>
+                            <!--<li>
                                 <button id="filter-gipt" class="filter-button is-on" disabled>
                                     Gipt: ON
                                 </button>
-                            </li>
+                            </li>-->
                             <li>
                                 <button id="filter-milestone" class="filter-button is-on"   disabled>
                                     記念日通知: ON
