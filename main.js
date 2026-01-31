@@ -1,5 +1,5 @@
 // main.js - 起動専用版(改良版 + notifyConfig 注入 + listen修正)
-require('dotenv').config();
+require('dotenv').config({ path: '/var/www/html/mai-push/.env' });
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
@@ -14,6 +14,7 @@ const twitter = require('./twitter');
 const fanbox = require('./fanbox');
 const MilestoneScheduler = require('./milestone');
 const gipt = require('./gipt');
+const { startTwitchPolling } = require('./twitch');
 
 const app = express();
 app.use(express.json());
@@ -73,6 +74,17 @@ async function main() {
     hmacSecret: process.env.NOTIFY_HMAC_SECRET || null,
     apiUrl: process.env.NOTIFY_API_URL || `http://localhost:${PORT}/api/notify`,
   };
+
+// --- Twitch 設定 ---
+  const twitchConfig = {
+    clientId: process.env.TWITCH_CLIENT_ID,
+    clientSecret: process.env.TWITCH_CLIENT_SECRET, // ★追加
+    appAccessToken: process.env.TWITCH_APP_ACCESS_TOKEN,
+    twitchUrl: process.env.TWITCH_URL || 'https://www.twitch.tv/koinoya_mai',
+    notifyConfig,
+    interval: 1000, // ★1秒間隔に設定
+  };
+
 
   console.log('ADMIN_NOTIFY_TOKEN:', process.env.ADMIN_NOTIFY_TOKEN);
   console.log("Worker notify token:", notifyConfig.token);
@@ -157,33 +169,33 @@ async function main() {
   const startPromises = [];
 
   // YouTube webhook 起動
-  try {
-    if (typeof youtube.startWebhook === 'function') {
-      startPromises.push(
-        (async () => {
-          try {
-            await youtube.startWebhook(YT_WEBHOOK_PORT);
-            console.log(`YouTube webhook 起動 on ${YT_WEBHOOK_PORT}`);
+ try {
+  if (typeof youtube.startWebhook === 'function') {
+   startPromises.push(
+    (async () => {
+     try {
+      await youtube.startWebhook(YT_WEBHOOK_PORT);
+      console.log(`YouTube webhook 起動 on ${YT_WEBHOOK_PORT}`);
 
-            // ★★★ 起動直後の初回購読リクエストを追加 ★★★
-            if (typeof youtube.subscribeAllChannels === 'function') {
-              await youtube.subscribeAllChannels();
-              console.log('✅ YouTube チャンネルの初回購読リクエストを送信しました。');
-            }
-            // ★★★ 追加ここまで ★★★
+      // ★★★ 起動直後の初回購読リクエストを追加 ★★★
+      if (typeof youtube.subscribeAllChannels === 'function') {
+       await youtube.subscribeAllChannels();
+       console.log('✅ YouTube チャンネルの初回購読リクエストを送信しました。');
+      }
+      // ★★★ 追加ここまで ★★★
 
-          } catch (e) {
-            console.error('YouTube webhook 起動エラー:', e && e.message ? e.message : e);
-            throw e;
-          }
-        })()
-      );
-    } else {
-      console.log('youtube.startWebhook 未定義。');
-    }
-  } catch (e) {
-    console.error('YouTube 起動ハンドルエラー:', e);
-  }
+     } catch (e) {
+      console.error('YouTube webhook 起動エラー:', e && e.message ? e.message : e);
+      throw e;
+     }
+    })()
+   );
+  } else {
+   console.log('youtube.startWebhook 未定義。');
+  }
+ } catch (e) {
+  console.error('YouTube 起動ハンドルエラー:', e);
+ }
 
 // youtubeCommunity
 // 監視対象 YouTube ハンドル
@@ -300,6 +312,22 @@ if (typeof twitcasting.startTwitcastingServer === 'function') {
     );
   }
 
+  // Twitch
+if (typeof startTwitchPolling === 'function') {
+    startPromises.push(
+      (async () => {
+        try {
+          await startTwitchPolling(twitchConfig); // configを渡す
+          console.log('Twitch polling 起動 (1s interval)');
+        } catch (e) {
+          console.error('Twitch polling 起動エラー:', e.message);
+          throw e;
+        }
+      })()
+    );
+  }
+
+
   // main の startPromises 構築部分の適切な場所（例えば Twitter watchers の後）に追加
 const MONITOR_TWITCASTING = ['c:koinoya_mai']; // 監視したい screenId を列挙
 
@@ -378,7 +406,7 @@ if (typeof twitcasting.startWatcher === 'function') {
     console.error('Fanbox watcher 起動エラー:', e && e.message ? e.message : e);
   }
 
-
+/*
   // Gipt
 startPromises.push((async () => {
   try {
@@ -401,7 +429,7 @@ startPromises.push((async () => {
     throw e;
   }
 })());
-
+*/
 
   // マイルストーンスケジューラー起動
   try {

@@ -494,7 +494,8 @@ app.get('/api/get-platform-settings', (req, res) => {
       fanbox: true,
       twitterMain: true,
       twitterSub: true,
-      gipt: false
+      gipt: true,
+      twitch: true
     };
 
     // row が無い場合は既定値を返す（存在確認したいなら 404 を返す方針も検討）
@@ -831,7 +832,8 @@ app.get('/api/get-user-data', (req, res) => {
     fanbox: true,
     twitterMain: true,
     twitterSub: true,
-    gipt: false
+    gipt: true,
+    twitch: true
   };
 
   db.get(
