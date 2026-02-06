@@ -1,0 +1,243 @@
+/* ===== カルーセル親 ===== */
+.stats-carousel {
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  touch-action: pan-y;
+  /* ↓ 高さの変化を滑らかにする */
+  transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: flex-start; /* ← 重要：中身の高さに合わせる */
+}
+
+.stats-carousel-inner {
+  display: flex;
+  width: 100%;
+  transition: transform 0.28s ease;
+  will-change: transform;
+  align-items: flex-start; /* ← 重要：各ページを自立した高さにする */
+}
+
+.stats-page {
+  flex: 0 0 100%;             /* 1ページ＝画面幅 */
+  width: 100%;
+}
+.stats-carousel-inner {
+  will-change: transform;
+}
+
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.carousel-dots button {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: #b4b4b4;
+  padding: 0;
+  cursor: pointer;
+  transition: transform .15s, background .15s;
+}
+
+.carousel-dots button.active {
+  background: #B11E7C;
+  transform: scale(1.4);
+}
+/* =====================
+    週間予定：一体型カード（区切り・色分けあり）
+===================== */
+
+.weekly-list {
+  display: flex;
+  flex-direction: row;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+/* 各日のエリア */
+.week-row {
+  flex: 1 0 0;          /* ← 重要：これですべて同じ幅（1:1:1...）に固定されます */
+  min-width: 0;         /* ← 重要：中身が長くても幅を突き破らないようにする */
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-right: 1px solid #f0f0f0;
+  transition: background 0.2s;
+}
+
+.week-row:last-child {
+  border-right: none;
+}
+
+/* 「今日」のハイライト */
+.week-row.is-today {
+  background: #ffd7f0; /* ほんのりピンク（テーマ色に合わせ） */
+}
+
+/* 曜日ヘッダー部分（ここに区切り線を追加） */
+.week-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 5px;
+  border-bottom: 2px solid #f8f8f8; /* 日付の下の区切り線 */
+  margin-bottom: 8px;
+}
+
+/* 土・日の色分け */
+/* 日曜日 (1番目) */
+.week-row:nth-child(1) .week-header span:first-child { color: #e53935; } 
+/* 土曜日 (7番目) */
+.week-row:nth-child(7) .week-header span:first-child { color: #1e88e5; }
+
+.week-header span:first-child {
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #444;
+}
+
+.week-date {
+  font-size: 0.7rem;
+  color: #505050;
+  margin-top: 2px;
+}
+
+/* イベントエリア */
+.week-events {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 6px;
+  min-height: 90px;
+}
+
+
+
+/* =====================
+    スマホ対応
+===================== */
+@media (max-width: 768px) {
+  .weekly-list { flex-direction: column; }
+
+  .week-row {
+    flex-direction: row;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .week-header {
+    width: 65px;
+    padding: 15px 0;
+    margin-bottom: 0;
+    border-bottom: none;
+    border-right: 2px solid #f8f8f8; /* スマホ時は右側に線 */
+  }
+
+  .week-events {
+    flex: 1;
+    min-height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-left: 15px;
+  }
+}
+
+/* イベント単体のデザイン変更 */
+.event {
+  display: block;
+  text-decoration: none;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  overflow: hidden; /* サムネイルの角丸を反映 */
+  background: #f9f9f9;
+  border: 1px solid #eee;
+  transition: all 0.2s ease;
+}
+
+.event:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  border-color: #B11E7C;
+}
+
+/* サムネイル */
+.event-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #eee;
+}
+
+.event-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 時間とタイトルの情報エリア */
+.event-info {
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.event-time {
+  font-size: 0.65rem;
+  font-weight: bold;
+  color: #B11E7C; /* 時間を強調 */
+}
+
+.event-title {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #333;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* タイプ別の極細ライン（左側） */
+.event.live { border-left: 3px solid #B11E7C; }
+.event.video { border-left: 3px solid #4a90e2; }
+
+/* スマホ対応の微調整 */
+@media (max-width: 768px) {
+  .week-events {
+    display: flex;
+    flex-direction: column; /* スマホでも1日複数あれば縦に並べる */
+    gap: 8px;
+  }
+
+  .event {
+    display: flex; /* スマホではサムネイルと文字を横並びに */
+    align-items: center;
+    width: 100%;
+  }
+
+  .event-thumb {
+    width: 80px; /* スマホではサムネイルを左側に固定 */
+    height: 45px;
+    aspect-ratio: auto;
+    flex-shrink: 0;
+  }
+
+  .event-info {
+    padding: 2px 10px;
+  }
+  
+  .event-title {
+    font-size: 0.85rem; /* スマホでは少し文字を大きく */
+    white-space: normal; /* 折り返し許可 */
+  }
+}
