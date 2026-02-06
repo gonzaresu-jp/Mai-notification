@@ -23,11 +23,47 @@
         <h2 class="history fade">Update logs</h2>
         <div class="card">
             <dl>
+                <dt>2026-02-07</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>週間予定表の編集ページ追加,予定表の自動追加(現時点でYTのみ),rss対応</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
+                <dt>2026-02-06</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>週間予定表を追加</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
+                <dt>2026-02-05</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>YouTubeのコミュニティ投稿の通知取得方法を変更、通知可能に</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
+                <dt>2026-02-03</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>Twitchの複数通知バグの修正のためステータスのメモリ保存からストレージへの保存に変更</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
                 <dt>2026-02-01</dt>
             </dl>
             <div class="bg"></div>
             <dl>
-                <dt>通知するプラットフォームにTwitchを追加、管理者用ログインページからのリダイレクトを修正</dt>
+                <dt>通知するプラットフォームにTwitchを追加,管理者用ログインページからのリダイレクトを修正,管理者通知送信フォームに予約通知追加</dt>
             </dl>
         </div>
         <div class="card">

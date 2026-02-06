@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>イベント管理 - まいちゃん通知ダッシュボード</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #B11E7C;
+            margin-bottom: 30px;
+        }
+
+        .actions {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #B11E7C;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #8f1864;
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #d0d0d0;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .event-list {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .event-item {
+            border-bottom: 1px solid #f0f0f0;
+            padding: 15px 0;
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }
+
+        .event-item:last-child {
+            border-bottom: none;
+        }
+
+        .event-thumbnail {
+            width: 120px;
+            height: 68px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .event-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .event-info {
+            flex: 1;
+        }
+
+        .event-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .event-meta {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .event-badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-scheduled {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .badge-live {
+            background: #ffebee;
+            color: #c62828;
+            animation: pulse 2s infinite;
+        }
+
+        .badge-ended {
+            background: #f5f5f5;
+            color: #757575;
+        }
+
+        .badge-youtube {
+            background: #ffebee;
+            color: #ff0000;
+        }
+
+        .badge-twitcasting {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .event-actions {
+            display: flex;
+            gap: 5px;
+            flex-direction: column;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .event-item {
+                flex-direction: column;
+            }
+
+            .event-thumbnail {
+                width: 100%;
+                height: auto;
+                aspect-ratio: 16/9;
+            }
+        }
+        .thumb-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px,1fr));
+    gap: 10px;
+}
+
+.thumb-item {
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid transparent;
+    transition: .15s;
+}
+
+.thumb-item img {
+    width: 100%;
+    height: 80px;
+    object-fit: cover;
+    display: block;
+}
+
+.thumb-item:hover {
+    transform: scale(1.03);
+}
+
+.thumb-item.selected {
+    border-color: #B11E7C;
+    box-shadow: 0 0 0 2px #B11E7C33;
+}
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📅 イベント管理</h1>
+
+        <div class="actions">
+            <button class="btn-primary" onclick="openCreateModal()">
+                ➕ 新規イベント作成
+            </button>
+            <button class="btn-secondary" onclick="loadEvents()">
+                🔄 再読み込み
+            </button>
+            <a href="/admin/" style="margin-left: auto;">
+                <button class="btn-secondary">← 管理画面に戻る</button>
+            </a>
+        </div>
+
+        <div class="event-list">
+            <div id="event-container" class="loading">
+                読み込み中...
+            </div>
+        </div>
+    </div>
+
+    <!-- イベント作成/編集モーダル -->
+    <div id="event-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modal-title">新規イベント作成</h2>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+
+            <form id="event-form" onsubmit="handleSubmit(event)">
+                <input type="hidden" id="event-id" value="">
+
+                <div class="form-group">
+                    <label for="title">タイトル *</label>
+                    <input type="text" id="title" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                    <label for="start_time">開始日時（未定可）</label>
+                    <input type="date" id="start_date">
+                    <input type="time" id="start_time">
+
+
+
+                    </div>
+                </div>
+
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="platform">プラットフォーム</label>
+                        <select id="platform">
+                            <option value="other">その他</option>
+                            <option value="youtube">YouTube</option>
+                            <option value="twitcasting">TwitCasting</option>
+                            <option value="twitch">Twitch</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="event_type">イベントタイプ</label>
+                        <select id="event_type">
+                            <option value="live">配信</option>
+                            <option value="video">動画投稿</option>
+                            <option value="other">その他</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="url">URL</label>
+                    <input type="url" id="url" placeholder="https://...">
+                </div>
+
+                <div class="form-group">
+                    <label>サムネイル選択</label>
+
+                    <!-- 直入力用 -->
+                    <input type="url" id="thumbnail_url" placeholder="https://...">
+
+                    <div class="thumb-picker" id="thumb-picker"></div>
+                </div>
+
+
+
+                <div class="form-group">
+                    <label for="description">説明</label>
+                    <textarea id="description"></textarea>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 30px;">
+                    <button type="submit" class="btn-primary" style="flex: 1;">
+                        保存
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="closeModal()">
+                        キャンセル
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+const THUMBNAILS = [
+  "https://mai.honna-yuzuki.com/thumb/th-yt-main.webp"
+];
+
+let events = [];
+let editingEventId = null;
+
+
+/* ===============================
+   認証
+================================ */
+
+function getAdminToken() {
+    return localStorage.getItem('adminToken');
+}
+
+function getAuthHeaders(json = true) {
+    const token = getAdminToken();
+
+    if (!token) {
+        alert('管理者ログインが必要です');
+        throw new Error('Admin token missing');
+    }
+
+    return {
+        ...(json ? { 'Content-Type': 'application/json' } : {}),
+        'x-admin-token': token
+    };
+}
+
+async function adminFetch(url, options = {}) {
+    const res = await fetch(url, {
+        ...options,
+        headers: {
+            ...getAuthHeaders(!!options.body),
+            ...(options.headers || {})
+        }
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`API Error ${res.status}: ${text}`);
+    }
+
+    return res;
+}
+
+
+/* ===============================
+   初期化
+================================ */
+
+document.addEventListener('DOMContentLoaded', () => {
+    renderThumbnailPicker();
+    loadEvents();
+});
+
+
+/* ===============================
+   サムネイル
+================================ */
+
+function renderThumbnailPicker() {
+    const container = document.getElementById('thumb-picker');
+    const input = document.getElementById('thumbnail_url');
+
+    container.innerHTML = THUMBNAILS.map(url => `
+        <div class="thumb-item" data-url="${url}">
+            <img src="${url}">
+        </div>
+    `).join('');
+
+    // ピッカークリック
+    container.addEventListener('click', e => {
+        const item = e.target.closest('.thumb-item');
+        if (!item) return;
+
+        document.querySelectorAll('.thumb-item')
+            .forEach(el => el.classList.remove('selected'));
+
+        item.classList.add('selected');
+
+        input.value = item.dataset.url;
+    });
+
+    // 入力欄変更でピッカーと同期
+    input.addEventListener('input', () => {
+        const val = input.value.trim();
+
+        document.querySelectorAll('.thumb-item').forEach(el =>
+            el.classList.toggle('selected', el.dataset.url === val)
+        );
+    });
+}
+
+
+
+/* ===============================
+   URLテンプレ
+================================ */
+
+const PLATFORM_URL_TEMPLATES = {
+    youtube: "https://www.youtube.com/@koinoyamaich",
+    twitcasting: "https://twitcasting.tv/c:koinoya_mai",
+    twitch: "https://www.twitch.tv/koinoya_mai",
+    other: ""
+};
+
+document.getElementById('platform').addEventListener('change', e => {
+    if (url.value.trim() !== '') return;
+    url.value = PLATFORM_URL_TEMPLATES[e.target.value] || '';
+});
+
+
+/* ===============================
+   一覧取得（★ adminAPIのみ）
+================================ */
+
+async function loadEvents() {
+    const container = document.getElementById('event-container');
+    container.innerHTML = '<div class="loading">読み込み中...</div>';
+
+    try {
+        const response = await adminFetch('/api/admin/events?limit=100');
+        const data = await response.json();
+
+        events = data.items || [];
+
+        if (!events.length) {
+            container.innerHTML = '<div class="empty-state">イベントなし</div>';
+            return;
+        }
+
+        container.innerHTML = events.map(renderEventItem).join('');
+
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = '<div class="empty-state">取得失敗</div>';
+    }
+}
+
+
+/* ===============================
+   表示
+================================ */
+
+function renderEventItem(event) {
+
+    let dateText = '日時未定';
+
+    if (event.start_time) {
+        const [d, t] = event.start_time.split('T');
+        if (d && t) dateText = `${d} ${t.slice(0,5)}`;
+        else if (d) dateText = d;
+    }
+
+    return `
+        <div class="event-item">
+            <div class="event-info">
+                <div class="event-title">${escapeHtml(event.title)}</div>
+                <div class="event-meta">📅 ${dateText}</div>
+            </div>
+            <div class="event-actions">
+                <button onclick="editEvent(${event.id})">編集</button>
+                <button onclick="deleteEvent(${event.id})">削除</button>
+            </div>
+        </div>
+    `;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+
+/* ===============================
+   モーダル
+================================ */
+
+function openCreateModal() {
+    editingEventId = null;
+    document.getElementById('event-form').reset();
+    document.getElementById('event-modal').classList.add('active');
+}
+
+function closeModal() {
+    document.getElementById('event-modal').classList.remove('active');
+}
+
+
+/* ===============================
+   編集（★ adminAPIのみ）
+================================ */
+
+async function editEvent(id) {
+
+    editingEventId = id;
+
+    const response = await adminFetch(`/api/admin/events/${id}`);
+    const event = await response.json();
+
+    title.value = event.title || '';
+
+    if (event.start_time) {
+        const [d, t] = event.start_time.split('T');
+        start_date.value = d || '';
+        start_time.value = t ? t.slice(0,5) : '';
+    } else {
+        start_date.value = '';
+        start_time.value = '';
+    }
+
+    platform.value = event.platform || 'other';
+    event_type.value = event.event_type || 'live';
+    url.value = event.url || '';
+    thumbnail_url.value = event.thumbnail_url || '';
+
+    document.querySelectorAll('.thumb-item').forEach(el =>
+        el.classList.toggle('selected', el.dataset.url === thumbnail_url.value)
+    );
+
+    description.value = event.description || '';
+
+    document.getElementById('event-modal').classList.add('active');
+}
+
+
+/* ===============================
+   保存
+================================ */
+
+async function handleSubmit(e) {
+    e.preventDefault();
+
+    const date = start_date.value;
+    const time = start_time.value;
+
+    const startDateTime = date ? `${date}T${time || '00:00'}` : null;
+
+    const formData = {
+        title: title.value,
+        start_time: startDateTime,
+        platform: platform.value,
+        event_type: event_type.value,
+        url: url.value || null,
+        thumbnail_url: thumbnail_url.value || null,
+        description: description.value || null
+    };
+
+    const urlPath = editingEventId
+        ? `/api/admin/events/${editingEventId}`
+        : `/api/admin/events`;
+
+    await adminFetch(urlPath, {
+        method: editingEventId ? 'PUT' : 'POST',
+        body: JSON.stringify(formData)
+    });
+
+    closeModal();
+    loadEvents();
+}
+
+
+/* ===============================
+   削除
+================================ */
+
+async function deleteEvent(id) {
+    if (!confirm('削除しますか？')) return;
+
+    await adminFetch(`/api/admin/events/${id}`, { method: 'DELETE' });
+    loadEvents();
+}
+
+
+/* ===============================
+   モーダル外クリック
+================================ */
+
+document.getElementById('event-modal').addEventListener('click', e => {
+    if (e.target.id === 'event-modal') closeModal();
+});
+</script>
+
+
+
+
+
+</body>
+</html>

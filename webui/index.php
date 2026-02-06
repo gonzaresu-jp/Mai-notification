@@ -37,6 +37,7 @@
     <link rel="manifest" href="./manifest.json" />
     
     <link rel="stylesheet" href="./style.v1.css" />
+    <link rel="stylesheet" href="./top-card.css" />
     <link rel="preconnect" href="https://elza.poitou-mora.ts.net">
     <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/ios-helper.js" defer></script>
@@ -54,6 +55,7 @@
       document.head.appendChild(link);
     })();
     </script>
+
 </head>
 <body id="app-body" class="menu-transitions-disabled">
     <div id="header-slot">
@@ -76,27 +78,161 @@
                 </div>
             </div>
             -->
-            <div class="stats-card">
-                <h2 style="margin-top: 0; font-size: 1.5rem;" class="fade-in">カウント</h2>
-                <div class="stats-grid" aria-hidden="true">
-                    <div class="stat-item fade">
-                        <div class="label fade-in">デビューから</div>
-                        <div class="value fade-in d1" id="days-since-debut">0</div>
-                    </div>
-                    <div class="stat-item fade">
-                        <div class="label fade-in d1">お誕生日まで</div>
-                        <div class="value fade-in d2" id="days-to-birthday">0</div>
-                    </div>
-                    <div class="stat-item fade">
-                        <div class="label fade-in d2">周年記念まで</div>
-                        <div class="value fade-in d3" id="days-to-anniversary">0</div>
-                    </div>
-                    <div class="stat-item fade">
-                        <div class="label fade-in d3">推してから</div>
-                        <div class="value fade-in d4" id="days-to-meet">0</div>
-                    </div>
-                </div>
-            </div>
+           <div class="stats-card">
+ 
+
+  <div class="stats-carousel">
+    <div class="stats-carousel-inner">
+
+    <!-- ===== ページ1：既存カウント（まとめたまま） ===== -->
+    <div class="stats-page">
+       <h2 style="margin-top:0;font-size:1.5rem;">カウント</h2>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="label">デビューから</div>
+          <div class="value" id="days-since-debut">0</div>
+        </div>
+
+        <div class="stat-item">
+          <div class="label">お誕生日まで</div>
+          <div class="value" id="days-to-birthday">0</div>
+        </div>
+
+        <div class="stat-item">
+          <div class="label">周年記念まで</div>
+          <div class="value" id="days-to-anniversary">0</div>
+        </div>
+
+        <div class="stat-item">
+          <div class="label">推してから</div>
+          <div class="value" id="days-to-meet">0</div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- 週間予定表 -->
+  <div class="stats-page">   <!-- ← これ追加 -->
+    <h2 style="margin-top:0;font-size:1.5rem;">今週の予定</h2>
+    <div id="weekly-schedule"></div>
+  </div>
+
+<!-- JavaScript読み込み -->
+<script src="/js/weekly-schedule.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    loadWeeklySchedule('weekly-schedule');
+    enableAutoReload(5); // 5分ごとに自動更新
+});
+</script>
+
+    </div>
+  </div>
+  
+</div>
+<div class="carousel-dots"></div>
+
+<script>
+// ============================
+// カルーセル制御（高さ可変・スワイプ・ドット）
+// ============================
+const carousel = document.querySelector('.stats-carousel');
+const inner = document.querySelector('.stats-carousel-inner');
+const dotsWrap = document.querySelector('.carousel-dots');
+
+let current = 0;
+let startX = 0;
+let startY = 0;
+let tracking = false;
+
+const pages = inner.querySelectorAll('.stats-page');
+const maxPage = pages.length - 1;
+
+const threshold = 60;
+const dots = [];
+
+/**
+ * 状態更新（スライド・高さ・ドット）
+ */
+function update() {
+    if (!inner || !carousel) return;
+
+    // スライド移動
+    inner.style.transform = `translateX(-${current * 100}%)`;
+
+    // 高さの調整
+    const activePage = pages[current];
+
+    if (activePage) {
+        const newHeight = activePage.offsetHeight;
+        carousel.style.height = newHeight + 'px';
+    }
+
+    // ドットの状態更新
+    dots.forEach((d, i) => {
+        d.classList.toggle('active', i === current);
+    });
+}
+
+/**
+ * ドットの生成
+ */
+function initDots() {
+    dotsWrap.innerHTML = ''; 
+    dots.length = 0; // 配列をクリア
+    for (let i = 0; i <= maxPage; i++) {
+        const b = document.createElement('button');
+        b.addEventListener('click', () => {
+            current = i;
+            update();
+        });
+        dotsWrap.appendChild(b);
+        dots.push(b);
+    }
+}
+
+// ===== pointerイベント（スワイプ） =====
+carousel.addEventListener('pointerdown', e => {
+    startX = e.clientX;
+    startY = e.clientY;
+    tracking = true;
+});
+
+carousel.addEventListener('pointerup', e => {
+    if (!tracking) return;
+    tracking = false;
+
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    if (Math.abs(dx) < Math.abs(dy)) return; // 縦スクロール優先
+    if (Math.abs(dx) < threshold) return;
+
+    if (dx < 0 && current < maxPage) current++;
+    if (dx > 0 && current > 0) current--;
+
+    update();
+});
+
+// 親パネルへの伝播遮断
+['pointerdown','pointermove','pointerup','mousedown','mouseup','touchstart','touchend'].forEach(type => {
+    carousel.addEventListener(type, e => {
+        e.stopPropagation();
+    }, { passive: false }); // passive: false にして確実に止める
+});
+
+// --- 実行順序の整理 ---
+document.addEventListener('DOMContentLoaded', () => {
+    initDots();        // 2. ドット作成
+    
+    // 3. 初回表示（レンダリング時間を考慮して少し待つ）
+    setTimeout(update, 100); 
+});
+
+window.addEventListener('load', update);
+window.addEventListener('resize', update);
+</script>
+
     
             <div class="log-section">
                 <h2 class="history fade">通知履歴</h2>
@@ -394,8 +530,13 @@
 
       // ===== クリックトグル =====
       const toggle = (e) => {
-        if (e) e.preventDefault();
-        root.classList.toggle('is-open');
+      // もしクリックされたターゲットが、カルーセルの中身だったら何もしない
+      if (e.target.closest('.stats-carousel') || e.target.closest('.carousel-dots')) {
+          return;
+      }
+      
+      if (e) e.preventDefault();
+      root.classList.toggle('is-open');
       };
 
       btn?.addEventListener('click', toggle, { passive: false });
