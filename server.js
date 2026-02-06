@@ -18,6 +18,16 @@ const db = new sqlite3.Database(dbPath);
 let hasPlatformColumn = false;
 let hasStatusColumn = false;
 
+const { updateSchedule } = require('./weekly');
+
+// サーバー起動時に一度実行
+updateSchedule().catch(console.error);
+
+// 5分毎に定期実行
+setInterval(() => {
+  updateSchedule().catch(console.error);
+}, 5*60*1000);
+
 const HISTORY_JSON_PATH = path.join(__dirname, 'webui', 'history.json');
 const HISTORY_JSON_LIMIT = 20;
 const HISTORY_HTML_PATH = path.join(__dirname, 'webui', 'history.html');
@@ -144,6 +154,28 @@ db.serialize(() => {
     sent_at INTEGER
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  start_time DATETIME,
+  end_time DATETIME,
+  url TEXT,
+  thumbnail_url TEXT,
+  platform TEXT,  -- 'youtube', 'twitcasting', 'twitter', 'other'
+  event_type TEXT DEFAULT 'live',  -- 'live', 'video', 'other'
+  description TEXT,
+  status TEXT DEFAULT 'scheduled',  -- 'scheduled', 'live', 'ended', 'cancelled'
+  external_id TEXT,  -- YouTube video ID など
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`, (err) => {
+  if (err) console.error('events create err:', err.message);
+  else console.log('events table ensured');
+});
+// インデックス作成
+db.run(`CREATE INDEX IF NOT EXISTS idx_events_start_time ON events (start_time DESC)`);
+db.run(`CREATE INDEX IF NOT EXISTS idx_events_status ON events (status)`);
+db.run(`CREATE INDEX IF NOT EXISTS idx_events_platform ON events (platform)`);
   // notifications テーブルに platform / status カラムが無ければ追加
   // ============================================
 // DB Schema Migration / Startup Maintenance
@@ -318,10 +350,93 @@ async function sendPushNotification(subscription, payload, dbRef, isTest = false
   }
 }
 
+// 過去のイベントのステータスを自動更新
+function updateEventStatuses() {
+  const now = new Date().toISOString();
+
+  // 開始時刻を過ぎた scheduled イベントを live に
+  db.run(`
+    UPDATE events 
+    SET status = 'live', updated_at = CURRENT_TIMESTAMP
+    WHERE status = 'scheduled' 
+    AND start_time <= ?
+  `, [now], function(err) {
+    if (err) {
+      console.error('updateEventStatuses (to live) err:', err.message);
+    } else if (this.changes > 0) {
+      console.log(`[Event Status] ${this.changes} events marked as live`);
+    }
+  });
+
+  // 終了時刻を過ぎた live イベントを ended に
+  db.run(`
+    UPDATE events 
+    SET status = 'ended', updated_at = CURRENT_TIMESTAMP
+    WHERE status = 'live' 
+    AND end_time IS NOT NULL 
+    AND end_time <= ?
+  `, [now], function(err) {
+    if (err) {
+      console.error('updateEventStatuses (to ended) err:', err.message);
+    } else if (this.changes > 0) {
+      console.log(`[Event Status] ${this.changes} events marked as ended`);
+    }
+  });
+
+  // 終了時刻がない場合、開始時刻から3時間後に ended に
+  const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+  db.run(`
+    UPDATE events 
+    SET status = 'ended', updated_at = CURRENT_TIMESTAMP
+    WHERE status = 'live' 
+    AND end_time IS NULL 
+    AND start_time <= ?
+  `, [threeHoursAgo], function(err) {
+    if (err) {
+      console.error('updateEventStatuses (auto-ended) err:', err.message);
+    } else if (this.changes > 0) {
+      console.log(`[Event Status] ${this.changes} events auto-marked as ended`);
+    }
+  });
+}
+
+// 5分ごとにイベントステータスを更新
+setInterval(updateEventStatuses, 5 * 60 * 1000);
+// 起動時にも一度実行
+setTimeout(updateEventStatuses, 5000);
+
+// ==============================
+// 日付ユーティリティ（サーバー専用）
+// ==============================
+
+// YYYY-MM-DD
+function toLocalDateString(date) {
+  const d = new Date(date);
+
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// YYYY-MM-DD HH:mm:ss
+function formatLocalDate(date) {
+  const d = new Date(date);
+
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+}
+
 // ----------------------------------------------------
 // --- API ---
 // ----------------------------------------------------
-
 // --- 購読保存・更新（統合版） ---
 app.post('/api/save-platform-settings', (req, res) => {
   console.log('\n========== /api/save-platform-settings START ==========');
@@ -538,6 +653,296 @@ app.get('/api/get-name', (req, res) => {
     return res.json({ name: row.name || null });
   });
 });
+
+// --- イベント一覧取得 (公開API) ---
+app.get('/api/events', (req, res) => {
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const from = req.query.from; // ISO8601形式の日付
+  const to = req.query.to;
+  const platform = req.query.platform;
+  const status = req.query.status || 'scheduled'; // デフォルトは予定されているイベント
+
+  let sql = 'SELECT * FROM events WHERE 1=1';
+  const params = [];
+
+  // 日付フィルター
+  if (from) {
+    sql += ' AND start_time >= ?';
+    params.push(from);
+  }
+  if (to) {
+    sql += ' AND start_time <= ?';
+    params.push(to);
+  }
+
+  // プラットフォームフィルター
+  if (platform) {
+    sql += ' AND platform = ?';
+    params.push(platform);
+  }
+
+  // ステータスフィルター
+  if (status && status !== 'all') {
+    sql += ' AND status = ?';
+    params.push(status);
+  }
+
+  sql += ' ORDER BY start_time ASC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  db.all(sql, params, (err, rows) => {
+    if (err) {
+      console.error('/api/events SELECT err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+    return res.json({ 
+      items: rows || [], 
+      limit, 
+      offset,
+      total: rows ? rows.length : 0 
+    });
+  });
+});
+
+// ============================================
+// 3. RSS フィード生成
+// ============================================
+
+app.get('/api/events/rss', (req, res) => {
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  const sql = `
+    SELECT * FROM events 
+    WHERE start_time >= datetime('now', '-7 days')
+    AND status != 'cancelled'
+    ORDER BY start_time DESC 
+    LIMIT ?
+  `;
+
+  db.all(sql, [limit], (err, rows) => {
+    if (err) {
+      console.error('/api/events/rss SELECT err:', err.message);
+      return res.status(500).send('RSS generation failed');
+    }
+
+    const baseUrl = req.protocol + '://' + req.get('host');
+    const now = new Date().toUTCString();
+
+    let rss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>まいちゃん予定表</title>
+    <link>${baseUrl}</link>
+    <description>まいちゃんの配信・動画投稿予定</description>
+    <language>ja</language>
+    <lastBuildDate>${now}</lastBuildDate>
+    <atom:link href="${baseUrl}/api/events/rss" rel="self" type="application/rss+xml" />
+`;
+
+    rows.forEach(event => {
+      const title = escapeXml(event.title);
+      const description = escapeXml(event.description || '');
+      const link = event.url || `${baseUrl}/events/${event.id}`;
+      const pubDate = new Date(event.start_time).toUTCString();
+      const guid = `event-${event.id}`;
+
+      rss += `
+    <item>
+      <title>${title}</title>
+      <link>${link}</link>
+      <description>${description}</description>
+      <pubDate>${pubDate}</pubDate>
+      <guid isPermaLink="false">${guid}</guid>`;
+
+      if (event.platform) {
+        rss += `
+      <category>${escapeXml(event.platform)}</category>`;
+      }
+
+      if (event.thumbnail_url) {
+        rss += `
+      <enclosure url="${escapeXml(event.thumbnail_url)}" type="image/jpeg" />`;
+      }
+
+      rss += `
+    </item>`;
+    });
+
+    rss += `
+  </channel>
+</rss>`;
+
+    res.set('Content-Type', 'application/rss+xml; charset=utf-8');
+    res.send(rss);
+  });
+});
+
+// XML エスケープ用ヘルパー関数
+function escapeXml(unsafe) {
+  if (!unsafe) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// --- 週間イベント取得 (便利エンドポイント) ---
+app.get('/api/events/weekly', (req, res) => {
+
+  const date = req.query.date || toLocalDateString(new Date());
+
+  const targetDate = new Date(date);
+
+  const dayOfWeek = targetDate.getDay();
+
+  const sunday = new Date(targetDate);
+  sunday.setDate(targetDate.getDate() - dayOfWeek);
+
+  const nextSunday = new Date(sunday);
+  nextSunday.setDate(sunday.getDate() + 7);
+
+  const from = formatLocalDate(sunday);
+  const to   = formatLocalDate(nextSunday);
+
+  const sql = `
+    SELECT * FROM events
+    WHERE start_time >= ? AND start_time < ?
+    AND status != 'cancelled'
+    ORDER BY start_time ASC
+  `;
+
+  db.all(sql, [from, to], (err, rows) => {
+    if (err) {
+      console.error('/api/events/weekly SELECT err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+
+    const weekData = Array(7).fill(null).map((_, i) => {
+      const d = new Date(sunday);
+      d.setDate(sunday.getDate() + i);
+
+      return {
+        date: toLocalDateString(d),
+        dayOfWeek: ['日','月','火','水','木','金','土'][i],
+        events: []
+      };
+    });
+
+    rows.forEach(event => {
+      if (!event.start_time) return;
+
+      const eventDate = new Date(event.start_time);
+      const dayIndex = eventDate.getDay();
+
+      weekData[dayIndex].events.push(event);
+    });
+
+    res.json({ week: weekData, from, to });
+  });
+});
+
+
+// --- 特定イベント取得 (公開API) ---
+app.get('/api/events/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid event ID' });
+  }
+
+  db.get('SELECT * FROM events WHERE id = ?', [id], (err, row) => {
+    if (err) {
+      console.error('/api/events/:id SELECT err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+    if (!row) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    return res.json(row);
+  });
+});
+
+// --- イベント作成 (管理者のみ) ---
+app.post('/api/admin/events', adminAuth.requireAuth, (req, res) => {
+  const {
+    title,
+    start_time,
+    end_time,
+    url,
+    thumbnail_url,
+    platform,
+    event_type,
+    description,
+    status,
+    external_id
+  } = req.body;
+
+  // バリデーション
+  if (!title || !start_time) {
+    return res.status(400).json({ error: 'title and start_time are required' });
+  }
+
+  const sql = `
+    INSERT INTO events (
+      title, start_time, end_time, url, thumbnail_url, 
+      platform, event_type, description, status, external_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const params = [
+    title,
+    start_time,
+    end_time || null,
+    url || null,
+    thumbnail_url || null,
+    platform || 'other',
+    event_type || 'live',
+    description || null,
+    status || 'scheduled',
+    external_id || null
+  ];
+
+  db.run(sql, params, function(err) {
+    if (err) {
+      console.error('/api/admin/events POST err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+
+    console.log(`[Event Created] ID: ${this.lastID}, Title: ${title}, Admin: ${req.adminUser}`);
+
+    // 作成したイベントを返す
+    db.get('SELECT * FROM events WHERE id = ?', [this.lastID], (err, row) => {
+      if (err) {
+        return res.status(500).json({ error: 'Event created but failed to fetch' });
+      }
+      return res.status(201).json(row);
+    });
+  });
+});
+
+// --- イベント一覧取得 (管理者のみ) ---
+app.get('/api/admin/events', adminAuth.requireAuth, (req, res) => {
+  const limit = Math.min(100, parseInt(req.query.limit, 10) || 20);
+
+  const sql = `
+    SELECT * FROM events
+    ORDER BY start_time DESC
+    LIMIT ?
+  `;
+
+  db.all(sql, [limit], (err, rows) => {
+    if (err) {
+      console.error('/api/admin/events GET err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+
+    res.json({ items: rows });
+  });
+});
+
 
 // --- 購読者名保存 ---
 app.post('/api/save-name', (req, res) => {
@@ -1546,6 +1951,145 @@ async function handleAdminNotify(body, adminUser = 'scheduler') {
   return { sentCount, totalCount: total };
 }
 
+// --- イベント更新 (管理者のみ) ---
+app.put('/api/admin/events/:id', adminAuth.requireAuth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid event ID' });
+  }
+
+  const {
+    title,
+    start_time,
+    end_time,
+    url,
+    thumbnail_url,
+    platform,
+    event_type,
+    description,
+    status,
+    external_id
+  } = req.body;
+
+  // 更新対象のフィールドを動的に構築
+  const updates = [];
+  const params = [];
+
+  if (title !== undefined) {
+    updates.push('title = ?');
+    params.push(title);
+  }
+  if (start_time !== undefined) {
+    updates.push('start_time = ?');
+    params.push(start_time);
+  }
+  if (end_time !== undefined) {
+    updates.push('end_time = ?');
+    params.push(end_time);
+  }
+  if (url !== undefined) {
+    updates.push('url = ?');
+    params.push(url);
+  }
+  if (thumbnail_url !== undefined) {
+    updates.push('thumbnail_url = ?');
+    params.push(thumbnail_url);
+  }
+  if (platform !== undefined) {
+    updates.push('platform = ?');
+    params.push(platform);
+  }
+  if (event_type !== undefined) {
+    updates.push('event_type = ?');
+    params.push(event_type);
+  }
+  if (description !== undefined) {
+    updates.push('description = ?');
+    params.push(description);
+  }
+  if (status !== undefined) {
+    updates.push('status = ?');
+    params.push(status);
+  }
+  if (external_id !== undefined) {
+    updates.push('external_id = ?');
+    params.push(external_id);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: 'No fields to update' });
+  }
+
+  updates.push('updated_at = CURRENT_TIMESTAMP');
+  params.push(id);
+
+  const sql = `UPDATE events SET ${updates.join(', ')} WHERE id = ?`;
+
+  db.run(sql, params, function(err) {
+    if (err) {
+      console.error('/api/admin/events/:id PUT err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    console.log(`[Event Updated] ID: ${id}, Admin: ${req.adminUser}`);
+
+    // 更新したイベントを返す
+    db.get('SELECT * FROM events WHERE id = ?', [id], (err, row) => {
+      if (err) {
+        return res.status(500).json({ error: 'Event updated but failed to fetch' });
+      }
+      return res.json(row);
+    });
+  });
+});
+
+// --- イベント取得（管理者用） ---
+app.get('/api/admin/events/:id', adminAuth.requireAuth, (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid event ID' });
+    }
+
+    db.get('SELECT * FROM events WHERE id = ?', [id], (err, row) => {
+        if (err) {
+            console.error('/api/admin/events/:id SELECT err:', err.message);
+            return res.status(500).json({ error: 'DB error', detail: err.message });
+        }
+        if (!row) {
+            return res.status(404).json({ error: 'Event not found' });
+        }
+        return res.json(row);
+    });
+});
+
+// --- イベント削除 (管理者のみ) ---
+app.delete('/api/admin/events/:id', adminAuth.requireAuth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid event ID' });
+  }
+
+  db.run('DELETE FROM events WHERE id = ?', [id], function(err) {
+    if (err) {
+      console.error('/api/admin/events/:id DELETE err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    console.log(`[Event Deleted] ID: ${id}, Admin: ${req.adminUser}`);
+
+    return res.json({ success: true, message: 'Event deleted' });
+  });
+});
 
 // ============================================
 // API：即時 or 予約
