@@ -202,55 +202,50 @@ async function main() {
 const MONITOR_YT_COMMUNITY = ['@koinoyamaich', '@koinoyamaisub'];
 
 // モジュール初期化（保存先と自動保存を設定）
-youtubeCommunity.init({ filePath: path.join(__dirname, 'data', 'community.json'), autoSave: true });
+youtubeCommunity.init({
+  filePath: path.join(__dirname, 'data', 'community.json'),
+  autoSave: true
+});
 
-if (typeof youtubeCommunity.startPolling === 'function') {
+if (typeof youtubeCommunity.pollAndNotify === 'function') {
   startPromises.push(
     (async () => {
-      try {
-        for (const handle of MONITOR_YT_COMMUNITY) {
-          // チャンネルページを取得して抽出・保存まで行う（fetchPostsFromHandleAndSave は parse + save を行う想定）
-          const result = await youtubeCommunity.fetchPostsFromHandleAndSave(handle.replace(/^@/, '')); // モジュールは handle を素の名前で期待する場合を考慮
 
-          // 結果のログ
-          const posts = result?.posts || [];
-          const saveResult = result?.saveResult || null;
-          console.log(`[${handle}] 抽出ポスト数:`, posts.length, '保存結果:', saveResult);
+      for (const handle of MONITOR_YT_COMMUNITY) {
+        try {
+          const result = await youtubeCommunity.pollAndNotify(handle);
 
-          // 通知送信（API が存在する・トークンがある・かつ通知すべきデータがある場合）
-          if (notifyConfig.token && (posts.length > 0 || (saveResult && saveResult.addedCount > 0))) {
-            const fetch = global.fetch || (await import('node-fetch')).then(mod => mod.default);
-            const payload = {
-              type: 'ytcommunity',
-              channel: handle,
-              data: {
-                posts,           // 抽出した生データ（配列）
-                saveResult       // 保存の成否・追加件数など
-              }
-            };
-
-            await fetch(notifyConfig.apiUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Notify-Token': notifyConfig.token
-              },
-              body: JSON.stringify(payload)
-            });
-
-            console.log(`[${handle}] 通知送信完了 (added:${saveResult?.addedCount ?? 0})`);
+          // ===== 戻り値自体が壊れてる（異常系）=====
+          if (!result) {
+            console.error(`[${handle}] poll returned invalid result`);
+            continue;
           }
+
+          // ===== 明示的失敗のみ =====
+          if (result.ok === false) {
+            console.warn(`[${handle}] 取得失敗: ${result.error}`);
+            continue;
+          }
+
+          // ===== 初回 =====
+          if (result.firstRun === true) {
+            console.log(`[${handle}] 初回登録のみ（通知なし）`);
+            continue;
+          }
+
+          // ===== 成功 =====
+          console.log(
+            `[${handle}] fetched=${result.fetched ?? 0} new=${result.newCount ?? 0} notified=${result.notified ?? 0}`
+          );
+
+        } catch (err) {
+          console.error(`[${handle}] poll 例外:`, err?.message || err);
         }
-      } catch (e) {
-        console.error('youtubeCommunity 起動エラー:', e && e.message ? e.message : e);
-        throw e;
       }
+
     })()
   );
 }
-
-
-
 
 
 // 💡 新しい TwitCasting サーバーの起動
