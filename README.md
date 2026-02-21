@@ -198,9 +198,15 @@ sqlite3 data.db
 .mode csv
 SELECT * FROM subscription;
 
-#delete
+# delete
 DELETE FROM notifications
 WHERE id IN (32, 35, 36, 37, 38);
 
+
+```
+
+```
+# 特定プロファイルでの立ち上げ
+firefox --no-remote -profile /var/lib/mai-push/puppeteer-profile
 
 ```
