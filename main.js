@@ -7,8 +7,7 @@ const cron = require('node-cron');
 
 const youtube = require('./youtube');
 const youtubeCommunity = require('./ytcommunity');
-const bilibiliVideo = require('./bilibiliVideo');
-const bilibiliDynamic = require('./bilibiliDynamic');
+const { startBilibiliWatcher } = require('./bilibili-live');
 const twitcasting = require('./twitcasting');
 const twitter = require('./twitter');
 const fanbox = require('./fanbox');
@@ -137,8 +136,7 @@ async function main() {
   // 各モジュールに init があれば注入
   try { if (typeof youtube.init === 'function') youtube.init(notifyConfig); } catch(e){ console.error('youtube.init err', e && e.message ? e.message : e); }
   try { if (typeof youtubeCommunity.init === 'function') youtubeCommunity.init(notifyConfig); } catch(e){ console.error('youtubeCommunity.init err', e && e.message ? e.message : e); }
-  try { if (typeof bilibiliVideo.init === 'function') bilibiliVideo.init(notifyConfig); } catch(e){ console.error('bilibiliVideo.init err', e && e.message ? e.message : e); }
-  try { if (typeof bilibiliDynamic.init === 'function') bilibiliDynamic.init(notifyConfig); } catch(e){ console.error('bilibiliDynamic.init err', e && e.message ? e.message : e); }
+
   try { if (typeof twitcasting.init === 'function') twitcasting.init(notifyConfig); } catch(e){ console.error('twitcasting.init err', e && e.message ? e.message : e); }
   try { if (typeof twitter.init === 'function') twitter.init(notifyConfig); } catch(e){ console.error('twitter.init err', e && e.message ? e.message : e); }
   try { if (typeof fanbox.init === 'function') fanbox.init(notifyConfig); } catch(e){ console.error('fanbox.init err', e && e.message ? e.message : e); }
@@ -211,42 +209,27 @@ if (typeof youtubeCommunity.pollAndNotify === 'function') {
   startPromises.push(
     (async () => {
 
-      for (const handle of MONITOR_YT_COMMUNITY) {
-        try {
-          const result = await youtubeCommunity.pollAndNotify(handle);
+      const intervalMs = 5 * 60 * 1000; // ★ 5分
 
-          // ===== 戻り値自体が壊れてる（異常系）=====
-          if (!result) {
-            console.error(`[${handle}] poll returned invalid result`);
-            continue;
+      const run = async () => {
+        for (const handle of MONITOR_YT_COMMUNITY) {
+          try {
+            await youtubeCommunity.pollAndNotify(handle);
+          } catch (e) {
+            console.error(`[${handle}] poll error:`, e?.message || e);
           }
-
-          // ===== 明示的失敗のみ =====
-          if (result.ok === false) {
-            console.warn(`[${handle}] 取得失敗: ${result.error}`);
-            continue;
-          }
-
-          // ===== 初回 =====
-          if (result.firstRun === true) {
-            console.log(`[${handle}] 初回登録のみ（通知なし）`);
-            continue;
-          }
-
-          // ===== 成功 =====
-          console.log(
-            `[${handle}] fetched=${result.fetched ?? 0} new=${result.newCount ?? 0} notified=${result.notified ?? 0}`
-          );
-
-        } catch (err) {
-          console.error(`[${handle}] poll 例外:`, err?.message || err);
         }
-      }
+      };
+
+      await run(); // 起動直後1回
+
+      setInterval(run, intervalMs).unref();
+
+      console.log(`YouTube Community polling 起動 (${intervalMs/60000} min)`);
 
     })()
   );
 }
-
 
 // 💡 新しい TwitCasting サーバーの起動
 if (typeof twitcasting.startTwitcastingServer === 'function') {
@@ -347,39 +330,22 @@ if (typeof twitcasting.startWatcher === 'function') {
 }
 
 
-  // bilibili watchers
-  if (typeof bilibiliVideo.startWatcher === 'function') {
-    startPromises.push(
-      (async () => {
-        try {
-          bilibiliVideo.startWatcher(5 * 60 * 1000);
-          console.log('bilibiliVideo startWatcher 起動');
-        } catch (e) {
-          console.error('bilibiliVideo watcher 起動エラー:', e && e.message ? e.message : e);
-          throw e;
-        }
-      })()
-    );
-  } else {
-    console.log('bilibiliVideo.startWatcher 未定義。');
-  }
+// bilibili
+/*
+startBilibiliWatcher({
+  roomId: process.env.BILIBILI_ROOM_ID,
 
-  if (typeof bilibiliDynamic.startWatcher === 'function') {
-    startPromises.push(
-      (async () => {
-        try {
-          bilibiliDynamic.startWatcher(60 * 1000);
-          console.log('bilibiliDynamic startWatcher 起動');
-        } catch (e) {
-          console.error('bilibiliDynamic watcher 起動エラー:', e && e.message ? e.message : e);
-          throw e;
-        }
-      })()
-    );
-  } else {
-    console.log('bilibiliDynamic.startWatcher 未定義。');
-  }
+  onLiveStart: async () => {
+    console.log('[Notify] bilibili live start detected');
 
+    await notify({
+      platform: 'bilibili',
+      title: 'まいちゃん配信開始',
+      url: `https://live.bilibili.com/${process.env.BILIBILI_ROOM_ID}`
+    });
+  }
+});
+*/
   // Fanbox
   try {
     if (typeof fanbox.startPolling === 'function') {

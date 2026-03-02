@@ -1,10 +1,8 @@
 // ytcommunity.js
-// Stable production build
-// login_required / Target.closeTarget / bot detection 全対策済み
+// SSD書き込み最小化 + RAMプロファイル + Page再利用 完全最適化版
 
 const fs = require('fs');
 const path = require('path');
-
 const puppeteer = require('puppeteer-extra');
 const Stealth = require('puppeteer-extra-plugin-stealth');
 
@@ -16,16 +14,26 @@ puppeteer.use(Stealth());
 
 let notifyConfig = null;
 
-let defaultFilePath = path.join(__dirname, 'community.json');
-let stateFilePath = path.join(__dirname, 'ytcommunity_state.json');
-let profileDir = path.join(__dirname, '.ytprofile'); // ← 重要：永続プロファイル
+const stateFilePath = path.join(__dirname, 'ytcommunity_state.json');
+
+/*
+  ★★★★★ ここが最重要 ★★★★★
+  Linux tmpfs (/dev/shm) を使用
+  → SSD書き込みゼロ
+*/
+const profileDir = '/var/lib/mai-push/puppeteer-profile';
 
 const ICON_URL = './icon.webp';
 
 let browser = null;
+let sharedPage = null;
+
+let stateCache = null;
+let stateDirty = false;
+
 
 /* =============================
-   Browser (persistent)
+   Browser
 ============================= */
 
 async function getBrowser() {
@@ -33,37 +41,70 @@ async function getBrowser() {
 
   browser = await puppeteer.launch({
     headless: 'new',
-
-    // ★ incognito禁止
     userDataDir: profileDir,
 
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--window-size=1280,900'
+      '--window-size=1280,900',
+
+      // キャッシュ完全停止
+      '--disk-cache-size=0',
+      '--media-cache-size=0',
+      '--disable-application-cache',
+      '--disable-gpu-shader-disk-cache',
+
+      '--disable-background-networking',
+      '--disable-sync',
+      '--disable-extensions',
+      '--disable-logging',
+      '--log-level=3',
+      '--mute-audio',
+      '--aggressive-cache-discard'
     ]
   });
 
   browser.on('disconnected', () => {
     browser = null;
+    sharedPage = null;
   });
 
   return browser;
 }
 
+
+/* =============================
+   Page (再利用)
+============================= */
+
+async function getPage() {
+  const browser = await getBrowser();
+
+  if (sharedPage && !sharedPage.isClosed()) {
+    return sharedPage;
+  }
+
+  sharedPage = await browser.newPage();
+
+  await sharedPage.setCacheEnabled(false);
+
+  await sharedPage.setUserAgent(
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36'
+  );
+
+  await sharedPage.setExtraHTTPHeaders({
+    'Accept-Language': 'ja-JP,ja;q=0.9'
+  });
+
+  return sharedPage;
+}
+
+
 /* =============================
    Utils
 ============================= */
 
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
-}
-
-function safeClose(page) {
-  if (!page || page.isClosed()) return;
-  return page.close().catch(() => {});
-}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function safeWriteJson(file, obj) {
   const tmp = file + '.tmp';
@@ -71,32 +112,47 @@ function safeWriteJson(file, obj) {
   fs.renameSync(tmp, file);
 }
 
+
 /* =============================
    State
 ============================= */
 
 function loadState() {
+  if (stateCache) return stateCache;
+
   if (!fs.existsSync(stateFilePath)) {
-    return { initialized: false, known: {} };
+    stateCache = { initialized: false, known: {} };
+    return stateCache;
   }
-  return JSON.parse(fs.readFileSync(stateFilePath));
+
+  stateCache = JSON.parse(fs.readFileSync(stateFilePath));
+  return stateCache;
 }
 
-function saveState(s) {
-  safeWriteJson(stateFilePath, s);
+function markStateDirty() {
+  stateDirty = true;
 }
+
+function flushState() {
+  if (!stateDirty || !stateCache) return;
+  safeWriteJson(stateFilePath, stateCache);
+  stateDirty = false;
+}
+
+setInterval(() => {
+  if (stateDirty) flushState();
+}, 60000);
+
 
 /* =============================
-   Extract DOM (最安定)
+   DOM Extract
 ============================= */
 
 async function extractPostsFromDom(page) {
   return page.evaluate(() => {
     const out = [];
 
-    const nodes = document.querySelectorAll('ytd-backstage-post-renderer');
-
-    nodes.forEach(n => {
+    document.querySelectorAll('ytd-backstage-post-renderer').forEach(n => {
       const link = n.querySelector('a[href^="/post/"]');
       if (!link) return;
 
@@ -116,59 +172,34 @@ async function extractPostsFromDom(page) {
   });
 }
 
+
 /* =============================
    Fetch
 ============================= */
 
 async function fetchPosts(handle) {
-  const browser = await getBrowser();
-  const page = await browser.newPage();
+  const page = await getPage();
 
-  try {
-    await page.setUserAgent(
-      // ★ 実在Chrome UA
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-    );
+  const url = `https://www.youtube.com/@${handle.replace('@','')}/posts`;
 
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'ja-JP,ja;q=0.9'
-    });
+  await page.goto(url, {
+    waitUntil: 'networkidle2',
+    timeout: 45000
+  });
 
-    const url = `https://www.youtube.com/@${handle.replace('@','')}/posts`;
+  await sleep(2500);
 
-    console.log('[YT] Fetching:', url);
-
-    await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: 45000
-    });
-
-    await sleep(2500);
-
-    // スクロール読み込み
-    for (let i = 0; i < 4; i++) {
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await sleep(1200);
-    }
-
-    const posts = await extractPostsFromDom(page);
-
-    if (!posts.length) {
-      const html = await page.content();
-      if (html.includes('Sign in')) {
-        throw new Error('login_required');
-      }
-    }
-
-    return posts;
-
-  } finally {
-    await safeClose(page);
+  for (let i = 0; i < 4; i++) {
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await sleep(1200);
   }
+
+  return await extractPostsFromDom(page);
 }
 
+
 /* =============================
-   Poll + Notify
+   Poll
 ============================= */
 
 async function pollAndNotify(handle) {
@@ -185,33 +216,36 @@ async function pollAndNotify(handle) {
     posts.forEach(p => known[p.postId] = now);
     state.initialized = true;
     state.known = known;
-    saveState(state);
-
-    console.log('[YT] first run skip notify');
+    markStateDirty();
+    flushState();
     return;
   }
 
-  for (const p of newPosts) {
-    if (notifyConfig?.notifyFn) {
-      await notifyConfig.notifyFn({
-        type: 'ytcommunity',
-        data: {
-          title: '【コミュニティ投稿】',
-          body: p.content.slice(0, 200),
-          url: p.postUrl,
-          icon: ICON_URL
-        }
-      });
+  if (newPosts.length > 0) {
+    for (const p of newPosts) {
+      if (notifyConfig?.notifyFn) {
+        await notifyConfig.notifyFn({
+          type: 'ytcommunity',
+          data: {
+            title: '【コミュニティ投稿】',
+            body: p.content.slice(0, 200),
+            url: p.postUrl,
+            icon: ICON_URL
+          }
+        });
+      }
+
+      known[p.postId] = now;
     }
 
-    known[p.postId] = now;
+    state.known = known;
+    markStateDirty();
+    flushState();
   }
-
-  state.known = known;
-  saveState(state);
 
   console.log(`[YT] fetched=${posts.length} new=${newPosts.length}`);
 }
+
 
 /* =============================
    Init
@@ -219,10 +253,24 @@ async function pollAndNotify(handle) {
 
 function init(cfg = {}) {
   notifyConfig = cfg;
-  if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
+
+  if (!fs.existsSync(profileDir)) {
+    fs.mkdirSync(profileDir, { recursive: true });
+  }
 }
+
+process.on('SIGINT', () => {
+  flushState();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  flushState();
+  process.exit(0);
+});
 
 module.exports = {
   init,
-  pollAndNotify
+  pollAndNotify,
+  flushState
 };

@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { parseStringPromise } = require('xml2js');
+const { upsertEvent } = require('./weekly');
 
 const CHANNEL_IDS = [
     'UCElHA6-5CBmgWODVWNxS8VA',
@@ -61,7 +62,7 @@ async function fetchVideoStatus(videoId) {
         const resp = await axios.get(url, {
             params: {
                 id: videoId,
-                part: 'liveStreamingDetails,status',
+                part: 'snippet,liveStreamingDetails,status',
                 key: API_KEY
             },
             timeout: 10_000
@@ -74,6 +75,60 @@ async function fetchVideoStatus(videoId) {
         console.error(`fetchVideoStatus error for ${videoId}:`, err.message || err);
         return null;
     }
+}
+
+function buildEventFromVideoItem(item, fallbackTitle) {
+    if (!item || !item.id) return null;
+
+    const live = item.liveStreamingDetails || null;
+    const status = item.status || {};
+    const snippet = item.snippet || {};
+
+    const title = fallbackTitle || snippet.title || 'YouTube動画';
+    const description = snippet.description || null;
+    const thumbnail =
+        snippet.thumbnails?.high?.url ||
+        snippet.thumbnails?.medium?.url ||
+        null;
+
+    let eventType = 'video';
+    let eventStatus = 'ended';
+    let startTime = snippet.publishedAt || null;
+    let endTime = null;
+
+    if (live && live.scheduledStartTime && !live.actualStartTime) {
+        eventType = 'live';
+        eventStatus = 'scheduled';
+        startTime = live.scheduledStartTime;
+    } else if (live && live.actualStartTime && !live.actualEndTime) {
+        eventType = 'live';
+        eventStatus = 'live';
+        startTime = live.actualStartTime;
+    } else if (live && live.actualStartTime && live.actualEndTime) {
+        eventType = 'live';
+        eventStatus = 'ended';
+        startTime = live.actualStartTime;
+        endTime = live.actualEndTime;
+    } else if (status.uploadStatus && status.uploadStatus !== 'rejected') {
+        eventType = 'video';
+        eventStatus = 'ended';
+        startTime = snippet.publishedAt || startTime;
+    }
+
+    if (!startTime) return null;
+
+    return {
+        title,
+        start_time: startTime,
+        end_time: endTime,
+        url: `https://www.youtube.com/watch?v=${item.id}`,
+        thumbnail_url: thumbnail,
+        platform: 'youtube',
+        event_type: eventType,
+        description,
+        status: eventStatus,
+        external_id: item.id
+    };
 }
 
 /** 内部通知サーバ（NOTIFY_CONFIG.apiUrl）へ送る汎用関数 */
@@ -253,6 +308,10 @@ function startWebhook(port = 3001) {
                     };
                     const ok = await sendNotifyApi(payload);
                     if (ok) {
+                        const ev = buildEventFromVideoItem(item, title);
+                        if (ev) {
+                            try { await upsertEvent(ev); } catch (e) { console.error('upsertEvent(planned) failed:', e.message || e); }
+                        }
                         records[videoId] = { ...rec, plannedSent: true, plannedAt: new Date().toISOString() };
                         console.log(`Planned notify (using 5min-threshold) sent for ${videoId}`);
                     } else {
@@ -281,6 +340,10 @@ function startWebhook(port = 3001) {
                     };
                     const ok = await sendNotifyApi(payload);
                     if (ok) {
+                        const ev = buildEventFromVideoItem(item, title);
+                        if (ev) {
+                            try { await upsertEvent(ev); } catch (e) { console.error('upsertEvent(live) failed:', e.message || e); }
+                        }
                         records[videoId] = { ...rec, liveSent: true, liveAt: new Date().toISOString() };
                         console.log(`Live notify sent for ${videoId}`);
                     } else {
@@ -331,6 +394,10 @@ function startWebhook(port = 3001) {
                         };
                         const notified = await sendNotifyApi(notifyPayload);
                         if (notified) {
+                            const ev = buildEventFromVideoItem(item, title);
+                            if (ev) {
+                                try { await upsertEvent(ev); } catch (e) { console.error('upsertEvent(video) failed:', e.message || e); }
+                            }
                             records[videoId] = { ...rec, notifiedAt: new Date().toISOString() };
                             console.log(`Notify sent for new non-live video ${videoId}`);
                         } else {
