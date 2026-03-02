@@ -17,6 +17,8 @@ const dbPath = path.join(__dirname, 'data.db');
 const db = new sqlite3.Database(dbPath);
 let hasPlatformColumn = false;
 let hasStatusColumn = false;
+let hasScheduledKindColumn = false;
+let hasScheduledRefIdColumn = false;
 
 const { updateSchedule } = require('./weekly');
 
@@ -35,6 +37,34 @@ const HISTORY_HTML_LIMIT = 5;
 
 const ADMIN_NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
 const NOTIFY_HMAC_SECRET = process.env.NOTIFY_HMAC_SECRET || null;
+const DEFAULT_PLATFORM_SETTINGS = Object.freeze({
+  twitcasting: true,
+  youtube: true,
+  youtubeCommunity: true,
+  fanbox: true,
+  twitterMain: true,
+  twitterSub: true,
+  milestone: true,
+  schedule: true,
+  gipt: true,
+  twitch: true,
+  bilibili: false
+});
+
+function parseAndMergePlatformSettings(settingsJson) {
+  let parsed = {};
+  if (typeof settingsJson === 'string' && settingsJson.trim() !== '') {
+    try {
+      parsed = JSON.parse(settingsJson);
+    } catch (_) {
+      parsed = {};
+    }
+  } else if (settingsJson && typeof settingsJson === 'object') {
+    parsed = settingsJson;
+  }
+  if (!parsed || typeof parsed !== 'object') parsed = {};
+  return { ...DEFAULT_PLATFORM_SETTINGS, ...parsed };
+}
 
 // 起動時 PRAGMA チューニング（db を作った直後に実行）
 db.serialize(() => {
@@ -161,11 +191,12 @@ db.serialize(() => {
   end_time DATETIME,
   url TEXT,
   thumbnail_url TEXT,
-  platform TEXT,  -- 'youtube', 'twitcasting', 'twitter', 'other'
-  event_type TEXT DEFAULT 'live',  -- 'live', 'video', 'other'
+  platform TEXT,  -- 'youtube', 'twitcasting', 'twitch', 'bilibili', 'other'
+  event_type TEXT DEFAULT 'live',  -- 'live', 'video', 'voice', '1on1', 'other'
   description TEXT,
   status TEXT DEFAULT 'scheduled',  -- 'scheduled', 'live', 'ended', 'cancelled'
   external_id TEXT,  -- YouTube video ID など
+  confirmed INTEGER NOT NULL DEFAULT 1 CHECK (confirmed IN (0,1)),  -- 管理者が内容を確認したか（true=1, false=0）
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`, (err) => {
@@ -176,6 +207,17 @@ db.serialize(() => {
 db.run(`CREATE INDEX IF NOT EXISTS idx_events_start_time ON events (start_time DESC)`);
 db.run(`CREATE INDEX IF NOT EXISTS idx_events_status ON events (status)`);
 db.run(`CREATE INDEX IF NOT EXISTS idx_events_platform ON events (platform)`);
+db.run(`CREATE TABLE IF NOT EXISTS weekly_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  week_start TEXT NOT NULL UNIQUE, -- YYYY-MM-DD (週の開始日: 日曜)
+  message TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`, (err) => {
+  if (err) console.error('weekly_messages create err:', err.message);
+  else console.log('weekly_messages table ensured');
+});
+db.run(`CREATE INDEX IF NOT EXISTS idx_weekly_messages_week_start ON weekly_messages (week_start)`);
   // notifications テーブルに platform / status カラムが無ければ追加
   // ============================================
 // DB Schema Migration / Startup Maintenance
@@ -206,6 +248,24 @@ function ensureNotificationsSchema() {
   });
 }
 
+// ----------------------------
+// events
+// ----------------------------
+function ensureEventsSchema() {
+  db.all("PRAGMA table_info(events)", [], (err, columns) => {
+    if (err) {
+      console.error('PRAGMA events err:', err.message);
+      return;
+    }
+
+    const colNames = columns.map(c => c.name);
+
+    if (!colNames.includes('confirmed')) {
+      db.run("ALTER TABLE events ADD COLUMN confirmed INTEGER");
+      console.log('✅ events.confirmed 追加');
+    }
+  });
+}
 
 // ----------------------------
 // scheduled_notifications
@@ -224,6 +284,37 @@ function ensureScheduledSchema() {
       db.run("ALTER TABLE scheduled_notifications ADD COLUMN sent_at INTEGER");
       console.log('✅ scheduled_notifications.sent_at 追加');
     }
+
+    hasScheduledKindColumn = colNames.includes('kind');
+    hasScheduledRefIdColumn = colNames.includes('ref_id');
+
+    if (!hasScheduledKindColumn) {
+      db.run("ALTER TABLE scheduled_notifications ADD COLUMN kind TEXT", (alterErr) => {
+        if (alterErr) {
+          console.error('scheduled_notifications.kind 追加失敗:', alterErr.message);
+          return;
+        }
+        hasScheduledKindColumn = true;
+        console.log('✅ scheduled_notifications.kind 追加');
+        ensureIndexes();
+      });
+    }
+
+    if (!hasScheduledRefIdColumn) {
+      db.run("ALTER TABLE scheduled_notifications ADD COLUMN ref_id INTEGER", (alterErr) => {
+        if (alterErr) {
+          console.error('scheduled_notifications.ref_id 追加失敗:', alterErr.message);
+          return;
+        }
+        hasScheduledRefIdColumn = true;
+        console.log('✅ scheduled_notifications.ref_id 追加');
+        ensureIndexes();
+      });
+    }
+
+    if (hasScheduledKindColumn && hasScheduledRefIdColumn) {
+      ensureIndexes();
+    }
   });
 }
 
@@ -241,6 +332,18 @@ function ensureIndexes() {
     `CREATE INDEX IF NOT EXISTS idx_notifications_created_at 
      ON notifications (created_at DESC)`
   );
+
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_scheduled_notifications_due
+     ON scheduled_notifications (sent, run_at)`
+  );
+
+  if (hasScheduledKindColumn && hasScheduledRefIdColumn) {
+    db.run(
+      `CREATE INDEX IF NOT EXISTS idx_scheduled_notifications_event_ref
+       ON scheduled_notifications (kind, ref_id, sent)`
+    );
+  }
 
   console.log('✅ indexes ensured');
 }
@@ -283,6 +386,47 @@ function cleanupDuplicates() {
   );
 }
 
+function backfillPlatformSettingsDefaults() {
+  db.all('SELECT id, settings_json FROM subscriptions', [], (err, rows) => {
+    if (err) {
+      console.error('backfill settings load err:', err.message);
+      return;
+    }
+    if (!rows || !rows.length) return;
+
+    const targets = [];
+    for (const row of rows) {
+      const merged = parseAndMergePlatformSettings(row.settings_json);
+      const mergedJson = JSON.stringify(merged);
+      if (mergedJson !== (row.settings_json || '')) {
+        targets.push({ id: row.id, settingsJson: mergedJson });
+      }
+    }
+
+    if (!targets.length) return;
+
+    let pending = targets.length;
+    let updated = 0;
+    for (const target of targets) {
+      db.run(
+        'UPDATE subscriptions SET settings_json = ? WHERE id = ?',
+        [target.settingsJson, target.id],
+        function (updateErr) {
+          if (updateErr) {
+            console.error('backfill settings update err:', updateErr.message);
+          } else {
+            updated += this.changes || 0;
+          }
+          pending -= 1;
+          if (pending === 0) {
+            console.log(`✅ subscriptions.settings_json backfilled: ${updated}`);
+          }
+        }
+      );
+    }
+  });
+}
+
 
 // ============================================
 // 実行
@@ -290,8 +434,10 @@ function cleanupDuplicates() {
 
 ensureNotificationsSchema();
 ensureScheduledSchema();   // ← ★ これが今回の本命
+ensureEventsSchema();
 ensureIndexes();
 cleanupDuplicates();
+backfillPlatformSettingsDefaults();
 });
 
 // プロセス終了時に DB をクローズ（データ破損回避）
@@ -434,6 +580,237 @@ function formatLocalDate(date) {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
 }
 
+function getWeekBoundsByDate(dateInput) {
+  const targetDate = new Date(dateInput || toLocalDateString(new Date()));
+  const dayOfWeek = targetDate.getDay();
+
+  const sunday = new Date(targetDate);
+  sunday.setDate(targetDate.getDate() - dayOfWeek);
+
+  const nextSunday = new Date(sunday);
+  nextSunday.setDate(sunday.getDate() + 7);
+
+  return {
+    sunday,
+    nextSunday,
+    from: formatLocalDate(sunday),
+    to: formatLocalDate(nextSunday),
+    weekStart: toLocalDateString(sunday)
+  };
+}
+
+const EVENT_PRE_OFFSET_MS = 30 * 60 * 1000;
+const EVENT_NOTIFY_GRACE_MS = 2 * 60 * 1000;
+const EVENT_NOTIFY_LOOKAHEAD_DAYS = 14;
+const EVENT_NOTIFY_SYNC_INTERVAL_MS = 60 * 1000;
+
+function buildEventNotificationPayload(event, phase) {
+  const startDate = new Date(event.start_time);
+  const hh = String(startDate.getHours()).padStart(2, '0');
+  const mm = String(startDate.getMinutes()).padStart(2, '0');
+  const timeLabel = `${hh}:${mm}`;
+  const isPre = phase === 'event_pre';
+
+  return {
+    type: 'event',
+    settingKey: 'schedule',
+    data: {
+      title: event.title || '予定通知',
+      body: isPre
+        ? `開始30分前です（${timeLabel}予定）`
+        : `予定時刻になりました（${timeLabel}）`,
+      url: event.url || '/webui/events.html',
+      icon: '/webui/icon.webp'
+    }
+  };
+}
+
+function syncEventNotifications() {
+  return new Promise((resolve) => {
+    if (!hasScheduledKindColumn || !hasScheduledRefIdColumn) {
+      ensureScheduledSchema();
+      return resolve();
+    }
+
+    const now = Date.now();
+    const fromIso = new Date(now - EVENT_PRE_OFFSET_MS - EVENT_NOTIFY_GRACE_MS).toISOString();
+    const toIso = new Date(now + EVENT_NOTIFY_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+    db.all(
+      `
+      SELECT id, title, start_time, url, platform, event_type, status
+      FROM events
+      WHERE start_time IS NOT NULL
+      AND status != 'cancelled'
+      AND start_time >= ?
+      AND start_time <= ?
+      `,
+      [fromIso, toIso],
+      async (err, events) => {
+        if (err) {
+          console.error('[Event Notify Sync] events load err:', err.message);
+          return resolve();
+        }
+
+        let inserted = 0;
+        let updated = 0;
+        let deleted = 0;
+
+        try {
+          for (const event of events || []) {
+            const startMs = new Date(event.start_time).getTime();
+            if (!Number.isFinite(startMs)) continue;
+
+            const phases = [{ kind: 'event_pre', runAt: startMs - EVENT_PRE_OFFSET_MS }];
+
+            if (String(event.event_type || '').toLowerCase() !== 'live') {
+              phases.push({ kind: 'event_start', runAt: startMs });
+            } else {
+              await new Promise((r) => {
+                db.run(
+                  `DELETE FROM scheduled_notifications
+                   WHERE sent = 0 AND kind = 'event_start' AND ref_id = ?`,
+                  [event.id],
+                  function () {
+                    deleted += this.changes || 0;
+                    r();
+                  }
+                );
+              });
+            }
+
+            for (const phase of phases) {
+              if (phase.runAt < now - EVENT_NOTIFY_GRACE_MS) continue;
+
+              const payloadJson = JSON.stringify(buildEventNotificationPayload(event, phase.kind));
+
+              const existing = await new Promise((r) => {
+                db.get(
+                  `SELECT id, run_at, payload_json, sent
+                   FROM scheduled_notifications
+                   WHERE kind = ? AND ref_id = ?
+                   ORDER BY id DESC
+                   LIMIT 1`,
+                  [phase.kind, event.id],
+                  (getErr, row) => {
+                    if (getErr) {
+                      console.error('[Event Notify Sync] lookup err:', getErr.message);
+                      return r(null);
+                    }
+                    r(row || null);
+                  }
+                );
+              });
+
+              if (!existing) {
+                await new Promise((r) => {
+                  db.run(
+                    `INSERT INTO scheduled_notifications (run_at, payload_json, kind, ref_id)
+                     VALUES (?, ?, ?, ?)`,
+                    [phase.runAt, payloadJson, phase.kind, event.id],
+                    function (insertErr) {
+                      if (insertErr) {
+                        console.error('[Event Notify Sync] insert err:', insertErr.message);
+                      } else {
+                        inserted += 1;
+                      }
+                      r();
+                    }
+                  );
+                });
+              } else if (
+                existing.sent === 1 &&
+                existing.run_at === phase.runAt &&
+                existing.payload_json === payloadJson
+              ) {
+                // 同条件で送信済みなら何もしない
+              } else if (existing.sent === 0) {
+                await new Promise((r) => {
+                  db.run(
+                    `UPDATE scheduled_notifications
+                     SET run_at = ?, payload_json = ?, sent = 0
+                     WHERE id = ?`,
+                    [phase.runAt, payloadJson, existing.id],
+                    function (updateErr) {
+                      if (updateErr) {
+                        console.error('[Event Notify Sync] update err:', updateErr.message);
+                      } else {
+                        updated += this.changes || 0;
+                      }
+                      r();
+                    }
+                  );
+                });
+              } else if (existing.sent === 2) {
+                // scheduler 処理中は触らない
+              } else {
+                await new Promise((r) => {
+                  db.run(
+                    `INSERT INTO scheduled_notifications (run_at, payload_json, kind, ref_id)
+                     VALUES (?, ?, ?, ?)`,
+                    [phase.runAt, payloadJson, phase.kind, event.id],
+                    function (insertErr) {
+                      if (insertErr) {
+                        console.error('[Event Notify Sync] insert err:', insertErr.message);
+                      } else {
+                        inserted += 1;
+                      }
+                      r();
+                    }
+                  );
+                });
+              }
+            }
+          }
+
+          await new Promise((r) => {
+            db.run(
+              `
+              DELETE FROM scheduled_notifications
+              WHERE sent = 0
+              AND kind IN ('event_pre', 'event_start')
+              AND ref_id NOT IN (
+                SELECT id FROM events
+                WHERE start_time IS NOT NULL
+                AND status != 'cancelled'
+              )
+              `,
+              [],
+              function (cleanupErr) {
+                if (cleanupErr) {
+                  console.error('[Event Notify Sync] cleanup err:', cleanupErr.message);
+                } else {
+                  deleted += this.changes || 0;
+                }
+                r();
+              }
+            );
+          });
+
+          if (inserted || updated || deleted) {
+            console.log(`[Event Notify Sync] inserted=${inserted} updated=${updated} deleted=${deleted}`);
+          }
+        } catch (e) {
+          console.error('[Event Notify Sync] fatal:', e && e.message ? e.message : e);
+        }
+
+        resolve();
+      }
+    );
+  });
+}
+
+setInterval(() => {
+  syncEventNotifications().catch((e) => {
+    console.error('[Event Notify Sync] interval err:', e && e.message ? e.message : e);
+  });
+}, EVENT_NOTIFY_SYNC_INTERVAL_MS);
+setTimeout(() => {
+  syncEventNotifications().catch((e) => {
+    console.error('[Event Notify Sync] startup err:', e && e.message ? e.message : e);
+  });
+}, 10 * 1000);
+
 // ----------------------------------------------------
 // --- API ---
 // ----------------------------------------------------
@@ -463,7 +840,8 @@ app.post('/api/save-platform-settings', (req, res) => {
     return res.status(400).json({ error: 'invalid subscription object' });
   }
 
-  const settingsJson = settings ? JSON.stringify(settings) : null;
+  const mergedSettings = settings ? parseAndMergePlatformSettings(settings) : { ...DEFAULT_PLATFORM_SETTINGS };
+  const settingsJson = JSON.stringify(mergedSettings);
   const endpoint = subscription.endpoint;
 
   console.log('clientId:', clientId);
@@ -484,7 +862,7 @@ app.post('/api/save-platform-settings', (req, res) => {
       settings_json = excluded.settings_json
   `;
 
-  const upsertParams = [clientId, endpoint, subscriptionJson, settingsJson || '{}'];
+  const upsertParams = [clientId, endpoint, subscriptionJson, settingsJson];
 
   // helper: fallback path (UPDATE by clientId, if no rows then INSERT)
   function fallbackUpsert(callback) {
@@ -600,16 +978,7 @@ app.get('/api/get-platform-settings', (req, res) => {
     }
 
     // デフォルト設定（すべてON）
-    const defaultSettings = {
-      twitcasting: true,
-      youtube: true,
-      youtubeCommunity: true,
-      fanbox: true,
-      twitterMain: true,
-      twitterSub: true,
-      gipt: true,
-      twitch: true
-    };
+    const defaultSettings = DEFAULT_PLATFORM_SETTINGS;
 
     // row が無い場合は既定値を返す（存在確認したいなら 404 を返す方針も検討）
     if (!row || !row.settings_json) {
@@ -791,21 +1160,8 @@ function escapeXml(unsafe) {
 
 // --- 週間イベント取得 (便利エンドポイント) ---
 app.get('/api/events/weekly', (req, res) => {
-
   const date = req.query.date || toLocalDateString(new Date());
-
-  const targetDate = new Date(date);
-
-  const dayOfWeek = targetDate.getDay();
-
-  const sunday = new Date(targetDate);
-  sunday.setDate(targetDate.getDate() - dayOfWeek);
-
-  const nextSunday = new Date(sunday);
-  nextSunday.setDate(sunday.getDate() + 7);
-
-  const from = formatLocalDate(sunday);
-  const to   = formatLocalDate(nextSunday);
+  const { sunday, from, to, weekStart } = getWeekBoundsByDate(date);
 
   const sql = `
     SELECT * FROM events
@@ -840,8 +1196,101 @@ app.get('/api/events/weekly', (req, res) => {
       weekData[dayIndex].events.push(event);
     });
 
-    res.json({ week: weekData, from, to });
+    db.get(
+      `SELECT week_start, message, updated_at
+       FROM weekly_messages
+       WHERE week_start = ?
+       LIMIT 1`,
+      [weekStart],
+      (msgErr, msgRow) => {
+        if (msgErr) {
+          console.error('/api/events/weekly weekly_messages SELECT err:', msgErr.message);
+          return res.status(500).json({ error: 'DB error', detail: msgErr.message });
+        }
+
+        res.json({
+          week: weekData,
+          from,
+          to,
+          weekMessage: msgRow
+            ? {
+                weekStart: msgRow.week_start,
+                message: msgRow.message,
+                updatedAt: msgRow.updated_at
+              }
+            : null
+        });
+      }
+    );
   });
+});
+
+app.get('/api/admin/weekly-message', adminAuth.requireAuth, (req, res) => {
+  const date = req.query.date || toLocalDateString(new Date());
+  const { weekStart } = getWeekBoundsByDate(date);
+
+  db.get(
+    `SELECT week_start, message, created_at, updated_at
+     FROM weekly_messages
+     WHERE week_start = ?
+     LIMIT 1`,
+    [weekStart],
+    (err, row) => {
+      if (err) {
+        console.error('/api/admin/weekly-message GET err:', err.message);
+        return res.status(500).json({ error: 'DB error', detail: err.message });
+      }
+
+      return res.json({
+        weekStart,
+        exists: Boolean(row),
+        message: row ? row.message : '',
+        createdAt: row ? row.created_at : null,
+        updatedAt: row ? row.updated_at : null
+      });
+    }
+  );
+});
+
+app.post('/api/admin/weekly-message', adminAuth.requireAuth, (req, res) => {
+  const { date, weekStart, message } = req.body || {};
+  if (weekStart) {
+    const parsedWeekStart = new Date(weekStart);
+    if (Number.isNaN(parsedWeekStart.getTime())) {
+      return res.status(400).json({ error: 'weekStart must be a valid date' });
+    }
+  }
+
+  const normalizedWeekStart = weekStart
+    ? toLocalDateString(new Date(weekStart))
+    : getWeekBoundsByDate(date || toLocalDateString(new Date())).weekStart;
+
+  if (typeof message !== 'string' || message.trim() === '') {
+    return res.status(400).json({ error: 'message is required' });
+  }
+
+  const trimmedMessage = message.trim();
+
+  db.run(
+    `INSERT INTO weekly_messages (week_start, message, updated_at)
+     VALUES (?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(week_start) DO UPDATE SET
+       message = excluded.message,
+       updated_at = CURRENT_TIMESTAMP`,
+    [normalizedWeekStart, trimmedMessage],
+    function(err) {
+      if (err) {
+        console.error('/api/admin/weekly-message POST err:', err.message);
+        return res.status(500).json({ error: 'DB error', detail: err.message });
+      }
+
+      return res.json({
+        success: true,
+        weekStart: normalizedWeekStart,
+        message: trimmedMessage
+      });
+    }
+  );
 });
 
 
@@ -879,46 +1328,65 @@ app.post('/api/admin/events', adminAuth.requireAuth, (req, res) => {
     status,
     external_id
   } = req.body;
-
-  // バリデーション
-  if (!title || !start_time) {
-    return res.status(400).json({ error: 'title and start_time are required' });
+  
+  // start_time が空文字列または null の場合は null として扱う
+  const startTimeValue = start_time && start_time.trim() !== '' ? start_time : null;
+  const endTimeValue = end_time && end_time.trim() !== '' ? end_time : null;
+  
+  // confirmed ステータスの判定
+  let confirmed = null;
+  
+  // status が 'ended' の場合は必ず confirmed = true
+  if (status === 'ended') {
+    confirmed = true;
   }
-
+  // それ以外で start_time が設定されている場合
+  else if (startTimeValue) {
+    const eventDate = new Date(startTimeValue);
+    const now = new Date();
+    // 過去の日時なら confirmed = true
+    confirmed = eventDate < now ? true : null;
+  }
+  
   const sql = `
     INSERT INTO events (
       title, start_time, end_time, url, thumbnail_url, 
-      platform, event_type, description, status, external_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      platform, event_type, description, status, external_id, confirmed
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
-
+  
   const params = [
     title,
-    start_time,
-    end_time || null,
+    startTimeValue,
+    endTimeValue,
     url || null,
     thumbnail_url || null,
     platform || 'other',
     event_type || 'live',
     description || null,
     status || 'scheduled',
-    external_id || null
+    external_id || null,
+    confirmed
   ];
-
+  
   db.run(sql, params, function(err) {
     if (err) {
       console.error('/api/admin/events POST err:', err.message);
       return res.status(500).json({ error: 'DB error', detail: err.message });
     }
-
-    console.log(`[Event Created] ID: ${this.lastID}, Title: ${title}, Admin: ${req.adminUser}`);
-
-    // 作成したイベントを返す
-    db.get('SELECT * FROM events WHERE id = ?', [this.lastID], (err, row) => {
+    
+    const newId = this.lastID;
+    console.log(`[Event Created] ID: ${newId}, Admin: ${req.adminUser}`);
+    syncEventNotifications().catch(console.error);
+    
+    db.get('SELECT * FROM events WHERE id = ?', [newId], (err, row) => {
       if (err) {
-        return res.status(500).json({ error: 'Event created but failed to fetch' });
+        return res.status(500).json({ 
+          error: 'Event created but failed to fetch',
+          id: newId 
+        });
       }
-      return res.status(201).json(row);
+      return res.json(row);
     });
   });
 });
@@ -1312,16 +1780,7 @@ app.get('/api/get-user-data', (req, res) => {
   }
 
   // デフォルト設定
-  const defaultSettings = {
-    twitcasting: true,
-    youtube: true,
-    youtubeCommunity: true,
-    fanbox: true,
-    twitterMain: true,
-    twitterSub: true,
-    gipt: true,
-    twitch: true
-  };
+  const defaultSettings = DEFAULT_PLATFORM_SETTINGS;
 
   db.get(
     'SELECT settings_json, name FROM subscriptions WHERE client_id = ?',
@@ -1710,13 +2169,7 @@ db.run(
         return { clientId, sent: false, reason: 'parse_error' };
       }
 
-      let settings = {};
-      try {
-        settings = row.settings_json ? JSON.parse(row.settings_json) : {};
-      } catch (e) {
-        console.warn(`[/api/notify] ${clientId}: settings_json parse error, defaulting to {}`, e.message);
-        settings = {};
-      }
+      let settings = parseAndMergePlatformSettings(row.settings_json);
 
       // 設定でオフならスキップ
       if (settingKey && settings[settingKey] === false) {
@@ -1838,6 +2291,7 @@ async function handleAdminNotify(body, adminUser = 'scheduler') {
     : [];
 
   const isTargetedSend = clientIds.length > 0;
+  const isScheduleEventNotify = type === 'event' && settingKey === 'schedule';
 
   const MAX_TARGET = 500;
   if (clientIds.length > MAX_TARGET) {
@@ -1862,10 +2316,10 @@ async function handleAdminNotify(body, adminUser = 'scheduler') {
   recentNotifications.set(notificationHash, now);
 
   // 履歴保存（broadcastのみ）
-  if (!isTargetedSend) {
+  if (!isTargetedSend && !isScheduleEventNotify) {
     db.run(
       'INSERT INTO notifications (title, body, url, icon, platform, status) VALUES (?, ?, ?, ?, ?, ?)',
-      [data.title, data.body, data.url, data.icon, 'admin', 'success'],
+      [data.title, data.body, data.url, data.icon, settingKey || type || 'admin', 'success'],
       function(insertErr) {
         if (!insertErr) {
           updateHistoryJson().catch(console.error);
@@ -1935,6 +2389,13 @@ async function handleAdminNotify(body, adminUser = 'scheduler') {
     if (!row.subscription_json) return { sent: false };
 
     try {
+      if (settingKey) {
+        const settings = parseAndMergePlatformSettings(row.settings_json);
+        if (settings[settingKey] === false) {
+          return { sent: false, reason: 'disabled' };
+        }
+      }
+
       const subscription = JSON.parse(row.subscription_json);
       const sent = await sendPushNotification(subscription, data, db, false);
       return { sent };
@@ -1969,10 +2430,10 @@ app.put('/api/admin/events/:id', adminAuth.requireAuth, (req, res) => {
     event_type,
     description,
     status,
-    external_id
+    external_id,
+    confirmed  // ← これを追加
   } = req.body;
 
-  // 更新対象のフィールドを動的に構築
   const updates = [];
   const params = [];
 
@@ -1981,12 +2442,24 @@ app.put('/api/admin/events/:id', adminAuth.requireAuth, (req, res) => {
     params.push(title);
   }
   if (start_time !== undefined) {
+    // start_time が空文字列の場合は null にする
+    const startTimeValue = start_time && start_time.trim() !== '' ? start_time : null;
     updates.push('start_time = ?');
-    params.push(start_time);
+    params.push(startTimeValue);
+    
+    // confirmed の自動判定（明示的に指定されていない場合）
+    if (confirmed === undefined && startTimeValue) {
+      const eventDate = new Date(startTimeValue);
+      const now = new Date();
+      const autoConfirmed = eventDate < now ? true : null;
+      updates.push('confirmed = ?');
+      params.push(autoConfirmed);
+    }
   }
   if (end_time !== undefined) {
+    const endTimeValue = end_time && end_time.trim() !== '' ? end_time : null;
     updates.push('end_time = ?');
-    params.push(end_time);
+    params.push(endTimeValue);
   }
   if (url !== undefined) {
     updates.push('url = ?');
@@ -2016,6 +2489,10 @@ app.put('/api/admin/events/:id', adminAuth.requireAuth, (req, res) => {
     updates.push('external_id = ?');
     params.push(external_id);
   }
+  if (confirmed !== undefined) {  // ← これを追加
+    updates.push('confirmed = ?');
+    params.push(confirmed);
+  }
 
   if (updates.length === 0) {
     return res.status(400).json({ error: 'No fields to update' });
@@ -2037,8 +2514,8 @@ app.put('/api/admin/events/:id', adminAuth.requireAuth, (req, res) => {
     }
 
     console.log(`[Event Updated] ID: ${id}, Admin: ${req.adminUser}`);
+    syncEventNotifications().catch(console.error);
 
-    // 更新したイベントを返す
     db.get('SELECT * FROM events WHERE id = ?', [id], (err, row) => {
       if (err) {
         return res.status(500).json({ error: 'Event updated but failed to fetch' });
@@ -2086,6 +2563,7 @@ app.delete('/api/admin/events/:id', adminAuth.requireAuth, (req, res) => {
     }
 
     console.log(`[Event Deleted] ID: ${id}, Admin: ${req.adminUser}`);
+    syncEventNotifications().catch(console.error);
 
     return res.json({ success: true, message: 'Event deleted' });
   });

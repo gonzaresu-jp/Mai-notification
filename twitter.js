@@ -9,7 +9,7 @@ const sqlite3 = require('sqlite3').verbose();
 const os = require('os');
 const fs = require('fs');
 
-const PROFILE_PATH = path.join(os.homedir(), '.mozilla/firefox/j4gdqxur.default-release');
+const PROFILE_PATH = '/var/lib/mai-push/puppeteer-profile';
 const COOKIE_DB = path.join(PROFILE_PATH, 'cookies.sqlite');
 const TMP_DB = path.join(os.tmpdir(), 'cookies_temp_twitter.sqlite');
 const SEEN_PATH = path.join(__dirname, 'seen.json');
