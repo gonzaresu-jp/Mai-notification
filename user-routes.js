@@ -1,0 +1,534 @@
+// user-routes.js
+// Google OAuth フロー + ユーザー別 API を server.js に追加するモジュール
+// 使い方: server.js で require して register(app, db) を呼ぶ
+'use strict';
+
+const auth = require('./auth');
+
+// ============================================================
+// Promise ラッパー
+// ============================================================
+const dbGet = (db, sql, params) => new Promise((resolve, reject) =>
+  db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+);
+const dbRun = (db, sql, params) => new Promise((resolve, reject) =>
+  db.run(sql, params, function(err) {
+    err ? reject(err) : resolve({ lastID: this.lastID, changes: this.changes });
+  })
+);
+const dbAll = (db, sql, params) => new Promise((resolve, reject) =>
+  db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows))
+);
+
+// ============================================================
+// DB テーブル初期化
+// ============================================================
+function initUserTables(db) {
+  db.serialize(() => {
+    // ユーザー基本情報
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      google_id    TEXT NOT NULL UNIQUE,
+      email        TEXT NOT NULL,
+      display_name TEXT,
+      avatar_url   TEXT,
+      oshi_since   DATE,
+      created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, err => {
+      if (err) console.error('[users] create err:', err.message);
+      else     console.log('[users] table ensured');
+    });
+
+    // ユーザーに紐づいた通知サブスクリプション
+    // 匿名 subscriptions テーブルと client_id で連携
+    db.run(`CREATE TABLE IF NOT EXISTS user_subscriptions (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_id         TEXT NOT NULL UNIQUE,
+      endpoint          TEXT NOT NULL UNIQUE,
+      subscription_json TEXT,
+      settings_json     TEXT DEFAULT '{}',
+      device_name       TEXT,
+      created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, err => {
+      if (err) console.error('[user_subscriptions] create err:', err.message);
+      else     console.log('[user_subscriptions] table ensured');
+    });
+
+    db.run(`CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user_id ON user_subscriptions (user_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_user_subscriptions_client_id ON user_subscriptions (client_id)`);
+
+    // 個別スケジュール（将来用）
+    db.run(`CREATE TABLE IF NOT EXISTS user_schedules (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      event_id         INTEGER REFERENCES events(id) ON DELETE SET NULL,
+      title            TEXT,
+      note             TEXT,
+      scheduled_at     DATETIME,
+      reminder_minutes INTEGER DEFAULT 30,
+      created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, err => {
+      if (err) console.error('[user_schedules] create err:', err.message);
+      else     console.log('[user_schedules] table ensured');
+    });
+
+    db.run(`CREATE INDEX IF NOT EXISTS idx_user_schedules_user_id ON user_schedules (user_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_user_schedules_event_id ON user_schedules (event_id)`);
+  });
+}
+
+// ============================================================
+// デフォルト設定（server.js の DEFAULT_PLATFORM_SETTINGS と同値）
+// ============================================================
+const DEFAULT_PLATFORM_SETTINGS = Object.freeze({
+  twitcasting:    true,
+  youtube:        true,
+  youtubeCommunity: true,
+  fanbox:         true,
+  twitterMain:    true,
+  twitterSub:     true,
+  milestone:      true,
+  schedule:       true,
+  gipt:           true,
+  twitch:         true,
+  bilibili:       false,
+});
+
+function mergeSettings(json) {
+  let parsed = {};
+  try { parsed = JSON.parse(json || '{}'); } catch {}
+  return { ...DEFAULT_PLATFORM_SETTINGS, ...parsed };
+}
+
+// ============================================================
+// 匿名サブスクリプション → ユーザーへのマイグレーション
+// ============================================================
+async function migrateSubscription(db, clientId, userId) {
+  if (!clientId || !userId) return;
+
+  // 匿名テーブルから取得
+  const anon = await dbGet(db, 'SELECT * FROM subscriptions WHERE client_id = ?', [clientId]);
+  if (!anon) return;
+
+  // 既に紐づいているか確認
+  const existing = await dbGet(db, 'SELECT id FROM user_subscriptions WHERE client_id = ?', [clientId]);
+
+  if (existing) {
+    // user_id を最新に更新（デバイスの持ち替え対応）
+    await dbRun(db,
+      `UPDATE user_subscriptions
+       SET user_id = ?, endpoint = ?, subscription_json = ?, settings_json = COALESCE(?, settings_json)
+       WHERE client_id = ?`,
+      [userId, anon.endpoint, anon.subscription_json, anon.settings_json || null, clientId]
+    );
+    console.log(`[user-routes] subscription migrated (update) client_id=${clientId} -> user_id=${userId}`);
+  } else {
+    await dbRun(db,
+      `INSERT INTO user_subscriptions (user_id, client_id, endpoint, subscription_json, settings_json)
+       VALUES (?, ?, ?, ?, ?)`,
+      [userId, anon.client_id, anon.endpoint, anon.subscription_json, anon.settings_json || '{}']
+    );
+    console.log(`[user-routes] subscription migrated (insert) client_id=${clientId} -> user_id=${userId}`);
+  }
+}
+
+// ============================================================
+// Upsert user
+// ============================================================
+async function upsertUser(db, googleUser) {
+  const existing = await dbGet(db, 'SELECT * FROM users WHERE google_id = ?', [googleUser.googleId]);
+  if (existing) {
+    await dbRun(db,
+      `UPDATE users
+       SET email = ?, display_name = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE google_id = ?`,
+      [googleUser.email, googleUser.displayName, googleUser.avatarUrl, googleUser.googleId]
+    );
+    return { ...existing, email: googleUser.email, display_name: googleUser.displayName, avatar_url: googleUser.avatarUrl };
+  }
+  const result = await dbRun(db,
+    `INSERT INTO users (google_id, email, display_name, avatar_url)
+     VALUES (?, ?, ?, ?)`,
+    [googleUser.googleId, googleUser.email, googleUser.displayName, googleUser.avatarUrl]
+  );
+  return { id: result.lastID, google_id: googleUser.googleId, ...googleUser };
+}
+
+// ============================================================
+// ルート登録
+// ============================================================
+function register(app, db) {
+
+  // ──────────────────────────────────────────
+  // 1. Google ログイン開始
+  // ──────────────────────────────────────────
+  app.get('/auth/google', (req, res) => {
+    const returnTo  = req.query.returnTo  || '/';
+    const clientId  = req.query.client_id || ''; // 匿名デバイスのIDを渡す
+    const state = Buffer.from(JSON.stringify({ returnTo, clientId })).toString('base64url');
+    res.redirect(auth.getAuthUrl(state));
+  });
+
+  // ──────────────────────────────────────────
+  // 2. Google コールバック
+  // ──────────────────────────────────────────
+  app.get('/auth/google/callback', async (req, res) => {
+    const { code, state } = req.query;
+    if (!code) return res.status(400).send('Missing authorization code');
+
+    let stateData = { returnTo: '/', clientId: '' };
+    try {
+      stateData = JSON.parse(Buffer.from(state || '', 'base64url').toString());
+    } catch {}
+
+    try {
+      const googleUser = await auth.exchangeCodeForUser(code);
+      const user       = await upsertUser(db, googleUser);
+
+      // 匿名 client_id があれば紐づけ
+      if (stateData.clientId) {
+        await migrateSubscription(db, stateData.clientId, user.id);
+      }
+
+      const token = auth.signToken({ userId: user.id, email: user.email || user.google_id });
+      res.cookie(auth.COOKIE_NAME, token, auth.COOKIE_OPTIONS);
+
+      console.log(`[auth] login: user_id=${user.id} email=${user.email || user.google_id}`);
+      res.redirect(stateData.returnTo || '/');
+    } catch (e) {
+      console.error('[auth/google/callback]', e.message || e);
+      res.status(500).send('Authentication failed. Please try again.');
+    }
+  });
+
+  // ──────────────────────────────────────────
+  // 3. ログアウト
+  // ──────────────────────────────────────────
+  app.post('/auth/logout', (req, res) => {
+    res.clearCookie(auth.COOKIE_NAME);
+    res.json({ success: true });
+  });
+
+  // GET でもログアウトできるようにする（リンクからのアクセス対応）
+  app.get('/auth/logout', (req, res) => {
+    res.clearCookie(auth.COOKIE_NAME);
+    const returnTo = req.query.returnTo || '/';
+    res.redirect(returnTo);
+  });
+
+  // ──────────────────────────────────────────
+  // 4. 認証状態確認 / プロフィール取得
+  // ──────────────────────────────────────────
+  app.get('/api/user/me', auth.requireAuth, async (req, res) => {
+    try {
+      const user = await dbGet(db,
+        'SELECT id, email, display_name, avatar_url, oshi_since, created_at FROM users WHERE id = ?',
+        [req.userId]
+      );
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const oshiDays = user.oshi_since
+        ? Math.floor((Date.now() - new Date(user.oshi_since).getTime()) / 86400000)
+        : null;
+
+      res.json({ ...user, oshi_days: oshiDays });
+    } catch (e) {
+      console.error('[/api/user/me]', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ──────────────────────────────────────────
+  // 5. 推し始めた日 取得・設定
+  // ──────────────────────────────────────────
+  app.get('/api/user/oshi', auth.requireAuth, async (req, res) => {
+    try {
+      const user = await dbGet(db, 'SELECT oshi_since FROM users WHERE id = ?', [req.userId]);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const oshiSince = user.oshi_since;
+      const days = oshiSince
+        ? Math.floor((Date.now() - new Date(oshiSince).getTime()) / 86400000)
+        : null;
+
+      res.json({ oshi_since: oshiSince, days });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/user/oshi', auth.requireAuth, async (req, res) => {
+    const { oshi_since } = req.body;
+    if (!oshi_since || isNaN(new Date(oshi_since).getTime())) {
+      return res.status(400).json({ error: 'Valid date required (YYYY-MM-DD)' });
+    }
+    // 未来の日付はNG
+    if (new Date(oshi_since) > new Date()) {
+      return res.status(400).json({ error: 'Date cannot be in the future' });
+    }
+    try {
+      await dbRun(db,
+        'UPDATE users SET oshi_since = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [oshi_since, req.userId]
+      );
+      const days = Math.floor((Date.now() - new Date(oshi_since).getTime()) / 86400000);
+      res.json({ success: true, oshi_since, days });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ──────────────────────────────────────────
+  // 6. 通知フィルター設定 取得・更新
+  // ──────────────────────────────────────────
+  app.get('/api/user/notification-settings', auth.requireAuth, async (req, res) => {
+    try {
+      // ① user_subscriptions から取得（ログイン済みユーザーの設定）
+      const row = await dbGet(db,
+        'SELECT settings_json FROM user_subscriptions WHERE user_id = ? LIMIT 1',
+        [req.userId]
+      );
+      if (row) {
+        return res.json(mergeSettings(row.settings_json));
+      }
+
+      // ② user_subscriptions が空 → 匿名 subscriptions テーブルにフォールバック
+      // ユーザーに紐づいた client_id を user_subscriptions 経由で探せないので
+      // /api/user/link-subscription が呼ばれるまでの間、client_id はフロントから渡す必要がある
+      // ここでは clientId クエリパラメータで補完する
+      const clientId = req.query.clientId;
+      if (clientId) {
+        const anonRow = await dbGet(db,
+          'SELECT settings_json FROM subscriptions WHERE client_id = ?',
+          [clientId]
+        );
+        if (anonRow) {
+          return res.json(mergeSettings(anonRow.settings_json));
+        }
+      }
+
+      // ③ どこにも設定がなければデフォルト値を返す
+      res.json({ ...DEFAULT_PLATFORM_SETTINGS });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/user/notification-settings', auth.requireAuth, async (req, res) => {
+    const updates = req.body;
+    if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+      return res.status(400).json({ error: 'Request body must be a plain object' });
+    }
+
+    // 許可キー以外を除去（セキュリティ）
+    const allowedKeys = Object.keys(DEFAULT_PLATFORM_SETTINGS);
+    const filtered = {};
+    for (const key of allowedKeys) {
+      if (key in updates) filtered[key] = Boolean(updates[key]);
+    }
+    if (Object.keys(filtered).length === 0) {
+      return res.status(400).json({ error: 'No valid settings keys provided' });
+    }
+
+    try {
+      const rows = await dbAll(db,
+        'SELECT id, client_id, settings_json FROM user_subscriptions WHERE user_id = ?',
+        [req.userId]
+      );
+
+      const json = JSON.stringify({ ...DEFAULT_PLATFORM_SETTINGS, ...filtered });
+
+      if (rows.length > 0) {
+        // ① user_subscriptions がある場合：全デバイス更新 + 匿名テーブルに同期
+        for (const row of rows) {
+          const current = mergeSettings(row.settings_json);
+          const merged  = JSON.stringify({ ...current, ...filtered });
+
+          await dbRun(db,
+            'UPDATE user_subscriptions SET settings_json = ? WHERE id = ?',
+            [merged, row.id]
+          );
+          // 既存の通知送信ロジック（subscriptions テーブル参照）との後方互換
+          await dbRun(db,
+            'UPDATE subscriptions SET settings_json = ? WHERE client_id = ?',
+            [merged, row.client_id]
+          ).catch(() => {});
+        }
+        const finalSettings = mergeSettings(rows[0].settings_json);
+        const finalMerged   = { ...finalSettings, ...filtered };
+        return res.json({ success: true, settings: finalMerged, updated_devices: rows.length });
+
+      } else {
+        // ② user_subscriptions が空 → clientId クエリで匿名テーブルを直接更新
+        const clientId = req.query.clientId || req.body.clientId;
+        if (clientId) {
+          await dbRun(db,
+            'UPDATE subscriptions SET settings_json = ? WHERE client_id = ?',
+            [json, clientId]
+          ).catch(() => {});
+        }
+        // ログイン後に link-subscription が呼ばれた時のために
+        // users テーブルにキャッシュとして保持（次のログイン時にマイグレーションで拾う）
+        return res.json({
+          success: true,
+          settings: { ...DEFAULT_PLATFORM_SETTINGS, ...filtered },
+          updated_devices: 0,
+          note: 'Saved to anonymous subscription. Will sync on next migration.'
+        });
+      }
+    } catch (e) {
+      console.error('[/api/user/notification-settings PUT]', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ──────────────────────────────────────────
+  // 7. 登録デバイス一覧 / デバイス名変更 / 削除
+  // ──────────────────────────────────────────
+  app.get('/api/user/devices', auth.requireAuth, async (req, res) => {
+    try {
+      const rows = await dbAll(db,
+        'SELECT id, client_id, device_name, settings_json, created_at FROM user_subscriptions WHERE user_id = ? ORDER BY created_at DESC',
+        [req.userId]
+      );
+      res.json(rows.map(r => ({ ...r, settings: mergeSettings(r.settings_json) })));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch('/api/user/devices/:id', auth.requireAuth, async (req, res) => {
+    const { device_name } = req.body;
+    if (!device_name || typeof device_name !== 'string') {
+      return res.status(400).json({ error: 'device_name required' });
+    }
+    try {
+      const result = await dbRun(db,
+        'UPDATE user_subscriptions SET device_name = ? WHERE id = ? AND user_id = ?',
+        [device_name.slice(0, 100), req.params.id, req.userId]
+      );
+      if (result.changes === 0) return res.status(404).json({ error: 'Device not found' });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete('/api/user/devices/:id', auth.requireAuth, async (req, res) => {
+    try {
+      const device = await dbGet(db,
+        'SELECT client_id FROM user_subscriptions WHERE id = ? AND user_id = ?',
+        [req.params.id, req.userId]
+      );
+      if (!device) return res.status(404).json({ error: 'Device not found' });
+
+      await dbRun(db, 'DELETE FROM user_subscriptions WHERE id = ?', [req.params.id]);
+      // 匿名テーブルからも削除
+      await dbRun(db, 'DELETE FROM subscriptions WHERE client_id = ?', [device.client_id]).catch(() => {});
+
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ──────────────────────────────────────────
+  // 8. 匿名デバイスをアカウントに手動紐づけ
+  //    （ログイン後にclient_idを送ると紐づける）
+  // ──────────────────────────────────────────
+  app.post('/api/user/link-subscription', auth.requireAuth, async (req, res) => {
+    const { client_id, device_name } = req.body;
+    if (!client_id) return res.status(400).json({ error: 'client_id required' });
+
+    try {
+      await migrateSubscription(db, client_id, req.userId);
+
+      // device_name があれば更新
+      if (device_name) {
+        await dbRun(db,
+          'UPDATE user_subscriptions SET device_name = ? WHERE client_id = ? AND user_id = ?',
+          [device_name.slice(0, 100), client_id, req.userId]
+        ).catch(() => {});
+      }
+
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ──────────────────────────────────────────
+  // 9. 個別スケジュール（将来用）
+  // ──────────────────────────────────────────
+  app.get('/api/user/schedules', auth.requireAuth, async (req, res) => {
+    try {
+      const rows = await dbAll(db,
+        `SELECT us.id, us.event_id, us.title, us.note, us.scheduled_at, us.reminder_minutes,
+                us.created_at, us.updated_at,
+                e.title AS event_title, e.start_time, e.platform, e.url, e.status AS event_status
+         FROM user_schedules us
+         LEFT JOIN events e ON e.id = us.event_id
+         WHERE us.user_id = ?
+         ORDER BY COALESCE(us.scheduled_at, e.start_time) ASC`,
+        [req.userId]
+      );
+      res.json(rows);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/user/schedules', auth.requireAuth, async (req, res) => {
+    const { event_id, title, note, scheduled_at, reminder_minutes } = req.body;
+    try {
+      const result = await dbRun(db,
+        `INSERT INTO user_schedules (user_id, event_id, title, note, scheduled_at, reminder_minutes)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [req.userId, event_id ?? null, title ?? null, note ?? null, scheduled_at ?? null, reminder_minutes ?? 30]
+      );
+      res.status(201).json({ success: true, id: result.lastID });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/user/schedules/:id', auth.requireAuth, async (req, res) => {
+    const { title, note, scheduled_at, reminder_minutes } = req.body;
+    try {
+      const result = await dbRun(db,
+        `UPDATE user_schedules
+         SET title = COALESCE(?, title),
+             note = COALESCE(?, note),
+             scheduled_at = COALESCE(?, scheduled_at),
+             reminder_minutes = COALESCE(?, reminder_minutes),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND user_id = ?`,
+        [title ?? null, note ?? null, scheduled_at ?? null, reminder_minutes ?? null, req.params.id, req.userId]
+      );
+      if (result.changes === 0) return res.status(404).json({ error: 'Schedule not found' });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete('/api/user/schedules/:id', auth.requireAuth, async (req, res) => {
+    try {
+      const result = await dbRun(db,
+        'DELETE FROM user_schedules WHERE id = ? AND user_id = ?',
+        [req.params.id, req.userId]
+      );
+      if (result.changes === 0) return res.status(404).json({ error: 'Schedule not found' });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  console.log('[user-routes] all routes registered');
+}
+
+module.exports = { register, initUserTables };

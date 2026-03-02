@@ -8,6 +8,8 @@ const twitcasting = require('./twitcasting');
 const MilestoneScheduler = require('./milestone');
 require('dotenv').config();
 const adminAuth = require('./admin/admin');
+const cookieParser = require('cookie-parser');
+const userRoutes   = require('./user-routes');
 
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
@@ -119,11 +121,13 @@ setInterval(() => {
 }, SSE_PING_INTERVAL_MS);
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use('/pushweb', express.static(path.join(__dirname, 'pushweb')));
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
 app.set('trust proxy', true);
 app.use('/webui', express.static(path.join(__dirname, 'webui')));
+userRoutes.register(app, db);
 
 
 // --- VAPID設定 ---
@@ -438,6 +442,7 @@ ensureEventsSchema();
 ensureIndexes();
 cleanupDuplicates();
 backfillPlatformSettingsDefaults();
+userRoutes.initUserTables(db);
 });
 
 // プロセス終了時に DB をクローズ（データ破損回避）
@@ -599,7 +604,10 @@ function getWeekBoundsByDate(dateInput) {
   };
 }
 
-const EVENT_PRE_OFFSET_MS = 30 * 60 * 1000;
+const EVENT_PRE_OFFSETS_MS = [
+  30 * 60 * 1000, // 30分前
+  3 * 60 * 1000   // ★ 3分前 追加
+];
 const EVENT_NOTIFY_GRACE_MS = 2 * 60 * 1000;
 const EVENT_NOTIFY_LOOKAHEAD_DAYS = 14;
 const EVENT_NOTIFY_SYNC_INTERVAL_MS = 60 * 1000;
@@ -609,7 +617,10 @@ function buildEventNotificationPayload(event, phase) {
   const hh = String(startDate.getHours()).padStart(2, '0');
   const mm = String(startDate.getMinutes()).padStart(2, '0');
   const timeLabel = `${hh}:${mm}`;
-  const isPre = phase === 'event_pre';
+  const isPre = phase.startsWith('event_pre');
+  const offsetMin = isPre
+    ? Math.round(parseInt(phase.split('_')[2], 10) / 60000)
+    : 0;
 
   return {
     type: 'event',
@@ -617,7 +628,7 @@ function buildEventNotificationPayload(event, phase) {
     data: {
       title: event.title || '予定通知',
       body: isPre
-        ? `開始30分前です（${timeLabel}予定）`
+        ? `開始${offsetMin}分前です（${timeLabel}予定）`
         : `予定時刻になりました（${timeLabel}）`,
       url: event.url || '/webui/events.html',
       icon: '/webui/icon.webp'
@@ -633,7 +644,8 @@ function syncEventNotifications() {
     }
 
     const now = Date.now();
-    const fromIso = new Date(now - EVENT_PRE_OFFSET_MS - EVENT_NOTIFY_GRACE_MS).toISOString();
+    const maxOffset = Math.max(...EVENT_PRE_OFFSETS_MS);
+    const fromIso = new Date(now - maxOffset - EVENT_NOTIFY_GRACE_MS).toISOString();
     const toIso = new Date(now + EVENT_NOTIFY_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     db.all(
@@ -661,7 +673,10 @@ function syncEventNotifications() {
             const startMs = new Date(event.start_time).getTime();
             if (!Number.isFinite(startMs)) continue;
 
-            const phases = [{ kind: 'event_pre', runAt: startMs - EVENT_PRE_OFFSET_MS }];
+            const phases = EVENT_PRE_OFFSETS_MS.map(offset => ({
+              kind: `event_pre_${offset}`,   // ← 衝突回避のためユニーク化
+              runAt: startMs - offset
+            }));
 
             if (String(event.event_type || '').toLowerCase() !== 'live') {
               phases.push({ kind: 'event_start', runAt: startMs });
@@ -768,7 +783,7 @@ function syncEventNotifications() {
               `
               DELETE FROM scheduled_notifications
               WHERE sent = 0
-              AND kind IN ('event_pre', 'event_start')
+              AND (kind LIKE 'event_pre_%' OR kind = 'event_start')
               AND ref_id NOT IN (
                 SELECT id FROM events
                 WHERE start_time IS NOT NULL
@@ -1005,6 +1020,37 @@ app.get('/api/get-platform-settings', (req, res) => {
       return res.json({ settings: defaultSettings, exists: true });
     }
   });
+});
+
+app.patch('/api/update-settings', (req, res) => {
+  const { clientId, settings } = req.body || {};
+
+  if (!clientId || typeof clientId !== 'string') {
+    return res.status(400).json({ error: 'clientId required' });
+  }
+  if (!settings || typeof settings !== 'object') {
+    return res.status(400).json({ error: 'settings required' });
+  }
+
+  const merged     = parseAndMergePlatformSettings(settings);
+  const settingsJson = JSON.stringify(merged);
+
+  db.run(
+    'UPDATE subscriptions SET settings_json = ? WHERE client_id = ?',
+    [settingsJson, clientId],
+    function (err) {
+      if (err) {
+        console.error('/api/update-settings err:', err.message);
+        return res.status(500).json({ error: 'DB error', detail: err.message });
+      }
+      if (this.changes === 0) {
+        // 未登録の場合はスキップ（Push未登録ユーザーは設定だけ保存不要）
+        return res.json({ success: true, updated: false, message: 'No subscription found' });
+      }
+      console.log(`[Settings] updated clientId=${clientId}`);
+      return res.json({ success: true, updated: true });
+    }
+  );
 });
 
 // --- 購読者名取得 ---
