@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Update logs</title>
-    <link rel="icon" href="./icon.ico">
-    <link rel="stylesheet" href="/style.v1.9.css" />
+    <link rel="icon" href="./icon.webp">
+    <link rel="stylesheet" href="/style.v2.0.css" />
     <style type="text/css">
         dt {font-size: 24px;}
         @media(max-width: 800px){dt{font-size: 16px} .card{display: block;} img{ max-width: 80vw!important;}}
@@ -21,6 +21,15 @@
 
     <main>
         <h2 class="history fade">Update logs</h2>
+        <div class="card">
+            <dl>
+                <dt>2026-03-03</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>複数デバイスでの利便性向上のため、Googleアカウントによるログイン機能を追加</dt>
+            </dl>
+        </div>
         <div class="card">
             <dl>
                 <dt>2026-03-02</dt>

@@ -36,7 +36,7 @@
     <!-- manifest -->
     <link rel="manifest" href="./manifest.json" />
     
-    <link rel="stylesheet" href="./style.v1.9.css" />
+    <link rel="stylesheet" href="./style.v2.0.css" />
     <link rel="stylesheet" href="./top-card.v2.0.css" />
     <link rel="preconnect" href="https://elza.poitou-mora.ts.net">
     <!-- iOS Helper を main.js より先に読み込む -->
@@ -320,6 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <script src="/js/ui-misc.js?v=<?= @filemtime(__DIR__ . '/js/ui-misc.js') ?: time(); ?>" defer></script>
     <script src="/js/subscribers.js?v=<?= @filemtime(__DIR__ . '/js/subscribers.js') ?: time(); ?>" defer></script>
     <script type="module" src="/js/main.js?v=<?= @filemtime(__DIR__ . '/js/main.js') ?: time(); ?>" defer></script>
+    <script src="/js/auth-settings-bridge.js?v=<?= @filemtime(__DIR__ . '/js/auth-settings-bridge.js') ?: time(); ?>" defer></script>
 
 </body>
 </html>

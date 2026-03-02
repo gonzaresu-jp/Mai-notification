@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>このサービスについて</title>
-    <link rel="icon" href="/icon.ico">
-    <link rel="stylesheet" href="/style.v1.9.css" />
+    <link rel="icon" href="/icon.webp">
+    <link rel="stylesheet" href="/style.v2.0.css" />
     <style type="text/css">
         .service-intro {
   font-size: 1rem;
