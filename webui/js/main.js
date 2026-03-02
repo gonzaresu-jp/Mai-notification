@@ -1,18 +1,18 @@
 // main.js - メイン初期化処理（header.html fetch 挿入対応版）
 
-import { PAGING, getClientId } from './config.js';
-import { initPush, unsubscribePush, sendTestToMe, sendSubscriptionToServer } from './pushService.js';
-import { savePlatformSettings, getPlatformSettings } from './settingsService.js';
-import { saveNameToServer, initSubscriberNameUI } from './subscriberService.js';
-import { fetchHistory, fetchHistoryMore, clearJsonCache } from './historyService.js';
-import { initLogFilterSettings } from './filterService.js';
+import { PAGING, getClientId } from './config.js?v=20260301a';
+import { initPush, unsubscribePush, sendTestToMe, sendSubscriptionToServer } from './pushService.js?v=20260301a';
+import { savePlatformSettings, getPlatformSettings } from './settingsService.js?v=20260301a';
+import { saveNameToServer, initSubscriberNameUI } from './subscriberService.js?v=20260301a';
+import { fetchHistory, fetchHistoryMore, clearJsonCache } from './historyService.js?v=20260301a';
+import { initLogFilterSettings } from './filterService.js?v=20260301a';
 import {
   updateToggleImage,
   updatePlatformSettingsVisibility,
   initPlatformSettingsUI,
   initHeaderDependentUI,
   loadPlatformSettingsUIFromServer
-} from './uiController.js';
+} from './uiController.js?v=20260301a';
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js')
