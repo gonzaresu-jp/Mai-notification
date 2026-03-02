@@ -11,8 +11,10 @@ export function initLogFilterSettings($toggleNotify) {
     twitterMain: document.getElementById('filter-twitter-main'),
     twitterSub: document.getElementById('filter-twitter-sub'),
     milestone: document.getElementById('filter-milestone'),
+    schedule: document.getElementById('filter-schedule'),
     gipt: document.getElementById('filter-gipt'),
-    twitch: document.getElementById('filter-twitch')
+    twitch: document.getElementById('filter-twitch'),
+    bilibili: document.getElementById('filter-bilibili')
   };
 
   function loadFilterSettings() {
@@ -33,8 +35,10 @@ export function initLogFilterSettings($toggleNotify) {
       twitterMain: true,
       twitterSub: true,
       milestone: true,
+      schedule: true,
       gipt: true,
-      twitch: true
+      twitch: true,
+      bilibili: true
     };
   }
 
@@ -57,8 +61,10 @@ export function initLogFilterSettings($toggleNotify) {
       twitterMain: filterButtons.twitterMain?.classList.contains('is-on') || false,
       twitterSub: filterButtons.twitterSub?.classList.contains('is-on') || false,
       milestone: filterButtons.milestone?.classList.contains('is-on') || false,
+      schedule: filterButtons.schedule?.classList.contains('is-on') || false,
       gipt: filterButtons.gipt?.classList.contains('is-on') || false,
-      twitch: filterButtons.twitch?.classList.contains('is-on') || false
+      twitch: filterButtons.twitch?.classList.contains('is-on') || false,
+      bilibili: filterButtons.bilibili?.classList.contains('is-on') || false
     };
   }
 
@@ -93,8 +99,10 @@ export function initLogFilterSettings($toggleNotify) {
       twitterMain: platformSettings.twitterMain || false,
       twitterSub: platformSettings.twitterSub || false,
       milestone: platformSettings.milestone || false,
+      schedule: platformSettings.schedule || false,
       gipt: platformSettings.gipt || false,
-      twitch: platformSettings.twitch || false
+      twitch: platformSettings.twitch || false,
+      bilibili: platformSettings.bilibili || false
     };
   }
 
@@ -130,11 +138,17 @@ export function initLogFilterSettings($toggleNotify) {
         case 'milestone':
           shouldShow = settings.milestone;
           break;
+        case 'schedule':
+          shouldShow = settings.schedule;
+          break;
         case 'gipt':
           shouldShow = settings.gipt;
           break;
         case 'twitch':
           shouldShow = settings.twitch;
+          break;
+        case 'bilibili':
+          shouldShow = settings.bilibili;
           break;
         default:
           shouldShow = true;

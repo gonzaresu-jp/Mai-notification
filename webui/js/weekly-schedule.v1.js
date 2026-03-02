@@ -84,15 +84,42 @@ function renderWeeklyView(container, weekData) {
  */
 function renderEventCard(event) {
     const eventType = event.event_type === 'video' ? 'video' : 'live';
-    const startTime = new Date(event.start_time);
-    const timeStr = startTime.toLocaleTimeString('ja-JP', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false 
-    });
-    
     const url = event.url || '#';
     const thumbnail = event.thumbnail_url || '';
+    
+    // 時刻とステータス表示の準備
+    let timeDisplay = '';
+    let statusBadge = '';
+    
+    // イベントタイプのバッジ
+    if (event.event_type === 'live') {
+        statusBadge = '<span class="event-status-badge live">【配信】</span>';
+    } else if (event.event_type === 'video') {
+        statusBadge = '<span class="event-status-badge video">【動画】</span>';
+    } else {
+        statusBadge = '<span class="event-status-badge other">【その他】</span>';
+    }
+    
+    // 時刻表示の生成
+    if (event.start_time) {
+        const startTime = new Date(event.start_time);
+        const now = new Date();
+        const timeStr = startTime.toLocaleTimeString('ja-JP', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+        });
+        
+        // 未来の予定で confirmed が null または false の場合は「未定」を追加
+        if (startTime > now && (event.confirmed === null || event.confirmed === false)) {
+            timeDisplay = `${timeStr} <span class="unconfirmed-badge">未定</span>`;
+        } else {
+            timeDisplay = timeStr;
+        }
+    } else {
+        // start_time が null の場合
+        timeDisplay = '<span class="unconfirmed-badge">日時未定</span>';
+    }
     
     let html = `<a href="${url}" class="event ${eventType}" target="_blank" rel="noopener">`;
     
@@ -108,7 +135,7 @@ function renderEventCard(event) {
     // 情報
     html += `
         <div class="event-info">
-            <div class="event-time">${timeStr}</div>
+            <div class="event-time">${statusBadge} ${timeDisplay}</div>
             <div class="event-title">${escapeHtml(event.title)}</div>
         </div>
     `;

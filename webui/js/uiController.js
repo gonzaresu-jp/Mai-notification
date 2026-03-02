@@ -71,7 +71,6 @@ export function updatePlatformSettingsVisibility(isChecked) {
 // =========================
 function initOshiDays() {
   const STORAGE_KEY = "maistart_date";
-  const DEFAULT_DATE = "2020-01-07";
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
   const dateInput = document.getElementById("start"); // header 内
@@ -97,17 +96,34 @@ function initOshiDays() {
     const then = stripTime(date).getTime();
     return Math.max(0, Math.floor((now - then) / MS_PER_DAY));
   }
+  function yearsMonthsSince(date) {
+    const start = stripTime(date);
+    const now = stripTime(new Date());
+    if (now < start) return { years: 0, months: 0 };
+
+    let years = now.getFullYear() - start.getFullYear();
+    let months = now.getMonth() - start.getMonth();
+    if (now.getDate() < start.getDate()) months -= 1;
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    if (years < 0) return { years: 0, months: 0 };
+    return { years, months };
+  }
+  function formatDaysWithYearsMonths(date) {
+    const days = daysSinceLocal(date);
+    const ym = yearsMonthsSince(date);
+    return `${days}日(${ym.years}年${ym.months}ヶ月)`;
+  }
 
   function applyFromStorageOrInput() {
     const stored = localStorage.getItem(STORAGE_KEY);
     let effective = stored || dateInput.value || null;
 
-    // DEFAULT_DATE は「未設定扱い」にしたい（あなたの仕様）
-    if (!effective || effective === DEFAULT_DATE) {
+    if (!effective) {
       meetStatItem.style.display = "none";
       meetValueEl.textContent = "0 日";
-      // stored が無いなら input は空に寄せる
-      if (!stored) dateInput.value = "";
       return;
     }
 
@@ -117,14 +133,13 @@ function initOshiDays() {
       return;
     }
 
-    const since = daysSinceLocal(parsed);
-    meetValueEl.textContent = `${since} 日`;
+    meetValueEl.textContent = formatDaysWithYearsMonths(parsed);
     meetStatItem.style.display = "";
     if (dateInput.value !== effective) dateInput.value = effective;
   }
 
   function save(value) {
-    if (!value || value === DEFAULT_DATE) localStorage.removeItem(STORAGE_KEY);
+    if (!value) localStorage.removeItem(STORAGE_KEY);
     else localStorage.setItem(STORAGE_KEY, value);
     applyFromStorageOrInput();
   }
