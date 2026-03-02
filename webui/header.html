@@ -1,5 +1,6 @@
 <header>
         <div class="header-left">
+            <img src="/icon.webp" alt="まいちゃんロゴ" class="logo fade" fetchpriority="high" />
             <a href="/" rel="noopener noreferrer" style="text-decoration: none; color: inherit;"><h2 class="fade">通知ダッシュボード</h2></a>
         </div>
         
@@ -52,7 +53,6 @@
         type="date"
         id="start"
         name="trip-start"
-        value="2020-01-07"
         min="2020-01-01"
         max="2099-12-31"
         title="推し始めの日付を選択してください"
@@ -89,6 +89,11 @@
                                 </button>
                             </li>
                             <li>
+                                <button id="toggle-bilibili" class="platform-setting-button is-on">
+                                    Bilibili: ON
+                                </button>
+                            </li>
+                            <li>
                                 <button id="toggle-fanbox" class="platform-setting-button is-on">
                                     Pixiv Fanbox: ON
                                 </button>
@@ -113,11 +118,16 @@
                                     記念日通知: ON
                                 </button>
                             </li>
+                            <li>
+                                <button id="toggle-schedule" class="platform-setting-button is-on">
+                                    スケジュール: ON
+                                </button>
+                            </li>
                         </ul>
                     </div>
                 </li>
                 
-                <li><a href="https://github.com/gonzaresu-jp/Mai-notification" target="_blank" rel="noopener noreferrer">GitHubページ</a></li>
+                <li><a href="https://github.com/gonzaresu-jp/Mai-notification" target="_blank" rel="noopener noreferrer">GitHubページ(使用方法)</a></li>
                 <li><a href="/info/" rel="noopener noreferrer">このサービスについて</a></li>
                 <li><a href="/logs/" rel="noopener noreferrer">Update logs</a></li>
                 <li><a href="https://form.jotform.com/253191048959063" target="_blank" rel="noopener noreferrer">不具合報告</a></li>

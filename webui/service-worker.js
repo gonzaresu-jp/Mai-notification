@@ -1,6 +1,6 @@
-// service-worker.js (iOS対応版 v3.49 - 履歴Invalidate/互換メッセージ付き)
+// service-worker.js (iOS対応版 v3.54 - 履歴Invalidate/互換メッセージ付き)
 
-const VERSION = 'v3.49';
+const VERSION = 'v3.54';
 const CACHE_NAME = `mai-notification-${VERSION}`;
 const ALWAYS_OPEN_NEW_TAB = false;
 
@@ -80,7 +80,7 @@ self.addEventListener('install', event => {
     const cache = await caches.open(CACHE_NAME);
 
     // 1) 必須最小セット
-    const critical = ['/', './index.html', './style.css', './main.js'];
+    const critical = ['/', './index.php', './style.v1.9.css', './js/main.js'];
     try {
       await cache.addAll(critical);
       console.log(`[SW ${VERSION}] cached critical assets`);
@@ -147,6 +147,32 @@ self.addEventListener('fetch', (event) => {
       try {
         return await fetch(req);
       } catch {
+        return new Response('', { status: 503, statusText: 'Service Unavailable' });
+      }
+    })());
+    return;
+  }
+
+  // JS/CSS/HTML は常に最新を取りに行く（HTTPキャッシュを極力回避）
+  const isMutableTextAsset =
+    req.destination === 'script' ||
+    req.destination === 'style' ||
+    req.destination === 'document' ||
+    /\.(js|css|html?)$/i.test(url.pathname);
+
+  if (isMutableTextAsset) {
+    event.respondWith((async () => {
+      try {
+        return await fetch(req, { cache: 'no-store' });
+      } catch (err) {
+        // オフライン時のみキャッシュを使う
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          const cached = await cache.match(req);
+          if (cached) return cached;
+        } catch {
+          // ignore
+        }
         return new Response('', { status: 503, statusText: 'Service Unavailable' });
       }
     })());
@@ -449,4 +475,3 @@ self.addEventListener('sync', event => {
 });
 
 console.log(`[SW ${VERSION}] ========== Service Worker ready ==========`);
-

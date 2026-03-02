@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>このサービスについて</title>
     <link rel="icon" href="/icon.ico">
-    <link rel="stylesheet" href="/style.v1.css" />
+    <link rel="stylesheet" href="/style.v1.9.css" />
     <style type="text/css">
         .service-intro {
   font-size: 1rem;
