@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Update logs</title>
     <link rel="icon" href="./icon.ico">
-    <link rel="stylesheet" href="/style.v1.css" />
+    <link rel="stylesheet" href="/style.v1.9.css" />
     <style type="text/css">
         dt {font-size: 24px;}
         @media(max-width: 800px){dt{font-size: 16px} .card{display: block;} img{ max-width: 80vw!important;}}
@@ -21,6 +21,33 @@
 
     <main>
         <h2 class="history fade">Update logs</h2>
+        <div class="card">
+            <dl>
+                <dt>2026-03-02</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>管理者通知パネルのUIを大幅に改善,通知ダッシュボードのUI改善,クリックで喋る3Dまいちゃん追加,スケジュールにまいちゃんの一言追加,チャンネル登録者数推移の情報を追加,デビューと推し日数に年月表記追加</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
+                <dt>2026-02-25</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>スケジュール通知がadminとして通知や履歴を残す問題を修正,youtubeのAPIを大量に使用する不具合を修正</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
+                <dt>2026-02-24</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>bilibli通知(現状配信のみ)追加,スケジュール通知追加</dt>
+            </dl>
+        </div>
         <div class="card">
             <dl>
                 <dt>2026-02-07</dt>

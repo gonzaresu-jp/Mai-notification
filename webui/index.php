@@ -36,26 +36,20 @@
     <!-- manifest -->
     <link rel="manifest" href="./manifest.json" />
     
-    <link rel="stylesheet" href="./style.v1.css" />
-    <link rel="stylesheet" href="./top-card.css" />
+    <link rel="stylesheet" href="./style.v1.9.css" />
+    <link rel="stylesheet" href="./top-card.v2.0.css" />
     <link rel="preconnect" href="https://elza.poitou-mora.ts.net">
     <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/ios-helper.js" defer></script>
-    <script>
-    (() => {
-      // PC判定：hover可能 かつ fine pointer（=マウス前提）
-      const isDesktop = matchMedia("(hover:hover) and (pointer:fine)").matches;
-    
-      if (!isDesktop) return; // スマホは読み込まない
-    
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = "https://use.fontawesome.com/releases/v7.1.0/css/all.css";
-      link.crossOrigin = "anonymous"; // 任意
-      document.head.appendChild(link);
-    })();
-    </script>
-
+    <link
+  rel="stylesheet"
+  href="/fontawesome-free-7.2.0-web/css/all.min.css"
+  crossorigin="anonymous"
+/>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kaisei+Tokumin&display=swap" rel="stylesheet">
 </head>
 <body id="app-body" class="menu-transitions-disabled">
     <div id="header-slot">
@@ -69,41 +63,46 @@
             <img src="./left-mai.webp" alt="まいちゃん" fetchpriority="high" />
         
         </div>
-        <main>
+        <main class="bg-blur">
             <!--
             <div class="stats-card">
                 <h2>お知らせ</h2>
                 <div class="stat-item">
-                    <p>通知履歴を5件だけhtmlで生成することにより体感のロード時間が爆速に！個人的にはもっさり感がなくなって喜んでいる。</p>
+                    <p>サーバーOSストレージの書き込み寿命(TBW)が残り21%になっていることが発覚したので、02/28(土)の深夜にOSストレージのクローンと換装作業をします。</p>
                 </div>
             </div>
-            -->
+-->
            <div class="stats-card">
- 
+ <img src="./3dmai.webp" alt="" class="count-bg-mai" aria-hidden="true" />
 
   <div class="stats-carousel">
     <div class="stats-carousel-inner">
 
     <!-- ===== ページ1：既存カウント（まとめたまま） ===== -->
-    <div class="stats-page">
+    <div class="stats-page count-page">
        <h2 style="margin-top:0;font-size:1.5rem;">カウント</h2>
+      
       <div class="stats-grid">
         <div class="stat-item">
+          <button type="button" class="stat-copy-btn" data-copy-target="days-since-debut" aria-label="デビューからをコピー">copy</button>
           <div class="label">デビューから</div>
           <div class="value" id="days-since-debut">0</div>
         </div>
 
         <div class="stat-item">
+          <button type="button" class="stat-copy-btn" data-copy-target="days-to-birthday" aria-label="お誕生日までをコピー">copy</button>
           <div class="label">お誕生日まで</div>
           <div class="value" id="days-to-birthday">0</div>
         </div>
 
         <div class="stat-item">
+          <button type="button" class="stat-copy-btn" data-copy-target="days-to-anniversary" aria-label="周年記念までをコピー">copy</button>
           <div class="label">周年記念まで</div>
           <div class="value" id="days-to-anniversary">0</div>
         </div>
 
         <div class="stat-item">
+          <button type="button" class="stat-copy-btn" data-copy-target="days-to-meet" aria-label="推してからをコピー">copy</button>
           <div class="label">推してから</div>
           <div class="value" id="days-to-meet">0</div>
         </div>
@@ -113,12 +112,101 @@
 
     <!-- 週間予定表 -->
   <div class="stats-page">   <!-- ← これ追加 -->
-    <h2 style="margin-top:0;font-size:1.5rem;">今週の予定</h2>
-    <div id="weekly-schedule"></div>
+    <div class="week-head">
+    <button onclick="navigateWeek(-1)" class="week-arrow">
+        <i class="fa-solid fa-angle-left" style="color: #ffffff;"></i>
+    </button>
+
+    <h2 class="week-title">スケジュール</h2>
+
+    <button onclick="navigateWeek(1)" class="week-arrow">
+        <i class="fa-solid fa-angle-right" style="color: #ffffff;"></i>
+    </button>
+    </div>
+    <div class="week-content">
+        <div id="weekly-schedule"></div>
+        <div id="weekly-message"></div>
+    </div>
+  </div>
+  
+  <!-- ===== ページ3：チャンネル登録者数 ===== -->
+<div class="stats-page sub-page">
+
+  <div class="sub-header">
+    <h2 class="sub-title">登録者推移</h2>
+    <span class="sub-loading-badge" id="sub-loading-badge">読込中…</span>
   </div>
 
+  <!-- プラットフォームタブ（登録者数付き）-->
+  <div class="sub-platform-tabs" id="sub-platform-tabs">
+
+    <button class="sub-tab is-active" data-platform="youtube-main">
+      <span class="sub-tab-icon"><i class="fa-brands fa-youtube"></i></span>
+      <span class="sub-tab-body">
+        <span class="sub-tab-name">YouTube(@koinoyamaich)</span>
+        <span class="sub-tab-count" id="sub-count-youtube-main">--</span>
+      </span>
+    </button>
+
+    <button class="sub-tab" data-platform="youtube-sub">
+      <span class="sub-tab-icon"><i class="fa-brands fa-youtube"></i></span>
+      <span class="sub-tab-body">
+        <span class="sub-tab-name">YouTube(@koinoyamaisub)</span>
+        <span class="sub-tab-count" id="sub-count-youtube-sub">--</span>
+      </span>
+    </button>
+
+    <button class="sub-tab" data-platform="twitch">
+      <span class="sub-tab-icon"><i class="fa-brands fa-twitch"></i></span>
+      <span class="sub-tab-body">
+        <span class="sub-tab-name">Twitch</span>
+        <span class="sub-tab-count" id="sub-count-twitch">--</span>
+      </span>
+    </button>
+
+  </div>
+
+  <!-- グラフカード -->
+  <div class="sub-graph-card">
+    <div class="sub-range-row">
+      <button class="sub-range-btn is-active" data-range="all">全期間</button>
+      <button class="sub-range-btn" data-range="1y">1年</button>
+      <button class="sub-range-btn" data-range="6m">6ヶ月</button>
+      <button class="sub-range-btn" data-range="3m">3ヶ月</button>
+    </div>
+    <div class="sub-canvas-wrap">
+      <canvas id="sub-main-canvas"></canvas>
+      <div id="sub-tooltip" class="sub-tooltip" style="display:none;">
+        <div class="sub-tooltip-date" id="sub-tt-date"></div>
+        <div class="sub-tooltip-val" id="sub-tt-val"></div>
+      </div>
+      <div id="sub-no-data" class="sub-no-data" style="display:none;">データなし</div>
+    </div>
+    <div class="sub-milestones-legend">
+      <span class="sub-ms-item"><span class="sub-ms-dot debut"></span>デビュー</span>
+      <span class="sub-ms-item"><span class="sub-ms-dot milestone"></span>節目</span>
+    </div>
+  </div>
+
+  <!-- 記録カード -->
+  <div class="sub-records">
+    <div class="sub-rec-card">
+      <div class="sub-rec-label">ピーク</div>
+      <div class="sub-rec-value" id="sub-rec-peak">--</div>
+      <div class="sub-rec-unit" id="sub-rec-peak-unit">万人</div>
+    </div>
+    <div class="sub-rec-card">
+      <div class="sub-rec-label">計測データ数</div>
+      <div class="sub-rec-value" id="sub-rec-count">--</div>
+      <div class="sub-rec-unit">件</div>
+    </div>
+  </div>
+
+</div>
+  
+
 <!-- JavaScript読み込み -->
-<script src="/js/weekly-schedule.js"></script>
+<script src="/js/weekly-schedule.v1.2.js?v=<?= @filemtime(__DIR__ . '/js/weekly-schedule.v1.2.js') ?: time(); ?>" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     loadWeeklySchedule('weekly-schedule');
@@ -132,106 +220,9 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 <div class="carousel-dots"></div>
 
-<script>
-// ============================
-// カルーセル制御（高さ可変・スワイプ・ドット）
-// ============================
-const carousel = document.querySelector('.stats-carousel');
-const inner = document.querySelector('.stats-carousel-inner');
-const dotsWrap = document.querySelector('.carousel-dots');
 
-let current = 0;
-let startX = 0;
-let startY = 0;
-let tracking = false;
 
-const pages = inner.querySelectorAll('.stats-page');
-const maxPage = pages.length - 1;
 
-const threshold = 60;
-const dots = [];
-
-/**
- * 状態更新（スライド・高さ・ドット）
- */
-function update() {
-    if (!inner || !carousel) return;
-
-    // スライド移動
-    inner.style.transform = `translateX(-${current * 100}%)`;
-
-    // 高さの調整
-    const activePage = pages[current];
-
-    if (activePage) {
-        const newHeight = activePage.offsetHeight;
-        carousel.style.height = newHeight + 'px';
-    }
-
-    // ドットの状態更新
-    dots.forEach((d, i) => {
-        d.classList.toggle('active', i === current);
-    });
-}
-
-/**
- * ドットの生成
- */
-function initDots() {
-    dotsWrap.innerHTML = ''; 
-    dots.length = 0; // 配列をクリア
-    for (let i = 0; i <= maxPage; i++) {
-        const b = document.createElement('button');
-        b.addEventListener('click', () => {
-            current = i;
-            update();
-        });
-        dotsWrap.appendChild(b);
-        dots.push(b);
-    }
-}
-
-// ===== pointerイベント（スワイプ） =====
-carousel.addEventListener('pointerdown', e => {
-    startX = e.clientX;
-    startY = e.clientY;
-    tracking = true;
-});
-
-carousel.addEventListener('pointerup', e => {
-    if (!tracking) return;
-    tracking = false;
-
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-
-    if (Math.abs(dx) < Math.abs(dy)) return; // 縦スクロール優先
-    if (Math.abs(dx) < threshold) return;
-
-    if (dx < 0 && current < maxPage) current++;
-    if (dx > 0 && current > 0) current--;
-
-    update();
-});
-
-// 親パネルへの伝播遮断
-['pointerdown','pointermove','pointerup','mousedown','mouseup','touchstart','touchend'].forEach(type => {
-    carousel.addEventListener(type, e => {
-        e.stopPropagation();
-    }, { passive: false }); // passive: false にして確実に止める
-});
-
-// --- 実行順序の整理 ---
-document.addEventListener('DOMContentLoaded', () => {
-    initDots();        // 2. ドット作成
-    
-    // 3. 初回表示（レンダリング時間を考慮して少し待つ）
-    setTimeout(update, 100); 
-});
-
-window.addEventListener('load', update);
-window.addEventListener('resize', update);
-</script>
 
     
             <div class="log-section">
@@ -242,7 +233,7 @@ window.addEventListener('resize', update);
                         <button id="btn-refresh" class="fade d2">更新</button>
                     </div>
                     <button id="btn-log-settings" class="fade d2" aria-expanded="false"     aria-controls="log-settings-container">表示設定</button>
-                    <div id="log-settings-container" class="log-settings-container" aria-hidden="   true">
+                    <div id="log-settings-container" class="log-settings-container" aria-hidden="true">
                         <ul class="view-list">
                             <li>
                                 <button id="filter-sync-notification" class="filter-button is-on"   >
@@ -268,6 +259,12 @@ window.addEventListener('resize', update);
                                 <button id="filter-twitch" class="filter-button is-on" disabled>
                                     Twitch: ON
                                 </button>
+                            </li>
+                            <li>
+                                <button id="filter-bilibili" class="filter-button is-on" disabled>
+                                    Bilibili: ON
+                                </button>
+                            </li>
                             <li>
                                 <button id="filter-fanbox" class="filter-button is-on" disabled>
                                     Pixiv Fanbox: ON
@@ -316,275 +313,13 @@ window.addEventListener('resize', update);
         <?php include __DIR__ . '/footer.html'; ?>
     </div>
 
-    <script type="module" src="/js/main.js" defer></script>
-    <script>
-    const btn = document.getElementById('btn-log-settings');
-    const menu = document.getElementById('log-settings-container');
-
-    btn.addEventListener('click', () => {
-      const open = menu.classList.toggle('is-open');
-      btn.setAttribute('aria-expanded', open);
-      menu.setAttribute('aria-hidden', !open);
-    });
-
-    // メニュー外クリックで閉じる
-    document.addEventListener('click', (e) => {
-      if (!btn.contains(e.target) && !menu.contains(e.target)) {
-        menu.classList.remove('is-open');
-        btn.setAttribute('aria-expanded', false);
-        menu.setAttribute('aria-hidden', true);
-      }
-    });
-
-    </script>
-
-    <script>
-    function initOshiDays() {
-      const STORAGE_KEY = "maistart_date";
-      const DEFAULT_DATE = "2020-01-07";
-      const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-      const dateInput = document.getElementById("start");              // header内
-      const meetValueEl = document.getElementById("days-to-meet");     // main内
-      const meetStatItem = meetValueEl?.closest(".stat-item");
-
-      if (!meetValueEl || !meetStatItem) return; // 表示側がないなら何もしない
-      if (!dateInput) return;                    // headerが未挿入なら何もしない（待つ側で保証する）
-
-      function parseYMD(ymd) {
-        if (!ymd) return null;
-        const parts = ymd.split("-").map(Number);
-        if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
-        return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
-      }
-      function stripTime(d) {
-        return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-      }
-      function daysSinceLocal(date) {
-        const now = stripTime(new Date()).getTime();
-        const then = stripTime(date).getTime();
-        return Math.max(0, Math.floor((now - then) / MS_PER_DAY));
-      }
-
-      function loadAndApply() {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        let effective = stored || dateInput.value || null;
-
-        // DEFAULT_DATE を「未設定扱い」
-        if (!effective || effective === DEFAULT_DATE) {
-          meetStatItem.style.display = "none";
-          meetValueEl.textContent = "0 日";
-          if (!stored) dateInput.value = "";
-          return;
-        }
-
-        const parsed = parseYMD(effective);
-        if (!parsed) {
-          meetStatItem.style.display = "none";
-          return;
-        }
-
-        const since = daysSinceLocal(parsed);
-        meetValueEl.textContent = `${since} 日`;
-        meetStatItem.style.display = "";
-        if (dateInput.value !== effective) dateInput.value = effective;
-      }
-
-      function saveDate(value) {
-        if (!value || value === DEFAULT_DATE) localStorage.removeItem(STORAGE_KEY);
-        else localStorage.setItem(STORAGE_KEY, value);
-        loadAndApply();
-      }
-
-      // 多重登録防止
-      if (dateInput.dataset.boundOshiDays === "1") {
-        loadAndApply();
-        return;
-      }
-      dateInput.dataset.boundOshiDays = "1";
-
-      loadAndApply();
-      dateInput.addEventListener("change", (e) => saveDate(e.target.value));
-
-      // 「保存」ボタン（ユーザー名保存と共用）でも保存したいなら
-      const saveBtn = document.getElementById("subscriber-name-submit");
-      if (saveBtn && !saveBtn.dataset.boundOshiDays) {
-        saveBtn.dataset.boundOshiDays = "1";
-        saveBtn.addEventListener("click", () => saveDate(dateInput.value));
-      }
-
-      // 日付跨ぎ対策
-      setInterval(loadAndApply, 60 * 1000);
-    }
-
-
-    (async () => {
-      const load = async (id, url) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const res = await fetch(url, { cache: 'no-cache' });
-        el.innerHTML = await res.text();
-      };
-    })();
-    </script>
-    <script>
-    (() => {
-        const DEBUT_DATE = new Date(2021, 2, 21);
-        const BIRTHDAY = { month: 0, day: 7 };
-        const ANNIVERSARY = { month: 2, day: 21 };
-        const UPDATE_INTERVAL = 60 * 1000;
-        const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-        function nextOccurrence(monthZeroBased, day) {
-            const now = new Date();
-            const year = now.getFullYear();
-            let candidate = new Date(year, monthZeroBased, day, 0, 0, 0, 0);
-            if (stripTime(candidate) < stripTime(now)) {
-                candidate = new Date(year + 1, monthZeroBased, day, 0, 0, 0, 0);
-            }
-            return candidate;
-        }
-
-        function stripTime(d) {
-            return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-        }
-
-        function daysDiff(target, now = new Date()) {
-            const t = stripTime(target).getTime();
-            const n = stripTime(now).getTime();
-            return Math.floor((t - n) / MS_PER_DAY);
-        }
-
-        function daysSince(date) {
-            const n = stripTime(new Date()).getTime();
-            const d = stripTime(date).getTime();
-            return Math.floor((n - d) / MS_PER_DAY);
-        }
-
-        function setValue(id, value) {
-            const el = document.getElementById(id);
-            if (el) el.textContent = String(value) + ` 日`;
-        }
-
-        function updateAll() {
-            const now = new Date();
-            const since = Math.max(0, daysSince(DEBUT_DATE));
-            setValue('days-since-debut', since);
-
-            const nextBday = nextOccurrence(BIRTHDAY.month, BIRTHDAY.day);
-            const daysToBday = daysDiff(nextBday, now);
-            setValue('days-to-birthday', daysToBday);
-
-            const nextAnn = nextOccurrence(ANNIVERSARY.month, ANNIVERSARY.day);
-            const daysToAnn = daysDiff(nextAnn, now);
-            setValue('days-to-anniversary', daysToAnn);
-        }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                updateAll();
-                setInterval(updateAll, UPDATE_INTERVAL);
-            });
-        } else {
-            updateAll();
-            setInterval(updateAll, UPDATE_INTERVAL);
-        }
-    })();
-    </script>
-    <script>
-    (() => {
-      const img = document.querySelector('.left-mai .mask img');
-      if (!img) return;
-
-      function updatePanelWidth() {
-        if (!img.naturalWidth || !img.naturalHeight) return;
-
-        const ratio = img.naturalWidth / img.naturalHeight;
-        const vh = window.innerHeight;
-        const widthPx = vh * ratio;
-
-        document.documentElement.style.setProperty(
-          '--panel-width',
-          `${widthPx-100}px`
-        );
-      }
-
-      if (img.complete) {
-        updatePanelWidth();
-      } else {
-        img.addEventListener('load', updatePanelWidth);
-      }
-
-      // 画面回転・リサイズ対応
-      window.addEventListener('resize', updatePanelWidth);
-    })();
-    </script>
-
-    <script>
-    (() => {
-      const root = document.querySelector('.left-mai');
-      if (!root) return;
-
-      const btn    = root.querySelector('div.open');
-      const imgbtn = root.querySelector('.mask');
-
-      // ===== クリックトグル =====
-      const toggle = (e) => {
-      // もしクリックされたターゲットが、カルーセルの中身だったら何もしない
-      if (e.target.closest('.stats-carousel') || e.target.closest('.carousel-dots')) {
-          return;
-      }
-      
-      if (e) e.preventDefault();
-      root.classList.toggle('is-open');
-      };
-
-      btn?.addEventListener('click', toggle, { passive: false });
-      imgbtn?.addEventListener('click', toggle, { passive: false });
-
-      // ===== 横スワイプ処理 =====
-      let startX = 0;
-      let startY = 0;
-      let tracking = false;
-
-      const THRESHOLD = 50; // スワイプ判定距離(px)
-
-      const onStart = (e) => {
-        const p = e.touches ? e.touches[0] : e;
-        startX = p.clientX;
-        startY = p.clientY;
-        tracking = true;
-      };
-
-      const onEnd = (e) => {
-        if (!tracking) return;
-        tracking = false;
-
-        const p = e.changedTouches ? e.changedTouches[0] : e;
-        const dx = p.clientX - startX;
-        const dy = p.clientY - startY;
-
-        // 縦スクロール優先（横成分が弱い場合は無視）
-        if (Math.abs(dx) < Math.abs(dy)) return;
-
-        if (dx > THRESHOLD) {
-          // 右スワイプ → open
-          root.classList.add('is-open');
-        } else if (dx < -THRESHOLD) {
-          // 左スワイプ → close
-          root.classList.remove('is-open');
-        }
-      };
-
-      // touch
-      root.addEventListener('touchstart', onStart, { passive: true });
-      root.addEventListener('touchend', onEnd, { passive: true });
-
-      // mouse（PCトラックパッド対応）
-      root.addEventListener('mousedown', onStart);
-      window.addEventListener('mouseup', onEnd);
-    })();
-</script>
+    <script src="/js/carousel.js?v=<?= @filemtime(__DIR__ . '/js/carousel.js') ?: time(); ?>" defer></script>
+    <script src="/js/mai-voice.js?v=<?= @filemtime(__DIR__ . '/js/mai-voice.js') ?: time(); ?>" defer></script>
+    <script src="/js/count-days.js?v=<?= @filemtime(__DIR__ . '/js/count-days.js') ?: time(); ?>" defer></script>
+    <script src="/js/panel.js?v=<?= @filemtime(__DIR__ . '/js/panel.js') ?: time(); ?>" defer></script>
+    <script src="/js/ui-misc.js?v=<?= @filemtime(__DIR__ . '/js/ui-misc.js') ?: time(); ?>" defer></script>
+    <script src="/js/subscribers.js?v=<?= @filemtime(__DIR__ . '/js/subscribers.js') ?: time(); ?>" defer></script>
+    <script type="module" src="/js/main.js?v=<?= @filemtime(__DIR__ . '/js/main.js') ?: time(); ?>" defer></script>
 
 </body>
 </html>

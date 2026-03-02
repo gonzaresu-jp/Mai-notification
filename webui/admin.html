@@ -11,13 +11,21 @@
         
         body {
             font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #B11E7C 0%, #a12f8c 100%);
             margin: 0;
             padding: 20px;
             min-height: 100vh;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
+        }
+
+        .admin-shell {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
         }
         
         .container {
@@ -25,7 +33,7 @@
             border-radius: 16px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
             padding: 40px;
-            max-width: 600px;
+            max-width: 1200px;
             width: 100%;
         }
         
@@ -64,7 +72,7 @@
         textarea:focus,
         select:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #b11e7c;
         }
         
         textarea {
@@ -88,9 +96,15 @@
             cursor: pointer;
             transition: all 0.2s;
         }
+
+        .inspace {
+            width: 100%;
+            height: 2em;
+            font-size: 15px;
+        }
         
         .btn-send {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #B11E7C 0%, #a12f8c 100%);
             color: white;
         }
         
@@ -177,10 +191,256 @@
             color: #999;
             margin-top: 4px;
         }
+
+        .sub-panel {
+            margin-top: 24px;
+            padding: 18px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+
+        .sub-panel h2 {
+            margin: 0 0 12px 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .inline-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .inline-actions button {
+            flex: 0 0 auto;
+            width: auto;
+            padding: 10px 14px;
+            font-size: 14px;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .btn-primary {
+            background: #111827;
+            color: #fff;
+        }
+
+        .event-panel {
+            margin-top: 24px;
+            padding: 18px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fff;
+        }
+
+        .event-panel h2 {
+            margin: 0 0 12px 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .event-actions-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .event-list {
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 12px;
+            max-height: 800px;
+            overflow-y: auto;
+        }
+
+        .event-item {
+            border-bottom: 1px solid #f0f0f0;
+            padding: 12px 0;
+            display: flex;
+            gap: 12px;
+        }
+
+        .event-item:last-child {
+            border-bottom: none;
+        }
+
+        .event-thumbnail {
+            width: 96px;
+            height: 54px;
+            background: #eee;
+            border-radius: 6px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .event-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .event-info {
+            flex: 1;
+        }
+
+        .event-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #222;
+            margin-bottom: 4px;
+        }
+
+        .event-meta {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .event-badges {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .event-actions {
+            display: flex;
+            gap: 6px;
+            flex-direction: column;
+        }
+
+        .event-btn {
+            padding: 7px 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            width: auto;
+        }
+
+        .event-btn-main {
+            background: #B11E7C;
+            color: #fff;
+        }
+
+        .event-btn-sub {
+            background: #ececec;
+            color: #333;
+        }
+
+        .event-btn-danger {
+            background: #dc3545;
+            color: #fff;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .badge-scheduled { background: #e3f2fd; color: #1565c0; }
+        .badge-live { background: #ffebee; color: #c62828; }
+        .badge-ended { background: #efefef; color: #555; }
+        .badge-youtube { background: #ffebee; color: #d32f2f; }
+        .badge-twitcasting { background: #e8f5e9; color: #2e7d32; }
+        .badge-confirmed { background: #e6f7ea; color: #1b5e20; }
+        .badge-unconfirmed { background: #fff8e1; color: #7a5a00; }
+
+        .event-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.48);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .event-modal.active {
+            display: flex;
+        }
+
+        .event-modal-content {
+            background: #fff;
+            border-radius: 12px;
+            width: 92%;
+            max-width: 760px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .event-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .event-modal-title {
+            margin: 0;
+            font-size: 20px;
+            color: #222;
+        }
+
+        .event-close-btn {
+            border: none;
+            background: transparent;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            width: auto;
+            padding: 0 6px;
+            position: absolute;
+            left: 80%;
+        }
+
+        .event-form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .thumb-picker {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px,1fr));
+            gap: 8px;
+        }
+
+        .thumb-item {
+            cursor: pointer;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid transparent;
+            transition: .15s;
+        }
+
+        .thumb-item img {
+            width: 100%;
+            height: 80px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .thumb-item.selected {
+            border-color: #B11E7C;
+            box-shadow: 0 0 0 2px #B11E7C33;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="admin-shell">
+    <section class="container">
         <h1>📢 管理者通知パネル</h1>
         
         <form id="notification-form">
@@ -219,20 +479,125 @@
                  <input type="text" id="clientId" placeholder="特定の client_id を入力 (空欄で全員に送信)" />
                  <div class="helper-text">特定のデバイスにのみ送る場合は client_id を入力。空欄の場合は全員に送信されます。</div>
              </div>
+            <div class="preview">
+                <h3>📱 プレビュー</h3>
+                <div class="preview-card">
+                    <div class="preview-title" id="preview-title">タイトルがここに表示されます</div>
+                    <div class="preview-body" id="preview-body">メッセージがここに表示されます</div>
+                </div>
+            </div>
              <div class="button-group">
                  <button type="button" class="btn-clear" id="btn-clear">クリア</button>
                  <button type="submit" class="btn-send" id="btn-send">📤 全員に送信</button>
              </div>
          </form>
+    </section>
         
         <div class="status-message" id="status-message"></div>
-        
-        <div class="preview">
-            <h3>📱 プレビュー</h3>
-            <div class="preview-card">
-                <div class="preview-title" id="preview-title">タイトルがここに表示されます</div>
-                <div class="preview-body" id="preview-body">メッセージがここに表示されます</div>
+
+        <section class="sub-panel">
+            <h2>🗓 今週の一言</h2>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label for="weekly-date">対象日（この日が含まれる週に保存）</label>
+                <input type="date" id="weekly-date" />
+                <div class="helper-text" id="weekly-week-info">対象週: -</div>
             </div>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label for="weekly-message-text">メッセージ</label>
+                <textarea id="weekly-message-text" placeholder="例: 今週も一緒にがんばろう！"></textarea>
+            </div>
+            <div class="inline-actions">
+                <button type="button" class="btn-secondary" id="btn-weekly-load">読み込み</button>
+                <button type="button" class="btn-primary" id="btn-weekly-save">保存</button>
+            </div>
+            <div class="status-message" id="weekly-message-status"></div>
+        </section>
+
+        <section class="event-panel">
+            <h2>📅 イベント管理</h2>
+            <div class="event-actions-toolbar">
+                <button type="button" class="event-btn event-btn-main" id="btn-ev-create">➕ 新規イベント作成</button>
+                <button type="button" class="event-btn event-btn-sub" id="btn-ev-reload">🔄 再読み込み</button>
+            </div>
+            <div id="event-container" class="event-list">読み込み中...</div>
+        </section>
+    </div>
+        
+
+    <div id="event-modal" class="event-modal">
+        <div class="event-modal-content">
+            <div class="event-modal-header">
+                <h2 class="event-modal-title" id="ev-modal-title">新規イベント作成</h2>
+                <button type="button" class="event-close-btn" id="btn-ev-close">×</button>
+            </div>
+
+            <form id="ev-form">
+                <div class="form-group">
+                    <label for="ev-title">タイトル *</label>
+                    <input type="text" id="ev-title" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="ev-start-time">開始日時</label>
+                    <input type="datetime-local" id="ev-start-time">
+                </div>
+
+                <div class="form-group">
+                    <label for="ev-confirmed">確定ステータス</label>
+                    <select id="ev-confirmed">
+                        <option value="">未定</option>
+                        <option value="true">確定</option>
+                    </select>
+                </div>
+
+                <div class="event-form-row">
+                    <div class="form-group">
+                        <label for="ev-platform">プラットフォーム</label>
+                        <select id="ev-platform">
+                            <option value="other">その他</option>
+                            <option value="youtube">YouTube</option>
+                            <option value="twitcasting">TwitCasting</option>
+                            <option value="twitch">Twitch</option>
+                            <option value="bilibili">Bilibili</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ev-type">イベントタイプ</label>
+                        <select id="ev-type">
+                            <option value="live">配信</option>
+                            <option value="video">動画投稿</option>
+                            <option value="voice">ボイス販売</option>
+                            <option value="1on1">1on1</option>
+                            <option value="other">その他</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="ev-url">URL</label>
+                    <input type="url" id="ev-url" class="inspace" placeholder="https://...">
+                </div>
+
+                <div class="form-group">
+                    <label for="ev-thumb-url">サムネURL</label>
+                    <input type="url" id="ev-thumb-url" class="inspace" placeholder="https://...">
+                </div>
+
+                <div class="form-group">
+                    <label>候補サムネ</label>
+                    <div id="ev-thumb-picker" class="thumb-picker"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="ev-description">説明</label>
+                    <textarea id="ev-description"></textarea>
+                </div>
+
+                <div class="inline-actions">
+                    <button type="submit" class="btn-primary" id="btn-ev-save">保存</button>
+                    <button type="button" class="btn-secondary" id="btn-ev-cancel">キャンセル</button>
+                </div>
+            </form>
         </div>
     </div>
     
@@ -273,6 +638,29 @@
         const previewTitle = document.getElementById('preview-title');
         const previewBody = document.getElementById('preview-body');
         const scheduleAtInput = document.getElementById('scheduleAt');
+        const weeklyDateInput = document.getElementById('weekly-date');
+        const weeklyMessageText = document.getElementById('weekly-message-text');
+        const weeklyWeekInfo = document.getElementById('weekly-week-info');
+        const btnWeeklyLoad = document.getElementById('btn-weekly-load');
+        const btnWeeklySave = document.getElementById('btn-weekly-save');
+        const weeklyMessageStatus = document.getElementById('weekly-message-status');
+        const eventContainer = document.getElementById('event-container');
+        const btnEvCreate = document.getElementById('btn-ev-create');
+        const btnEvReload = document.getElementById('btn-ev-reload');
+        const eventModal = document.getElementById('event-modal');
+        const evModalTitle = document.getElementById('ev-modal-title');
+        const evForm = document.getElementById('ev-form');
+        const evTitle = document.getElementById('ev-title');
+        const evStartTime = document.getElementById('ev-start-time');
+        const evConfirmed = document.getElementById('ev-confirmed');
+        const evPlatform = document.getElementById('ev-platform');
+        const evType = document.getElementById('ev-type');
+        const evUrl = document.getElementById('ev-url');
+        const evThumbUrl = document.getElementById('ev-thumb-url');
+        const evDescription = document.getElementById('ev-description');
+        const evThumbPicker = document.getElementById('ev-thumb-picker');
+        const btnEvClose = document.getElementById('btn-ev-close');
+        const btnEvCancel = document.getElementById('btn-ev-cancel');
         
         // プレビュー更新
         function updatePreview() {
@@ -377,6 +765,338 @@
 
         // フォームロード時にも実行
         updateSendButton();
+
+        function formatDateLocal(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        async function loadWeeklyMessageByDate() {
+            const token = localStorage.getItem('adminToken');
+            const date = weeklyDateInput.value || formatDateLocal(new Date());
+
+            btnWeeklyLoad.disabled = true;
+            btnWeeklyLoad.textContent = '読み込み中...';
+
+            try {
+                const response = await fetch(`/api/admin/weekly-message?date=${encodeURIComponent(date)}`, {
+                    headers: { 'X-Admin-Token': token }
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('adminToken');
+                    window.location.href = './admin/login';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`取得失敗: ${response.status}`);
+                }
+
+                const result = await response.json();
+                weeklyMessageText.value = result.message || '';
+                weeklyWeekInfo.textContent = `対象週: ${result.weekStart} / 更新: ${result.updatedAt || '-'}`;
+                showWeeklyStatus('読み込みました', 'success');
+            } catch (error) {
+                showWeeklyStatus(`取得エラー: ${error.message}`, 'error');
+            } finally {
+                btnWeeklyLoad.disabled = false;
+                btnWeeklyLoad.textContent = '読み込み';
+            }
+        }
+
+        async function saveWeeklyMessage() {
+            const token = localStorage.getItem('adminToken');
+            const date = weeklyDateInput.value || formatDateLocal(new Date());
+            const message = weeklyMessageText.value.trim();
+
+            if (!message) {
+                showWeeklyStatus('メッセージを入力してください', 'error');
+                return;
+            }
+
+            btnWeeklySave.disabled = true;
+            btnWeeklySave.textContent = '保存中...';
+
+            try {
+                const response = await fetch('/api/admin/weekly-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Token': token
+                    },
+                    body: JSON.stringify({ date, message })
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('adminToken');
+                    window.location.href = './admin/login';
+                    return;
+                }
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || `保存失敗: ${response.status}`);
+                }
+
+                const result = await response.json();
+                weeklyWeekInfo.textContent = `対象週: ${result.weekStart}`;
+                showWeeklyStatus('保存しました', 'success');
+                await loadWeeklyMessageByDate();
+            } catch (error) {
+                showWeeklyStatus(`保存エラー: ${error.message}`, 'error');
+            } finally {
+                btnWeeklySave.disabled = false;
+                btnWeeklySave.textContent = '保存';
+            }
+        }
+
+        function showWeeklyStatus(message, type) {
+            weeklyMessageStatus.textContent = message;
+            weeklyMessageStatus.className = `status-message show ${type}`;
+            setTimeout(() => {
+                weeklyMessageStatus.classList.remove('show');
+            }, 4000);
+        }
+
+        weeklyDateInput.addEventListener('change', loadWeeklyMessageByDate);
+        btnWeeklyLoad.addEventListener('click', loadWeeklyMessageByDate);
+        btnWeeklySave.addEventListener('click', saveWeeklyMessage);
+
+        weeklyDateInput.value = formatDateLocal(new Date());
+        loadWeeklyMessageByDate();
+
+        const EV_THUMBNAILS = [
+            'https://mai.honna-yuzuki.com/thumb/th-yt-main.webp',
+            'https://mai.honna-yuzuki.com/thumb/twitch.webp',
+            'https://mai.honna-yuzuki.com/thumb/bilibili.webp',
+            'https://mai.honna-yuzuki.com/thumb/twitcasting.webp',
+        ];
+        const EV_PLATFORM_URL_TEMPLATES = {
+            youtube: 'https://www.youtube.com/@koinoyamaich',
+            twitcasting: 'https://twitcasting.tv/c:koinoya_mai',
+            twitch: 'https://www.twitch.tv/koinoya_mai',
+            other: ''
+        };
+        let editingEventId = null;
+
+        function evEscapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text == null ? '' : String(text);
+            return div.innerHTML;
+        }
+
+        function evToDatetimeLocal(value) {
+            if (!value) return '';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return '';
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            return `${y}-${m}-${day}T${hh}:${mm}`;
+        }
+
+        async function evAdminFetch(url, options = {}) {
+            const token = localStorage.getItem('adminToken');
+            if (!token) throw new Error('管理者トークンがありません');
+
+            const headers = {
+                'X-Admin-Token': token,
+                ...(options.body ? { 'Content-Type': 'application/json' } : {})
+            };
+            const response = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+            if (response.status === 401) {
+                localStorage.removeItem('adminToken');
+                window.location.href = './admin/login';
+                throw new Error('認証期限が切れました');
+            }
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                throw new Error(`API ${response.status}: ${text}`);
+            }
+            return response;
+        }
+
+        function evRenderThumbnailPicker() {
+            evThumbPicker.innerHTML = EV_THUMBNAILS.map((thumbUrl) => `
+                <div class="thumb-item" data-url="${thumbUrl}">
+                    <img src="${thumbUrl}" alt="thumbnail">
+                </div>
+            `).join('');
+
+            evThumbPicker.addEventListener('click', (e) => {
+                const item = e.target.closest('.thumb-item');
+                if (!item) return;
+                evThumbPicker.querySelectorAll('.thumb-item').forEach((el) => el.classList.remove('selected'));
+                item.classList.add('selected');
+                evThumbUrl.value = item.dataset.url || '';
+            });
+
+            evThumbUrl.addEventListener('input', () => {
+                const value = evThumbUrl.value.trim();
+                evThumbPicker.querySelectorAll('.thumb-item').forEach((el) => {
+                    el.classList.toggle('selected', el.dataset.url === value);
+                });
+            });
+        }
+
+        function evRenderEventItem(event) {
+            const thumbHtml = event.thumbnail_url
+                ? `<div class="event-thumbnail"><img src="${event.thumbnail_url}" alt="${evEscapeHtml(event.title)}"></div>`
+                : '<div class="event-thumbnail"></div>';
+            const statusText = event.status === 'live' ? 'LIVE' : event.status === 'ended' ? '終了' : '予定';
+            const platformBadge = event.platform === 'youtube'
+                ? '<span class="badge badge-youtube">YouTube</span>'
+                : event.platform === 'twitcasting'
+                    ? '<span class="badge badge-twitcasting">TwitCasting</span>'
+                    : '';
+            const confirmedBadge = String(event.confirmed) === 'true'
+                ? '<span class="badge badge-confirmed">確定</span>'
+                : '<span class="badge badge-unconfirmed">未定</span>';
+            const startTimeText = event.start_time
+                ? new Date(event.start_time).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : '日時未定';
+
+            return `
+                <div class="event-item">
+                    ${thumbHtml}
+                    <div class="event-info">
+                        <div class="event-title">${evEscapeHtml(event.title || '')}</div>
+                        <div class="event-meta">🕒 ${startTimeText}</div>
+                        <div class="event-badges">
+                            <span class="badge badge-${event.status || 'scheduled'}">${statusText}</span>
+                            ${platformBadge}
+                            ${confirmedBadge}
+                        </div>
+                    </div>
+                    <div class="event-actions">
+                        <button type="button" class="event-btn event-btn-sub" data-action="edit" data-id="${event.id}">編集</button>
+                        <button type="button" class="event-btn event-btn-danger" data-action="delete" data-id="${event.id}">削除</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function evLoadEvents() {
+            eventContainer.innerHTML = '読み込み中...';
+            try {
+                const res = await evAdminFetch('/api/admin/events?limit=100');
+                const data = await res.json();
+                const items = data.items || [];
+                if (!items.length) {
+                    eventContainer.innerHTML = 'イベントなし';
+                    return;
+                }
+                eventContainer.innerHTML = items.map(evRenderEventItem).join('');
+            } catch (error) {
+                eventContainer.innerHTML = `取得失敗: ${evEscapeHtml(error.message)}`;
+            }
+        }
+
+        function evOpenCreateModal() {
+            editingEventId = null;
+            evModalTitle.textContent = '新規イベント作成';
+            evForm.reset();
+            eventModal.classList.add('active');
+            evThumbPicker.querySelectorAll('.thumb-item').forEach((el) => el.classList.remove('selected'));
+        }
+
+        function evCloseModal() {
+            eventModal.classList.remove('active');
+        }
+
+        async function evEditEvent(id) {
+            try {
+                const res = await evAdminFetch(`/api/admin/events/${id}`);
+                const event = await res.json();
+                editingEventId = id;
+                evModalTitle.textContent = 'イベント編集';
+                evTitle.value = event.title || '';
+                evStartTime.value = evToDatetimeLocal(event.start_time);
+                evPlatform.value = event.platform || 'other';
+                evType.value = event.event_type || 'live';
+                evUrl.value = event.url || '';
+                evThumbUrl.value = event.thumbnail_url || '';
+                evDescription.value = event.description || '';
+                evConfirmed.value = event.confirmed === true ? 'true' : '';
+                evThumbPicker.querySelectorAll('.thumb-item').forEach((el) => {
+                    el.classList.toggle('selected', el.dataset.url === (event.thumbnail_url || ''));
+                });
+                eventModal.classList.add('active');
+            } catch (error) {
+                showStatus(`イベント読込エラー: ${error.message}`, 'error');
+            }
+        }
+
+        async function evDeleteEvent(id) {
+            if (!confirm('削除しますか？')) return;
+            try {
+                await evAdminFetch(`/api/admin/events/${id}`, { method: 'DELETE' });
+                showStatus('イベントを削除しました', 'success');
+                await evLoadEvents();
+            } catch (error) {
+                showStatus(`削除エラー: ${error.message}`, 'error');
+            }
+        }
+
+        async function evHandleSubmit(e) {
+            e.preventDefault();
+            const payload = {
+                title: evTitle.value.trim(),
+                start_time: evStartTime.value || null,
+                platform: evPlatform.value,
+                event_type: evType.value,
+                url: evUrl.value.trim(),
+                thumbnail_url: evThumbUrl.value.trim(),
+                description: evDescription.value.trim(),
+                confirmed: evConfirmed.value === 'true'
+            };
+            if (!payload.title) {
+                showStatus('イベントタイトルは必須です', 'error');
+                return;
+            }
+
+            try {
+                const targetUrl = editingEventId ? `/api/admin/events/${editingEventId}` : '/api/admin/events';
+                const method = editingEventId ? 'PUT' : 'POST';
+                await evAdminFetch(targetUrl, { method, body: JSON.stringify(payload) });
+                showStatus(editingEventId ? 'イベントを更新しました' : 'イベントを作成しました', 'success');
+                evCloseModal();
+                await evLoadEvents();
+            } catch (error) {
+                showStatus(`保存エラー: ${error.message}`, 'error');
+            }
+        }
+
+        evPlatform.addEventListener('change', (e) => {
+            if (evUrl.value.trim() !== '') return;
+            evUrl.value = EV_PLATFORM_URL_TEMPLATES[e.target.value] || '';
+        });
+
+        eventContainer.addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+            const id = parseInt(button.dataset.id, 10);
+            if (Number.isNaN(id)) return;
+            if (button.dataset.action === 'edit') evEditEvent(id);
+            if (button.dataset.action === 'delete') evDeleteEvent(id);
+        });
+
+        evForm.addEventListener('submit', evHandleSubmit);
+        btnEvCreate.addEventListener('click', evOpenCreateModal);
+        btnEvReload.addEventListener('click', evLoadEvents);
+        btnEvClose.addEventListener('click', evCloseModal);
+        btnEvCancel.addEventListener('click', evCloseModal);
+        eventModal.addEventListener('click', (e) => {
+            if (e.target === eventModal) evCloseModal();
+        });
+
+        evRenderThumbnailPicker();
+        evLoadEvents();
         
         function showStatus(message, type) {
             statusMessage.textContent = message;
