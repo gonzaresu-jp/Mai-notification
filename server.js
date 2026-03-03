@@ -2339,6 +2339,12 @@ async function handleAdminNotify(body, adminUser = 'scheduler') {
   const isTargetedSend = clientIds.length > 0;
   const isScheduleEventNotify = type === 'event' && settingKey === 'schedule';
 
+  // ユーザー個別スケジューラは、宛先未指定時に絶対ブロードキャストしない
+  if (adminUser === 'user-scheduler' && !isTargetedSend) {
+    console.warn('[Admin Notification] user-scheduler skip: missing target clientIds');
+    return { sentCount: 0, totalCount: 0, skipped: true, reason: 'missing_target' };
+  }
+
   const MAX_TARGET = 500;
   if (clientIds.length > MAX_TARGET) {
     throw new Error(`Too many clientIds (max ${MAX_TARGET})`);
@@ -2457,6 +2463,153 @@ async function handleAdminNotify(body, adminUser = 'scheduler') {
 
   return { sentCount, totalCount: total };
 }
+
+async function sendUserScheduleReminders() {
+  const now = Date.now();
+  const USER_SCHEDULE_LATE_CUTOFF_MS = 2 * 60 * 1000; // 2分以上過去なら通知しない
+  const candidates = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT id, user_id, title, note, url, thumbnail_url, scheduled_at, reminder_minutes
+       FROM user_schedules
+       WHERE event_id IS NULL
+         AND COALESCE(source, 'user') = 'user'
+         AND scheduled_at IS NOT NULL
+         AND reminder_sent_at IS NULL`,
+      [],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      }
+    );
+  });
+
+  for (const row of candidates) {
+    const scheduledMs = new Date(row.scheduled_at).getTime();
+    if (!Number.isFinite(scheduledMs)) continue;
+
+    // 予定時刻を過ぎた古い予定は通知対象外として完了扱いにする
+    if (scheduledMs < (now - USER_SCHEDULE_LATE_CUTOFF_MS)) {
+      await new Promise((resolve) => {
+        db.run(
+          'UPDATE user_schedules SET reminder_sent_at = CURRENT_TIMESTAMP WHERE id = ? AND reminder_sent_at IS NULL',
+          [row.id],
+          () => resolve()
+        );
+      });
+      continue;
+    }
+
+    const reminderMinutes = Number.isFinite(Number(row.reminder_minutes))
+      ? Number(row.reminder_minutes)
+      : 30;
+    const dueMs = scheduledMs - (reminderMinutes * 60 * 1000);
+    if (dueMs > now) continue;
+
+    const lockToken = `processing:${Date.now()}:${Math.random()}`;
+    const locked = await new Promise((resolve) => {
+      db.run(
+        `UPDATE user_schedules
+         SET reminder_sent_at = ?
+         WHERE id = ? AND reminder_sent_at IS NULL`,
+        [lockToken, row.id],
+        function () {
+          resolve(this.changes > 0);
+        }
+      );
+    });
+    if (!locked) continue;
+
+    try {
+      const clientRows = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT us.client_id
+           FROM user_subscriptions us
+           JOIN subscriptions s ON s.client_id = us.client_id
+           WHERE us.user_id = ?
+             AND s.subscription_json IS NOT NULL`,
+          [row.user_id],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
+
+      if (!clientRows.length) {
+        await new Promise((resolve) => {
+          db.run(
+            'UPDATE user_schedules SET reminder_sent_at = NULL WHERE id = ? AND reminder_sent_at = ?',
+            [row.id, lockToken],
+            () => resolve()
+          );
+        });
+        continue;
+      }
+
+      const clientId = clientRows
+        .map(r => r.client_id)
+        .filter(Boolean)
+        .join(',');
+
+      if (!clientId) {
+        await new Promise((resolve) => {
+          db.run(
+            'UPDATE user_schedules SET reminder_sent_at = NULL WHERE id = ? AND reminder_sent_at = ?',
+            [row.id, lockToken],
+            () => resolve()
+          );
+        });
+        continue;
+      }
+
+      const payload = {
+        type: 'event',
+        settingKey: 'schedule',
+        clientId,
+        data: {
+          title: row.title || 'マイスケジュール通知',
+          body: row.note != null ? row.note : '予定時刻が近づいています。',
+          url: row.url || '/webui/events.html',
+          icon: row.thumbnail_url || '/webui/icon.webp'
+        }
+      };
+
+      const result = await handleAdminNotify(payload, 'user-scheduler');
+      if (result && result.sentCount > 0) {
+        await new Promise((resolve) => {
+          db.run(
+            'UPDATE user_schedules SET reminder_sent_at = CURRENT_TIMESTAMP WHERE id = ? AND reminder_sent_at = ?',
+            [row.id, lockToken],
+            () => resolve()
+          );
+        });
+      } else {
+        await new Promise((resolve) => {
+          db.run(
+            'UPDATE user_schedules SET reminder_sent_at = NULL WHERE id = ? AND reminder_sent_at = ?',
+            [row.id, lockToken],
+            () => resolve()
+          );
+        });
+      }
+    } catch (e) {
+      console.error('[User Schedule Notify] failed id=', row.id, e && e.message ? e.message : e);
+      await new Promise((resolve) => {
+        db.run(
+          'UPDATE user_schedules SET reminder_sent_at = NULL WHERE id = ? AND reminder_sent_at = ?',
+          [row.id, lockToken],
+          () => resolve()
+        );
+      });
+    }
+  }
+}
+
+setInterval(() => {
+  sendUserScheduleReminders().catch((e) => {
+    console.error('[User Schedule Notify] fatal:', e && e.message ? e.message : e);
+  });
+}, 30000);
 
 // --- イベント更新 (管理者のみ) ---
 app.put('/api/admin/events/:id', adminAuth.requireAuth, (req, res) => {
