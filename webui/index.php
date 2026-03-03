@@ -36,8 +36,8 @@
     <!-- manifest -->
     <link rel="manifest" href="./manifest.json" />
     
-    <link rel="stylesheet" href="./style.v2.0.css" />
-    <link rel="stylesheet" href="./top-card.v2.0.css" />
+    <link rel="stylesheet" href="./style.v2.1.css" />
+    <link rel="stylesheet" href="./top-card.v2.3.css" />
     <link rel="preconnect" href="https://elza.poitou-mora.ts.net">
     <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/ios-helper.js" defer></script>
@@ -124,6 +124,7 @@
     </button>
     </div>
     <div class="week-content">
+        <button id="week-add-user-schedule" class="week-add-btn" type="button" aria-label="予定を追加">+</button>
         <div id="weekly-schedule"></div>
         <div id="weekly-message"></div>
     </div>
