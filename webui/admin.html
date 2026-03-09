@@ -537,9 +537,14 @@
                     <input type="text" id="ev-title" required>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="ev-start-time-group">
                     <label for="ev-start-time">開始日時</label>
                     <input type="datetime-local" id="ev-start-time">
+                </div>
+
+                <div class="form-group" id="ev-memo-date-group" style="display:none">
+                    <label for="ev-memo-date">日付 *</label>
+                    <input type="date" id="ev-memo-date">
                 </div>
 
                 <div class="form-group">
@@ -569,6 +574,7 @@
                             <option value="voice">ボイス販売</option>
                             <option value="1on1">1on1</option>
                             <option value="other">その他</option>
+                            <option value="memo">📝 メモ</option>
                         </select>
                     </div>
                 </div>
@@ -604,7 +610,6 @@
     <script>
         // 認証チェック
         (async () => {
-            const token = localStorage.getItem('adminToken');
             
             if (!token) {
                 window.location.href = './admin/login';
@@ -613,14 +618,13 @@
             
             try {
                 const response = await fetch('/api/admin/verify', {
-                    headers: { 'X-Admin-Token': token }
+                    credentials: 'include'
                 });
                 
                 if (!response.ok) {
                     throw new Error('認証失敗');
                 }
             } catch (error) {
-                localStorage.removeItem('adminToken');
                 window.location.href = './admin/login';
                 return;
             }
@@ -699,13 +703,12 @@
             btnSend.textContent = '送信中...';
             
             try {
-                const token = localStorage.getItem('adminToken');
                 
                 const response = await fetch('/api/admin/notify', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'X-Admin-Token': token
                     },
                     body: JSON.stringify({
                         type: 'admin',
@@ -723,7 +726,6 @@
                 });
                 
                 if (response.status === 401) {
-                    localStorage.removeItem('adminToken');
                     window.location.href = '/pushweb/login';
                     return;
                 }
@@ -774,7 +776,6 @@
         }
 
         async function loadWeeklyMessageByDate() {
-            const token = localStorage.getItem('adminToken');
             const date = weeklyDateInput.value || formatDateLocal(new Date());
 
             btnWeeklyLoad.disabled = true;
@@ -782,11 +783,10 @@
 
             try {
                 const response = await fetch(`/api/admin/weekly-message?date=${encodeURIComponent(date)}`, {
-                    headers: { 'X-Admin-Token': token }
+                    credentials: 'include'
                 });
 
                 if (response.status === 401) {
-                    localStorage.removeItem('adminToken');
                     window.location.href = './admin/login';
                     return;
                 }
@@ -808,7 +808,6 @@
         }
 
         async function saveWeeklyMessage() {
-            const token = localStorage.getItem('adminToken');
             const date = weeklyDateInput.value || formatDateLocal(new Date());
             const message = weeklyMessageText.value.trim();
 
@@ -823,15 +822,14 @@
             try {
                 const response = await fetch('/api/admin/weekly-message', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Admin-Token': token
                     },
                     body: JSON.stringify({ date, message })
                 });
 
                 if (response.status === 401) {
-                    localStorage.removeItem('adminToken');
                     window.location.href = './admin/login';
                     return;
                 }
@@ -873,11 +871,13 @@
             'https://mai.honna-yuzuki.com/thumb/twitch.webp',
             'https://mai.honna-yuzuki.com/thumb/bilibili.webp',
             'https://mai.honna-yuzuki.com/thumb/twitcasting.webp',
+            'https://mai.honna-yuzuki.com/thumb/1on1.webp',
         ];
         const EV_PLATFORM_URL_TEMPLATES = {
             youtube: 'https://www.youtube.com/@koinoyamaich',
             twitcasting: 'https://twitcasting.tv/c:koinoya_mai',
             twitch: 'https://www.twitch.tv/koinoya_mai',
+            bilibili: 'https://live.bilibili.com/23105590',
             other: ''
         };
         let editingEventId = null;
@@ -901,16 +901,11 @@
         }
 
         async function evAdminFetch(url, options = {}) {
-            const token = localStorage.getItem('adminToken');
-            if (!token) throw new Error('管理者トークンがありません');
-
             const headers = {
-                'X-Admin-Token': token,
                 ...(options.body ? { 'Content-Type': 'application/json' } : {})
             };
-            const response = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+            const response = await fetch(url, { ...options, credentials: 'include', headers: { ...headers, ...(options.headers || {}) } });
             if (response.status === 401) {
-                localStorage.removeItem('adminToken');
                 window.location.href = './admin/login';
                 throw new Error('認証期限が切れました');
             }
@@ -1001,6 +996,7 @@
             editingEventId = null;
             evModalTitle.textContent = '新規イベント作成';
             evForm.reset();
+            evToggleMemoMode();
             eventModal.classList.add('active');
             evThumbPicker.querySelectorAll('.thumb-item').forEach((el) => el.classList.remove('selected'));
         }
@@ -1023,9 +1019,16 @@
                 evThumbUrl.value = event.thumbnail_url || '';
                 evDescription.value = event.description || '';
                 evConfirmed.value = event.confirmed === true ? 'true' : '';
+                // メモの場合は日付フィールドに復元
+                if (event.event_type === 'memo' && event.start_time) {
+                    evMemoDate.value = event.start_time.slice(0, 10);
+                } else {
+                    evMemoDate.value = '';
+                }
                 evThumbPicker.querySelectorAll('.thumb-item').forEach((el) => {
                     el.classList.toggle('selected', el.dataset.url === (event.thumbnail_url || ''));
                 });
+                evToggleMemoMode();
                 eventModal.classList.add('active');
             } catch (error) {
                 showStatus(`イベント読込エラー: ${error.message}`, 'error');
@@ -1045,9 +1048,12 @@
 
         async function evHandleSubmit(e) {
             e.preventDefault();
+            const isMemo = evType.value === 'memo';
             const payload = {
                 title: evTitle.value.trim(),
-                start_time: evStartTime.value || null,
+                start_time: isMemo
+                    ? (evMemoDate.value ? evMemoDate.value + 'T00:00' : null)
+                    : (evStartTime.value || null),
                 platform: evPlatform.value,
                 event_type: evType.value,
                 url: evUrl.value.trim(),
@@ -1057,6 +1063,10 @@
             };
             if (!payload.title) {
                 showStatus('イベントタイトルは必須です', 'error');
+                return;
+            }
+            if (isMemo && !evMemoDate.value) {
+                showStatus('メモには日付が必須です', 'error');
                 return;
             }
 
@@ -1076,6 +1086,33 @@
             if (evUrl.value.trim() !== '') return;
             evUrl.value = EV_PLATFORM_URL_TEMPLATES[e.target.value] || '';
         });
+
+        // メモ選択時はURL・サムネ・プラットフォーム・時刻を日付のみ入力に切り替え
+        const evMemoHideTargets = [
+            evUrl.closest('.form-group'),
+            evThumbUrl.closest('.form-group'),
+            document.getElementById('ev-thumb-picker').closest('.form-group'),
+            evPlatform.closest('.form-group'),
+        ];
+        const evStartTimeGroup = document.getElementById('ev-start-time-group');
+        const evMemoDateGroup  = document.getElementById('ev-memo-date-group');
+        const evMemoDate       = document.getElementById('ev-memo-date');
+
+        function evToggleMemoMode() {
+            const isMemo = evType.value === 'memo';
+            evMemoHideTargets.forEach(el => { if (el) el.style.display = isMemo ? 'none' : ''; });
+            evStartTimeGroup.style.display = isMemo ? 'none' : '';
+            evMemoDateGroup.style.display  = isMemo ? '' : 'none';
+            if (isMemo) {
+                evPlatform.value = 'other';
+                evUrl.value = '';
+                evThumbUrl.value = '';
+                evStartTime.value = '';
+            } else {
+                evMemoDate.value = '';
+            }
+        }
+        evType.addEventListener('change', evToggleMemoMode);
 
         eventContainer.addEventListener('click', (e) => {
             const button = e.target.closest('button[data-action]');

@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Update logs</title>
-    <link rel="icon" href="./icon.webp">
-    <link rel="stylesheet" href="/style.v2.0.css" />
+    <link rel="icon" href="../icon.webp">
+    <link rel="stylesheet" href="/style.v2.98.css" />
     <style type="text/css">
         dt {font-size: 24px;}
         @media(max-width: 800px){dt{font-size: 16px} .card{display: block;} img{ max-width: 80vw!important;}}
@@ -23,11 +23,38 @@
         <h2 class="history fade">Update logs</h2>
         <div class="card">
             <dl>
+                <dt>2026-03-10</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>スケジュールUI変更,新規スケジュール追加時に必ず未定表示になる問題を修正,管理者画面で全てのスケジュールが未定になる問題を修正,YT自動スケジュール追加の時に既存の10分以内のスケジュールを削除するよう変更,YT自動スケジュール追加を2週間のみに制限,スケジュールにまいちゃんのメモを追加,バックエンドでのセキュリティ強化</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
+                <dt>2026-03-07</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>Androidアプリ実装準備のためのCSS最適化</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
+                <dt>2026-03-06</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>Safariでの表示、スクロール問題を修正,UI改善</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
                 <dt>2026-03-03</dt>
             </dl>
             <div class="bg"></div>
             <dl>
-                <dt>複数デバイスでの利便性向上のため、Googleアカウントによるログイン機能を追加</dt>
+                <dt>複数デバイスでの利便性向上のため、Googleアカウントによるログイン機能を追加,Googleアカウント別でスケジュール追加が可能になる,コード行数15684</dt>
             </dl>
         </div>
         <div class="card">
@@ -36,7 +63,7 @@
             </dl>
             <div class="bg"></div>
             <dl>
-                <dt>管理者通知パネルのUIを大幅に改善,通知ダッシュボードのUI改善,クリックで喋る3Dまいちゃん追加,スケジュールにまいちゃんの一言追加,チャンネル登録者数推移の情報を追加,デビューと推し日数に年月表記追加</dt>
+                <dt>管理者通知パネルのUIを大幅に改善,通知ダッシュボードのUI改善,クリックで喋る3Dまいちゃん追加,スケジュールにまいちゃんの一言追加,チャンネル登録者数推移の情報を追加,デビューと推し日数に年月表記追加,コード行数約1.4万</dt>
             </dl>
         </div>
         <div class="card">
@@ -63,7 +90,7 @@
             </dl>
             <div class="bg"></div>
             <dl>
-                <dt>週間予定表の編集ページ追加,予定表の自動追加(現時点でYTのみ),rss対応</dt>
+                <dt>週間予定表の編集ページ追加,予定表の自動追加(現時点でYTのみ),rss対応,コード行数12312</dt>
             </dl>
         </div>
         <div class="card">
@@ -108,7 +135,7 @@
             </dl>
             <div class="bg"></div>
             <dl>
-                <dt>phpを導入し、一部htmlをphpに変更</dt>
+                <dt>phpを導入し、一部htmlをphpに変更,コード行数10393</dt>
             </dl>
         </div>
         <div class="card">
@@ -207,7 +234,7 @@
             </dl>
             <div class="bg"></div>
             <dl>
-                <dt>テスト運用開始</dt>
+                <dt>テスト運用開始,コード行数約5600</dt>
             </dl>
         </div>
         <div class="card">
