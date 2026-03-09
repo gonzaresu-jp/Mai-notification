@@ -13,6 +13,16 @@ const userRoutes   = require('./user-routes');
 
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
+// 認証エンドポイント用レートリミット（1分に20回まで）
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => {
+    return req.ip || req.headers['x-forwarded-for']?.split(',')?.[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 const app = express();
 const dbPath = path.join(__dirname, 'data.db');
@@ -127,7 +137,7 @@ app.use('/pushweb', express.static(path.join(__dirname, 'pushweb')));
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
 app.set('trust proxy', true);
 app.use('/webui', express.static(path.join(__dirname, 'webui')));
-userRoutes.register(app, db);
+userRoutes.register(app, db, authLimiter);
 
 
 // --- VAPID設定 ---
@@ -654,6 +664,7 @@ function syncEventNotifications() {
       FROM events
       WHERE start_time IS NOT NULL
       AND status != 'cancelled'
+      AND event_type != 'memo'
       AND start_time >= ?
       AND start_time <= ?
       `,
@@ -1177,7 +1188,7 @@ app.get('/api/events/rss', (req, res) => {
 
       if (event.thumbnail_url) {
         rss += `
-      <enclosure url="${escapeXml(event.thumbnail_url)}" type="image/jpeg" />`;
+      <enclosure url="${escapeXml(event.thumbnail_url)}" type="${event.thumbnail_url?.endsWith(".webp") ? "image/webp" : "image/jpeg"}" />`;
       }
 
       rss += `
@@ -1189,6 +1200,7 @@ app.get('/api/events/rss', (req, res) => {
 </rss>`;
 
     res.set('Content-Type', 'application/rss+xml; charset=utf-8');
+    res.set('Access-Control-Allow-Origin', '*');
     res.send(rss);
   });
 });
@@ -1897,6 +1909,7 @@ const notifyLimiter = rateLimit({
 });
 
 
+
 // 認証ミドルウェア: ヘッダ X-Notify-Token または Authorization: Bearer <token>
 function requireNotifyToken(req, res, next) {
   if (!ADMIN_NOTIFY_TOKEN) {
@@ -2087,18 +2100,24 @@ function renderHistoryHtml(logs) {
       timeZone: 'Asia/Tokyo'
     });
 
+    const safeIcon     = escapeXml(log.icon     || '');
+    const safeUrl      = escapeXml(log.url       || '');
+    const safeTitle    = escapeXml(log.title     || '');
+    const safeBody     = escapeXml(log.body      || '');
+    const safePlatform = escapeXml(log.platform  || '');
+
     return `
 <div class="card" data-log-id="${log.id}">
-  ${log.icon ? `<img src="${log.icon}" alt="icon" class="icon" loading="lazy">` : ''}
+  ${safeIcon ? `<img src="${safeIcon}" alt="icon" class="icon" loading="lazy">` : ''}
   <div class="card-content">
     <div class="title">
-      ${log.url
-        ? `<a href="${log.url}" target="_blank" rel="noopener noreferrer">${log.title}</a>`
-        : log.title}
+      ${safeUrl
+        ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeTitle}</a>`
+        : safeTitle}
     </div>
-    <p class="body">${log.body || ''}</p>
+    <p class="body">${safeBody}</p>
     <div class="meta">
-      <span class="platform">${log.platform}</span>
+      <span class="platform">${safePlatform}</span>
       <span class="time">${date}</span>
       ${log.status === 'fail' ? '<span class="status-badge">送信失敗</span>' : ''}
     </div>

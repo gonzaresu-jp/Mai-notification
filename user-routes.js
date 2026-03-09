@@ -139,6 +139,57 @@ function mergeSettings(json) {
   return { ...DEFAULT_PLATFORM_SETTINGS, ...parsed };
 }
 
+const MAX_SCHEDULE_TITLE_LEN = 120;
+const MAX_SCHEDULE_TEXT_LEN = 200;
+const MAX_SCHEDULE_URL_LEN = 500;
+const ALLOWED_REMINDER_MINUTES = new Set([60, 30, 10, 5, 3, 0]);
+
+function normalizeOptionalText(value, maxLen) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+  return normalized.slice(0, maxLen);
+}
+
+function normalizeRequiredTitle(value) {
+  const normalized = normalizeOptionalText(value, MAX_SCHEDULE_TITLE_LEN);
+  return normalized || null;
+}
+
+function normalizeOptionalHttpUrl(value) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (raw.length > MAX_SCHEDULE_URL_LEN) {
+    throw new Error('URL_TOO_LONG');
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('URL_INVALID');
+  }
+
+  const protocol = String(parsed.protocol || '').toLowerCase();
+  if (protocol !== 'https:' && protocol !== 'http:') {
+    throw new Error('URL_SCHEME_INVALID');
+  }
+  return parsed.toString();
+}
+
+function normalizeReminderMinutes(value, fallback = 30) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const n = Number(value);
+  if (!Number.isFinite(n) || !ALLOWED_REMINDER_MINUTES.has(n)) {
+    throw new Error('REMINDER_INVALID');
+  }
+  return n;
+}
+
 // ============================================================
 // 匿名サブスクリプション → ユーザーへのマイグレーション
 // ============================================================
@@ -196,12 +247,21 @@ async function upsertUser(db, googleUser) {
 // ============================================================
 // ルート登録
 // ============================================================
-function register(app, db) {
+// 自サイト内パスのみ許可するリダイレクトヘルパー
+function safeRedirect(res, url) {
+  const target = (typeof url === 'string' && url.startsWith('/') && !url.startsWith('//'))
+    ? url
+    : '/';
+  res.redirect(target);
+}
+
+function register(app, db, authLimiter) {
+  const limiter = authLimiter || ((req, res, next) => next()); // fallback: no-op
 
   // ──────────────────────────────────────────
   // 1. Google ログイン開始
   // ──────────────────────────────────────────
-  app.get('/auth/google', (req, res) => {
+  app.get('/auth/google', limiter, (req, res) => {
     const returnTo  = req.query.returnTo  || '/';
     const clientId  = req.query.client_id || ''; // 匿名デバイスのIDを渡す
     const state = Buffer.from(JSON.stringify({ returnTo, clientId })).toString('base64url');
@@ -211,7 +271,7 @@ function register(app, db) {
   // ──────────────────────────────────────────
   // 2. Google コールバック
   // ──────────────────────────────────────────
-  app.get('/auth/google/callback', async (req, res) => {
+  app.get('/auth/google/callback', limiter, async (req, res) => {
     const { code, state } = req.query;
     if (!code) return res.status(400).send('Missing authorization code');
 
@@ -233,7 +293,7 @@ function register(app, db) {
       res.cookie(auth.COOKIE_NAME, token, auth.COOKIE_OPTIONS);
 
       console.log(`[auth] login: user_id=${user.id} email=${user.email || user.google_id}`);
-      res.redirect(stateData.returnTo || '/');
+      safeRedirect(res, stateData.returnTo);
     } catch (e) {
       console.error('[auth/google/callback]', e.message || e);
       res.status(500).send('Authentication failed. Please try again.');
@@ -249,10 +309,9 @@ function register(app, db) {
   });
 
   // GET でもログアウトできるようにする（リンクからのアクセス対応）
-  app.get('/auth/logout', (req, res) => {
+  app.get('/auth/logout', limiter, (req, res) => {
     res.clearCookie(auth.COOKIE_NAME);
-    const returnTo = req.query.returnTo || '/';
-    res.redirect(returnTo);
+    safeRedirect(res, req.query.returnTo);
   });
 
   // ──────────────────────────────────────────
@@ -524,6 +583,11 @@ function register(app, db) {
   app.post('/api/user/schedules', auth.requireAuth, async (req, res) => {
     const { event_id, title, note, text, url, thumbnail_url, scheduled_at, reminder_minutes } = req.body;
     try {
+      const normalizedText = normalizeOptionalText(note ?? text, MAX_SCHEDULE_TEXT_LEN);
+      const normalizedUrl = normalizeOptionalHttpUrl(url);
+      const normalizedThumbUrl = normalizeOptionalHttpUrl(thumbnail_url);
+      const normalizedReminder = normalizeReminderMinutes(reminder_minutes, 30);
+
       if (event_id !== undefined && event_id !== null) {
         const event = await dbGet(db, 'SELECT id FROM events WHERE id = ?', [event_id]);
         if (!event) return res.status(404).json({ error: 'Event not found' });
@@ -531,12 +595,13 @@ function register(app, db) {
         const result = await dbRun(db,
           `INSERT INTO user_schedules (user_id, event_id, source, note, url, thumbnail_url, reminder_minutes)
            VALUES (?, ?, 'admin', ?, ?, ?, ?)`,
-          [req.userId, event_id, note ?? text ?? null, url ?? null, thumbnail_url ?? null, reminder_minutes ?? 30]
+          [req.userId, event_id, normalizedText ?? null, normalizedUrl ?? null, normalizedThumbUrl ?? null, normalizedReminder]
         );
         return res.status(201).json({ success: true, id: result.lastID, source: 'admin' });
       }
 
-      if (!title || typeof title !== 'string' || !title.trim()) {
+      const normalizedTitle = normalizeRequiredTitle(title);
+      if (!normalizedTitle) {
         return res.status(400).json({ error: 'title required' });
       }
       if (!scheduled_at || isNaN(new Date(scheduled_at).getTime())) {
@@ -546,10 +611,20 @@ function register(app, db) {
       const result = await dbRun(db,
         `INSERT INTO user_schedules (user_id, event_id, source, title, note, url, thumbnail_url, scheduled_at, reminder_minutes)
          VALUES (?, NULL, 'user', ?, ?, ?, ?, ?, ?)`,
-        [req.userId, title.trim(), note ?? text ?? null, url ?? null, thumbnail_url ?? null, scheduled_at, reminder_minutes ?? 30]
+        [req.userId, normalizedTitle, normalizedText ?? null, normalizedUrl ?? null, normalizedThumbUrl ?? null, scheduled_at, normalizedReminder]
       );
       res.status(201).json({ success: true, id: result.lastID, source: 'user' });
     } catch (e) {
+      const msg = String(e && e.message ? e.message : '');
+      if (msg === 'URL_INVALID' || msg === 'URL_SCHEME_INVALID') {
+        return res.status(400).json({ error: 'URL must be http/https' });
+      }
+      if (msg === 'URL_TOO_LONG') {
+        return res.status(400).json({ error: `URL too long (max ${MAX_SCHEDULE_URL_LEN})` });
+      }
+      if (msg === 'REMINDER_INVALID') {
+        return res.status(400).json({ error: 'reminder_minutes must be one of: 60,30,10,5,3,0' });
+      }
       res.status(500).json({ error: e.message });
     }
   });
@@ -557,6 +632,21 @@ function register(app, db) {
   app.put('/api/user/schedules/:id', auth.requireAuth, async (req, res) => {
     const { title, note, text, url, thumbnail_url, scheduled_at, reminder_minutes } = req.body;
     try {
+      const normalizedTitle = normalizeOptionalText(title, MAX_SCHEDULE_TITLE_LEN);
+      const normalizedText = normalizeOptionalText(note ?? text, MAX_SCHEDULE_TEXT_LEN);
+      const normalizedUrl = normalizeOptionalHttpUrl(url);
+      const normalizedThumbUrl = normalizeOptionalHttpUrl(thumbnail_url);
+      const normalizedReminder = (reminder_minutes === undefined)
+        ? undefined
+        : normalizeReminderMinutes(reminder_minutes, 30);
+
+      if (title !== undefined && !normalizedTitle) {
+        return res.status(400).json({ error: 'title required' });
+      }
+      if (scheduled_at !== undefined && scheduled_at !== null && scheduled_at !== '' && isNaN(new Date(scheduled_at).getTime())) {
+        return res.status(400).json({ error: 'valid scheduled_at required' });
+      }
+
       const result = await dbRun(db,
         `UPDATE user_schedules
          SET title = COALESCE(?, title),
@@ -570,29 +660,65 @@ function register(app, db) {
          WHERE id = ? AND user_id = ?
            AND COALESCE(source, 'user') = 'user'
            AND event_id IS NULL`,
-        [title ?? null, note ?? text ?? null, url ?? null, thumbnail_url ?? null, scheduled_at ?? null, reminder_minutes ?? null, req.params.id, req.userId]
+        [
+          normalizedTitle ?? null,
+          normalizedText ?? null,
+          normalizedUrl ?? null,
+          normalizedThumbUrl ?? null,
+          scheduled_at ?? null,
+          normalizedReminder ?? null,
+          req.params.id,
+          req.userId
+        ]
       );
       if (result.changes === 0) {
         return res.status(403).json({ error: 'Admin schedules are read-only' });
       }
       res.json({ success: true });
     } catch (e) {
+      const msg = String(e && e.message ? e.message : '');
+      if (msg === 'URL_INVALID' || msg === 'URL_SCHEME_INVALID') {
+        return res.status(400).json({ error: 'URL must be http/https' });
+      }
+      if (msg === 'URL_TOO_LONG') {
+        return res.status(400).json({ error: `URL too long (max ${MAX_SCHEDULE_URL_LEN})` });
+      }
+      if (msg === 'REMINDER_INVALID') {
+        return res.status(400).json({ error: 'reminder_minutes must be one of: 60,30,10,5,3,0' });
+      }
       res.status(500).json({ error: e.message });
     }
   });
 
   app.delete('/api/user/schedules/:id', auth.requireAuth, async (req, res) => {
     try {
-      const result = await dbRun(db,
-        `DELETE FROM user_schedules
+      // 削除前にレコードを取得して存在・権限確認
+      const schedule = await dbGet(db,
+        `SELECT id, reminder_sent_at FROM user_schedules
          WHERE id = ? AND user_id = ?
            AND COALESCE(source, 'user') = 'user'
            AND event_id IS NULL`,
         [req.params.id, req.userId]
       );
-      if (result.changes === 0) {
+      if (!schedule) {
         return res.status(403).json({ error: 'Admin schedules are read-only' });
       }
+
+      // sendUserScheduleReminders() がこのスケジュールを掴まないよう
+      // 先にロック値をセットしてから削除する（レースコンディション防止）
+      await dbRun(db,
+        `UPDATE user_schedules
+         SET reminder_sent_at = 'deleted'
+         WHERE id = ? AND reminder_sent_at IS NULL`,
+        [req.params.id]
+      );
+
+      // スケジュール本体を削除
+      await dbRun(db,
+        `DELETE FROM user_schedules WHERE id = ? AND user_id = ?`,
+        [req.params.id, req.userId]
+      );
+
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: e.message });
