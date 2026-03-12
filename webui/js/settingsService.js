@@ -1,6 +1,14 @@
 // settingsService.js - プラットフォーム設定管理（統合API対応版）
 import { API, getClientId, fetchWithTimeout, mergeSettings } from './config.js';
 
+function isAndroidApp() {
+  try {
+    return typeof window !== 'undefined' && window.MaiApp && typeof window.MaiApp.isAndroidApp === 'function' && window.MaiApp.isAndroidApp();
+  } catch {
+    return false;
+  }
+}
+
 export function getPlatformSettings() {
   return {
     twitcasting: document.getElementById('toggle-twitcasting')?.classList.contains('is-on') || false,
@@ -18,6 +26,39 @@ export function getPlatformSettings() {
 }
 
 export async function savePlatformSettings() {
+  if (isAndroidApp()) {
+    try {
+      const platformSettings = getPlatformSettings();
+      console.log('[Android] updateSettings', platformSettings);
+      window.MaiApp.updateSettings(JSON.stringify(platformSettings));
+      try { localStorage.setItem('platformSettings', JSON.stringify(platformSettings)); } catch(e){}
+      try {
+        const androidClientId = window.MaiApp.getAndroidClientId && window.MaiApp.getAndroidClientId();
+        if (androidClientId) {
+          await fetch('/api/android/link-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ clientId: androidClientId })
+          });
+
+          // サーバー側にも設定を反映（通知ON/OFFの実体）
+          await fetch('/api/android/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ clientId: androidClientId, settings: platformSettings })
+          });
+        }
+      } catch (e) {
+        console.warn('[Android] link-user/settings failed', e);
+      }
+      return true;
+    } catch (e) {
+      console.error('Android settings update failed:', e);
+      return false;
+    }
+  }
   const clientId = getClientId();
   if (!clientId) {
     console.error('Client IDが取得できません。設定保存を中止します。');
@@ -223,3 +264,4 @@ export function applySettingsToUI(settings) {
     btn.textContent = `${label}: ${value ? 'ON' : 'OFF'}`;
   }
 }
+

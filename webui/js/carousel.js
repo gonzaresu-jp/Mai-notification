@@ -26,19 +26,51 @@ function update() {
   }
 
   dots.forEach((d, i) => d.classList.toggle('active', i === current));
+
+  // 矢印の端判定
+  if (arrowPrev) arrowPrev.disabled = current === 0;
+  if (arrowNext) arrowNext.disabled = current === maxPage;
 }
 
-/** ドットボタンを生成 */
+/** ドットボタンと左右矢印を生成 */
+let arrowPrev = null;
+let arrowNext = null;
+
 function initDots() {
   dotsWrap.innerHTML = '';
   dots.length = 0;
 
+  // 左矢印
+  arrowPrev = document.createElement('button');
+  arrowPrev.type = 'button';
+  arrowPrev.className = 'carousel-arrow carousel-arrow-prev';
+  arrowPrev.setAttribute('aria-label', '前のスライドへ');
+  arrowPrev.innerHTML = '<i class="fa-solid fa-angle-left" aria-hidden="true"></i>';
+  arrowPrev.addEventListener('click', () => {
+    if (current > 0) { current--; update(); }
+  });
+  dotsWrap.appendChild(arrowPrev);
+
+  // ドット
   for (let i = 0; i <= maxPage; i++) {
     const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('aria-label', `スライド ${i + 1}`);
     b.addEventListener('click', () => { current = i; update(); });
     dotsWrap.appendChild(b);
     dots.push(b);
   }
+
+  // 右矢印
+  arrowNext = document.createElement('button');
+  arrowNext.type = 'button';
+  arrowNext.className = 'carousel-arrow carousel-arrow-next';
+  arrowNext.setAttribute('aria-label', '次のスライドへ');
+  arrowNext.innerHTML = '<i class="fa-solid fa-angle-right" aria-hidden="true"></i>';
+  arrowNext.addEventListener('click', () => {
+    if (current < maxPage) { current++; update(); }
+  });
+  dotsWrap.appendChild(arrowNext);
 }
 
 // ===== ポインターイベント（スワイプ） =====

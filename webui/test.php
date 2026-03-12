@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>テスト完了！</title>
     <link rel="icon" href="/icon.webp">
-    <link rel="stylesheet" href="/style.v2.0.css" />
+    <link rel="stylesheet" href="/style.v2.98.css" />
 
     <script src="https://unpkg.com/@lottiefiles/lottie-player@2.0.2/dist/lottie-player.js"></script>
 <style type="text/css">

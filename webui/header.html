@@ -192,6 +192,7 @@
                 
                 <li><a href="https://github.com/gonzaresu-jp/Mai-notification" target="_blank" rel="noopener noreferrer">GitHubページ(使用方法)</a></li>
                 <li><a href="/info/" rel="noopener noreferrer">このサービスについて</a></li>
+                <li><a href="/download/" rel="noopener noreferrer">Androidアプリをダウンロード</a></li>
                 <li><a href="/logs/" rel="noopener noreferrer">Update logs</a></li>
                 <li><a href="https://form.jotform.com/253191048959063" target="_blank" rel="noopener noreferrer">不具合報告</a></li>
 
@@ -411,6 +412,26 @@
         }).catch(() => {});
       }
 
+      // Androidアプリの場合は android_devices.user_id を紐づけ
+      try {
+        const isAndroid = typeof window !== 'undefined'
+          && window.MaiApp
+          && typeof window.MaiApp.isAndroidApp === 'function'
+          && window.MaiApp.isAndroidApp();
+        if (isAndroid) {
+          const androidClientId = window.MaiApp.getAndroidClientId && window.MaiApp.getAndroidClientId();
+          const linkClientId = androidClientId || storedClientId;
+          if (linkClientId) {
+            fetch('/api/android/link-user', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ clientId: linkClientId })
+            }).catch(() => {});
+          }
+        }
+      } catch {}
+
     } catch {
       chip.style.display = 'none';
       loginBtn.style.display = 'flex';
@@ -434,9 +455,22 @@ function headerLoginWithGoogle() {
 }
 
 async function headerLogout() {
+  let clientId = localStorage.getItem('clientId') || localStorage.getItem('client_id') || '';
+  try {
+    const isAndroid = typeof window !== 'undefined'
+      && window.MaiApp
+      && typeof window.MaiApp.isAndroidApp === 'function'
+      && window.MaiApp.isAndroidApp();
+    if (isAndroid && window.MaiApp.getAndroidClientId) {
+      clientId = window.MaiApp.getAndroidClientId() || clientId;
+    }
+  } catch {}
+
   await fetch('/auth/logout', {
     method: 'POST',
-    credentials: 'include'
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId })
   });
   location.reload();
 }

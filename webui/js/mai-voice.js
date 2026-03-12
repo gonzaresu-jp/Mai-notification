@@ -4,8 +4,10 @@
   const targets = document.querySelectorAll('.count-bg-mai');
   if (!targets.length) return;
 
+  const ua = navigator.userAgent || '';
+  const isSafari = /Safari/i.test(ua) && !/Chrome|CriOS|EdgiOS|FxiOS|OPiOS|Android/i.test(ua);
   const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-  const speed = reduceMotion ? 0 : 0.35;
+  const speed = (reduceMotion || isSafari) ? 0 : 0.35;
 
   let ticking      = false;
   let hideTimer    = 0;
@@ -97,9 +99,11 @@
     requestAnimationFrame(applyParallax);
   }
 
-  window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', onScroll);
-  window.addEventListener('load',   onScroll);
+  if (speed > 0) {
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    window.addEventListener('load', onScroll);
+  }
 
   // ===== クリックイベント =====
   targets.forEach(img => {
@@ -118,5 +122,5 @@
     if (url) window.location.href = url;
   });
 
-  onScroll();
+  if (speed > 0) onScroll();
 })();
