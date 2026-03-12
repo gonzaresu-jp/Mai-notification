@@ -15,12 +15,20 @@ import {
   applySettingsToUI,
   loadPlatformSettingsUI,
   fetchPlatformSettingsFromServer,
-} from "./settingsService.js";
+} from "./settingsService.js?v=20260312d";
 
 // =========================
 // 共通ユーティリティ
 // =========================
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function isAndroidApp() {
+  try {
+    return typeof window !== 'undefined' && window.MaiApp && typeof window.MaiApp.isAndroidApp === 'function' && window.MaiApp.isAndroidApp();
+  } catch {
+    return false;
+  }
+}
 
 async function waitForElement(selector, { timeoutMs = 8000, intervalMs = 50 } = {}) {
   const start = Date.now();
@@ -337,7 +345,7 @@ function initHamburgerMenu() {
 // =========================
 export function initPlatformSettingsUI($toggleNotify) {
   // 互換：呼び出し側が渡してこなくても取れるようにする
-  const notifyToggle = $toggleNotify || document.getElementById("toggle-notify");
+  const notifyToggle = document.getElementById("toggle-notify");
 
   // 二重バインド防止
   if (document.body.dataset.platformDelegationBound === "1") return;
@@ -387,8 +395,22 @@ export function initPlatformSettingsUI($toggleNotify) {
 // =========================
 // サーバー/ローカルから設定を反映
 // =========================
-export async function loadPlatformSettingsUIFromServer($toggleNotify) {
-  const notifyToggle = $toggleNotify || document.getElementById("toggle-notify");
+export async function loadPlatformSettingsUIFromServer() {
+  const notifyToggle = document.getElementById("toggle-notify");
+
+  if (isAndroidApp()) {
+    const local = await loadPlatformSettingsUI();
+    if (local.ok) {
+      applySettingsToUI(local.settings);
+      if (notifyToggle) {
+        const anyOn = Object.values(local.settings).some((v) => !!v);
+        notifyToggle.checked = anyOn;
+        updatePlatformSettingsVisibility(anyOn);
+        updateToggleImage();
+      }
+      return { applied: true, source: "android-local", settings: local.settings };
+    }
+  }
 
   try {
     let hasSubscription = false;
@@ -525,3 +547,5 @@ export function lockHamburger(lock) {
 window.updateToggleImage = updateToggleImage;
 window.getPlatformSettings = getPlatformSettings;
 window.initHeaderDependentUI = initHeaderDependentUI;
+
+

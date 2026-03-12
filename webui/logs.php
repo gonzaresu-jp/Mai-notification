@@ -23,6 +23,15 @@
         <h2 class="history fade">Update logs</h2>
         <div class="card">
             <dl>
+                <dt>2026-03-12</dt>
+            </dl>
+            <div class="bg"></div>
+            <dl>
+                <dt>Androidアプリをリリース</dt>
+            </dl>
+        </div>
+        <div class="card">
+            <dl>
                 <dt>2026-03-10</dt>
             </dl>
             <div class="bg"></div>

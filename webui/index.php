@@ -81,7 +81,7 @@
          CSS
          ===================================================== -->
     <link rel="stylesheet" href="./style.v2.98.css" />
-    <link rel="stylesheet" href="./top-card.v2.44.css" />
+    <link rel="stylesheet" href="./top-card.v2.50.css" />
 
     <!-- =====================================================
          preconnect（実際に外部フェッチが発生するホストのみ）
@@ -136,7 +136,7 @@
                         <!-- ===== ページ1：カウント ===== -->
                         <!-- ✅ role="tabpanel" + aria-label でスクリーンリーダー対応 -->
                         <div class="stats-page count-page" role="tabpanel" aria-label="カウント" aria-roledescription="スライド">
-                            <h2 style="margin-top:0;font-size:1.5rem;">カウント</h2>
+                            <h2 class="marker" style="margin-top:0;font-size:1.5rem;">カウント</h2>
 
                             <div class="stats-grid">
                                 <div class="stat-item">
@@ -167,13 +167,12 @@
 
                         <!-- ===== ページ2：週間予定表 ===== -->
                         <div class="stats-page" role="tabpanel" aria-label="スケジュール" aria-roledescription="スライド">
+                            <h2 class="week-title marker">スケジュール</h2>
                             <div class="week-head">
                                 <!-- ✅ aria-label を追加（アイコンのみのボタン対応） -->
                                 <button onclick="navigateWeek(-1)" class="week-arrow" type="button" aria-label="前の週へ">
                                     <i class="fa-solid fa-angle-left" style="color: #040300;" aria-hidden="true"></i>
                                 </button>
-
-                                <h2 class="week-title">スケジュール</h2>
 
                                 <button onclick="navigateWeek(1)" class="week-arrow" type="button" aria-label="次の週へ">
                                     <i class="fa-solid fa-angle-right" style="color: #040300;" aria-hidden="true"></i>
@@ -190,7 +189,7 @@
                         <div class="stats-page sub-page" role="tabpanel" aria-label="登録者推移" aria-roledescription="スライド">
 
                             <div class="sub-header">
-                                <h2 class="sub-title">登録者推移</h2>
+                                <h2 class="sub-title marker" >登録者推移</h2>
                                 <!-- ✅ role="status" で読み込み状態をスクリーンリーダーに伝える -->
                                 <span class="sub-loading-badge" id="sub-loading-badge" role="status" aria-live="polite">読込中…</span>
                             </div>
@@ -273,7 +272,7 @@
             <!-- ✅ カルーセルドットに role="tablist" -->
             <div class="carousel-dots" role="tablist" aria-label="スライド切り替え"></div>
             <!-- JavaScript読み込み -->
-            <script src="/js/weekly-schedule.js?v=<?= @filemtime(__DIR__ . '/js/weekly-schedule.js') ?: time(); ?>" defer></script>
+            <script src="/js/weekly-schedule.js?v=<?=@filemtime(__DIR__ . '/js/weekly-schedule.js') ?: time(); ?>" defer></script>
             <script>
             document.addEventListener('DOMContentLoaded', () => {
                 loadWeeklySchedule('weekly-schedule');
@@ -434,14 +433,14 @@
         <?php include __DIR__ . '/footer.html'; ?>
     </section>
 
-    <script src="/js/carousel.js?v=<?= @filemtime(__DIR__ . '/js/carousel.js') ?: time(); ?>" defer></script>
-    <script src="/js/mai-voice.js?v=<?= @filemtime(__DIR__ . '/js/mai-voice.js') ?: time(); ?>" defer></script>
-    <script src="/js/count-days.js?v=<?= @filemtime(__DIR__ . '/js/count-days.js') ?: time(); ?>" defer></script>
-    <script src="/js/panel.js?v=<?= @filemtime(__DIR__ . '/js/panel.js') ?: time(); ?>" defer></script>
-    <script src="/js/ui-misc.js?v=<?= @filemtime(__DIR__ . '/js/ui-misc.js') ?: time(); ?>" defer></script>
-    <script src="/js/subscribers.js?v=<?= @filemtime(__DIR__ . '/js/subscribers.js') ?: time(); ?>" defer></script>
-    <script type="module" src="/js/main.js?v=<?= @filemtime(__DIR__ . '/js/main.js') ?: time(); ?>" defer></script>
-    <script src="/js/auth-settings-bridge.js?v=<?= @filemtime(__DIR__ . '/js/auth-settings-bridge.js') ?: time(); ?>" defer></script>
+    <script src="/js/carousel.js?v=<?=@filemtime(__DIR__ . '/js/carousel.js') ?: time(); ?>" defer></script>
+    <script src="/js/mai-voice.js?v=<?=@filemtime(__DIR__ . '/js/mai-voice.js') ?: time(); ?>" defer></script>
+    <script src="/js/count-days.js?v=<?=@filemtime(__DIR__ . '/js/count-days.js') ?: time(); ?>" defer></script>
+    <script src="/js/panel.js?v=<?=@filemtime(__DIR__ . '/js/panel.js') ?: time(); ?>" defer></script>
+    <script src="/js/ui-misc.js?v=<?=@filemtime(__DIR__ . '/js/ui-misc.js') ?: time(); ?>" defer></script>
+    <script src="/js/subscribers.js?v=<?=@filemtime(__DIR__ . '/js/subscribers.js') ?: time(); ?>" defer></script>
+    <script type="module" src="/js/main.js?v=<?=@filemtime(__DIR__ . '/js/main.js') ?: time(); ?>" defer></script>
+    <script src="/js/auth-settings-bridge.js?v=<?=@filemtime(__DIR__ . '/js/auth-settings-bridge.js') ?: time(); ?>" defer></script>
 
 </body>
 </html>

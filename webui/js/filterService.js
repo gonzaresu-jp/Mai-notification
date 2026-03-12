@@ -1,44 +1,38 @@
-// filterService.js - ログフィルター管理
-import { getPlatformSettings } from './settingsService.js';
+// filterService.js - ログフィルター管理（トグルスイッチ版）
+import { getPlatformSettings } from './settingsService.js?v=20260312b';
 
 export function initLogFilterSettings($toggleNotify) {
-  const syncButton = document.getElementById('filter-sync-notification');
-  const filterButtons = {
-    twitcasting: document.getElementById('filter-twitcasting'),
-    youtube: document.getElementById('filter-youtube'),
+  const syncInput = document.getElementById('filter-sync-notification');
+  const filterInputs = {
+    twitcasting:      document.getElementById('filter-twitcasting'),
+    youtube:          document.getElementById('filter-youtube'),
     youtubeCommunity: document.getElementById('filter-youtube-community'),
-    fanbox: document.getElementById('filter-fanbox'),
-    twitterMain: document.getElementById('filter-twitter-main'),
-    twitterSub: document.getElementById('filter-twitter-sub'),
-    milestone: document.getElementById('filter-milestone'),
-    schedule: document.getElementById('filter-schedule'),
-    gipt: document.getElementById('filter-gipt'),
-    twitch: document.getElementById('filter-twitch'),
-    bilibili: document.getElementById('filter-bilibili')
+    fanbox:           document.getElementById('filter-fanbox'),
+    twitterMain:      document.getElementById('filter-twitter-main'),
+    twitterSub:       document.getElementById('filter-twitter-sub'),
+    milestone:        document.getElementById('filter-milestone'),
+    schedule:         document.getElementById('filter-schedule'),
+    gipt:             document.getElementById('filter-gipt'),
+    twitch:           document.getElementById('filter-twitch'),
+    bilibili:         document.getElementById('filter-bilibili'),
   };
 
+  // =========================================================
+  // 保存 / 読み込み
+  // =========================================================
   function loadFilterSettings() {
     try {
       const saved = localStorage.getItem('logFilterSettings');
-      if (saved) {
-        return JSON.parse(saved);
-      }
+      if (saved) return JSON.parse(saved);
     } catch (e) {
       console.warn('フィルター設定の読み込みに失敗', e);
     }
     return {
       syncWithNotification: true,
-      twitcasting: true,
-      youtube: true,
-      youtubeCommunity: true,
-      fanbox: true,
-      twitterMain: true,
-      twitterSub: true,
-      milestone: true,
-      schedule: true,
-      gipt: true,
-      twitch: true,
-      bilibili: true
+      twitcasting: true, youtube: true, youtubeCommunity: true,
+      fanbox: true, twitterMain: true, twitterSub: true,
+      milestone: true, schedule: true, gipt: true,
+      twitch: true, bilibili: true,
     };
   }
 
@@ -51,64 +45,81 @@ export function initLogFilterSettings($toggleNotify) {
     }
   }
 
+  // =========================================================
+  // UI から現在の設定を読み取る
+  // =========================================================
   function getCurrentFilterSettings() {
     return {
-      syncWithNotification: syncButton?.classList.contains('is-on') || false,
-      twitcasting: filterButtons.twitcasting?.classList.contains('is-on') || false,
-      youtube: filterButtons.youtube?.classList.contains('is-on') || false,
-      youtubeCommunity: filterButtons.youtubeCommunity?.classList.contains('is-on') || false,
-      fanbox: filterButtons.fanbox?.classList.contains('is-on') || false,
-      twitterMain: filterButtons.twitterMain?.classList.contains('is-on') || false,
-      twitterSub: filterButtons.twitterSub?.classList.contains('is-on') || false,
-      milestone: filterButtons.milestone?.classList.contains('is-on') || false,
-      schedule: filterButtons.schedule?.classList.contains('is-on') || false,
-      gipt: filterButtons.gipt?.classList.contains('is-on') || false,
-      twitch: filterButtons.twitch?.classList.contains('is-on') || false,
-      bilibili: filterButtons.bilibili?.classList.contains('is-on') || false
+      syncWithNotification: syncInput?.checked ?? false,
+      twitcasting:      filterInputs.twitcasting?.checked      ?? false,
+      youtube:          filterInputs.youtube?.checked           ?? false,
+      youtubeCommunity: filterInputs.youtubeCommunity?.checked  ?? false,
+      fanbox:           filterInputs.fanbox?.checked            ?? false,
+      twitterMain:      filterInputs.twitterMain?.checked       ?? false,
+      twitterSub:       filterInputs.twitterSub?.checked        ?? false,
+      milestone:        filterInputs.milestone?.checked         ?? false,
+      schedule:         filterInputs.schedule?.checked          ?? false,
+      gipt:             filterInputs.gipt?.checked              ?? false,
+      twitch:           filterInputs.twitch?.checked            ?? false,
+      bilibili:         filterInputs.bilibili?.checked          ?? false,
     };
   }
 
+  // =========================================================
+  // 設定を UI に反映（checkbox の checked + disabled 制御）
+  // =========================================================
   function applyFilterSettingsToUI(settings) {
     console.log('[applyFilterSettingsToUI] 適用:', settings);
-    
-    if (syncButton) {
-      syncButton.classList.toggle('is-on', settings.syncWithNotification);
-      syncButton.textContent = `通知設定連動: ${settings.syncWithNotification ? 'ON' : 'OFF'}`;
+
+    if (syncInput) {
+      syncInput.checked = settings.syncWithNotification;
+      syncInput.setAttribute('aria-checked', settings.syncWithNotification);
     }
 
-    Object.keys(filterButtons).forEach(key => {
-      const btn = filterButtons[key];
-      if (btn) {
-        btn.classList.toggle('is-on', settings[key]);
-        const label = btn.textContent.split(':')[0];
-        btn.textContent = `${label}: ${settings[key] ? 'ON' : 'OFF'}`;
-        btn.disabled = settings.syncWithNotification;
-      }
+    const isSynced = settings.syncWithNotification;
+
+    Object.keys(filterInputs).forEach(key => {
+      const input = filterInputs[key];
+      if (!input) return;
+
+      input.checked  = !!settings[key];
+      input.disabled = isSynced;
+      input.setAttribute('aria-checked', !!settings[key]);
+
+      // 親 label に is-synced を付与（CSS で opacity 制御用）
+      const row = input.closest('.filter-toggle-row');
+      if (row) row.classList.toggle('is-synced', isSynced);
     });
   }
 
+  // =========================================================
+  // 通知設定と同期
+  // =========================================================
   function syncFilterWithNotificationSettings() {
     const platformSettings = getPlatformSettings();
     console.log('[syncFilterWithNotificationSettings] 通知設定:', platformSettings);
     return {
       syncWithNotification: true,
-      twitcasting: platformSettings.twitcasting || false,
-      youtube: platformSettings.youtube || false,
-      youtubeCommunity: platformSettings.youtubeCommunity || false,
-      fanbox: platformSettings.fanbox || false,
-      twitterMain: platformSettings.twitterMain || false,
-      twitterSub: platformSettings.twitterSub || false,
-      milestone: platformSettings.milestone || false,
-      schedule: platformSettings.schedule || false,
-      gipt: platformSettings.gipt || false,
-      twitch: platformSettings.twitch || false,
-      bilibili: platformSettings.bilibili || false
+      twitcasting:      platformSettings.twitcasting      || false,
+      youtube:          platformSettings.youtube           || false,
+      youtubeCommunity: platformSettings.youtubeCommunity  || false,
+      fanbox:           platformSettings.fanbox            || false,
+      twitterMain:      platformSettings.twitterMain       || false,
+      twitterSub:       platformSettings.twitterSub        || false,
+      milestone:        platformSettings.milestone         || false,
+      schedule:         platformSettings.schedule          || false,
+      gipt:             platformSettings.gipt              || false,
+      twitch:           platformSettings.twitch            || false,
+      bilibili:         platformSettings.bilibili          || false,
     };
   }
 
+  // =========================================================
+  // ログカードへのフィルター適用
+  // =========================================================
   function applyLogFiltering() {
     const settings = getCurrentFilterSettings();
-    const cards = document.querySelectorAll('#logs .card[data-platform]');
+    const cards    = document.querySelectorAll('#logs .card[data-platform]');
 
     console.log('[applyLogFiltering] フィルター適用:', settings, 'カード数:', cards.length);
 
@@ -116,54 +127,32 @@ export function initLogFilterSettings($toggleNotify) {
       const platform = card.getAttribute('data-platform');
       let shouldShow = true;
 
-      switch(platform) {
-        case 'twitcasting':
-          shouldShow = settings.twitcasting;
-          break;
-        case 'youtube':
-          shouldShow = settings.youtube;
-          break;
-        case 'youtube-community':
-          shouldShow = settings.youtubeCommunity;
-          break;
-        case 'fanbox':
-          shouldShow = settings.fanbox;
-          break;
-        case 'twitter-main':
-          shouldShow = settings.twitterMain;
-          break;
-        case 'twitter-sub':
-          shouldShow = settings.twitterSub;
-          break;
-        case 'milestone':
-          shouldShow = settings.milestone;
-          break;
-        case 'schedule':
-          shouldShow = settings.schedule;
-          break;
-        case 'gipt':
-          shouldShow = settings.gipt;
-          break;
-        case 'twitch':
-          shouldShow = settings.twitch;
-          break;
-        case 'bilibili':
-          shouldShow = settings.bilibili;
-          break;
-        default:
-          shouldShow = true;
+      switch (platform) {
+        case 'twitcasting':       shouldShow = settings.twitcasting;      break;
+        case 'youtube':           shouldShow = settings.youtube;           break;
+        case 'youtube-community': shouldShow = settings.youtubeCommunity;  break;
+        case 'fanbox':            shouldShow = settings.fanbox;            break;
+        case 'twitter-main':      shouldShow = settings.twitterMain;       break;
+        case 'twitter-sub':       shouldShow = settings.twitterSub;        break;
+        case 'milestone':         shouldShow = settings.milestone;         break;
+        case 'schedule':          shouldShow = settings.schedule;          break;
+        case 'gipt':              shouldShow = settings.gipt;              break;
+        case 'twitch':            shouldShow = settings.twitch;            break;
+        case 'bilibili':          shouldShow = settings.bilibili;          break;
+        default:                  shouldShow = true;
       }
 
       card.classList.toggle('filtered-out', !shouldShow);
     });
   }
 
-  if (syncButton) {
-    syncButton.addEventListener('click', () => {
-      const isCurrentlyOn = syncButton.classList.contains('is-on');
-      const newState = !isCurrentlyOn;
-
-      console.log('[syncButton] クリック: ', isCurrentlyOn, '->', newState);
+  // =========================================================
+  // イベント：通知設定連動トグル
+  // =========================================================
+  if (syncInput) {
+    syncInput.addEventListener('change', () => {
+      const newState = syncInput.checked;
+      console.log('[syncInput] change ->', newState);
 
       if (newState) {
         const synced = syncFilterWithNotificationSettings();
@@ -180,27 +169,28 @@ export function initLogFilterSettings($toggleNotify) {
     });
   }
 
-  Object.keys(filterButtons).forEach(key => {
-    const btn = filterButtons[key];
-    if (btn) {
-      btn.addEventListener('click', () => {
-        if (btn.disabled) return;
+  // =========================================================
+  // イベント：個別フィルタートグル
+  // =========================================================
+  Object.keys(filterInputs).forEach(key => {
+    const input = filterInputs[key];
+    if (!input) return;
 
-        console.log('[filterButton] クリック:', key);
+    input.addEventListener('change', () => {
+      if (input.disabled) return;
+      console.log('[filterInput] change:', key, '->', input.checked);
 
-        btn.classList.toggle('is-on');
-        const label = btn.textContent.split(':')[0];
-        btn.textContent = `${label}: ${btn.classList.contains('is-on') ? 'ON' : 'OFF'}`;
-
-        const settings = getCurrentFilterSettings();
-        saveFilterSettings(settings);
-        applyLogFiltering();
-      });
-    }
+      const settings = getCurrentFilterSettings();
+      saveFilterSettings(settings);
+      applyLogFiltering();
+    });
   });
 
+  // =========================================================
+  // 初期化
+  // =========================================================
   const initialSettings = loadFilterSettings();
-  
+
   if (initialSettings.syncWithNotification && $toggleNotify) {
     const synced = syncFilterWithNotificationSettings();
     applyFilterSettingsToUI(synced);
@@ -209,11 +199,12 @@ export function initLogFilterSettings($toggleNotify) {
     applyFilterSettingsToUI(initialSettings);
   }
 
-  window.applyLogFiltering = applyLogFiltering;
-  window.syncFilterWithNotificationSettings = syncFilterWithNotificationSettings;
-  window.applyFilterSettingsToUI = applyFilterSettingsToUI;
-  window.saveFilterSettings = saveFilterSettings;
-  window.getCurrentFilterSettings = getCurrentFilterSettings;
+  // グローバル公開（auth-settings-bridge.js / historyService.js から参照）
+  window.applyLogFiltering                   = applyLogFiltering;
+  window.syncFilterWithNotificationSettings  = syncFilterWithNotificationSettings;
+  window.applyFilterSettingsToUI             = applyFilterSettingsToUI;
+  window.saveFilterSettings                  = saveFilterSettings;
+  window.getCurrentFilterSettings            = getCurrentFilterSettings;
 
   console.log('[initLogFilterSettings] 初期化完了');
 }

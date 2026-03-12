@@ -1,6 +1,6 @@
 // subscriberService.js - 購読者名管理（統合API版）
 import { API, getClientId } from './config.js';
-import { getPlatformSettings } from './settingsService.js';
+import { getPlatformSettings } from './settingsService.js?v=20260312b';
 
 export async function saveNameToServer(clientId, name) {
   if (!clientId) {

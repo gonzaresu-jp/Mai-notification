@@ -104,6 +104,15 @@ export async function unsubscribePush() {
 }
 
 export async function sendTestToMe() {
+  if (typeof window !== 'undefined' && window.MaiApp && typeof window.MaiApp.sendTestNotification === 'function') {
+    // Androidアプリの場合、通知設定が有効かチェックする
+    if (typeof window.MaiApp.isNotificationsEnabled === 'function' && !window.MaiApp.isNotificationsEnabled()) {
+      alert('現在アプリの通知設定がオフになっています。\nテスト通知を受信するには、設定から通知をオンにしてください。');
+      return;
+    }
+    window.MaiApp.sendTestNotification();
+    return;
+  }
   const clientId = getClientId();
   if (!clientId) {
     console.error('Client IDが取得できません。テスト通知を送信できません。');

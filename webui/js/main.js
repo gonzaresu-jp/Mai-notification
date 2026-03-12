@@ -1,20 +1,34 @@
 // main.js - メイン初期化処理（header.html fetch 挿入対応版）
 
-import { PAGING, getClientId } from './config.js?v=20260301a';
-import { initPush, unsubscribePush, sendTestToMe, sendSubscriptionToServer } from './pushService.js?v=20260301a';
-import { savePlatformSettings, getPlatformSettings } from './settingsService.js?v=20260301a';
-import { saveNameToServer, initSubscriberNameUI } from './subscriberService.js?v=20260301a';
-import { fetchHistory, fetchHistoryMore, clearJsonCache } from './historyService.js?v=20260301a';
-import { initLogFilterSettings } from './filterService.js?v=20260301a';
+import { PAGING, getClientId } from './config.js?v=20260312a';
+import { initPush, unsubscribePush, sendTestToMe, sendSubscriptionToServer } from './pushService.js?v=20260312a';
+import { savePlatformSettings, getPlatformSettings } from './settingsService.js?v=20260312c';
+import { saveNameToServer, initSubscriberNameUI } from './subscriberService.js?v=20260312a';
+import { fetchHistory, fetchHistoryMore, clearJsonCache } from './historyService.js?v=20260312a';
+import { initLogFilterSettings } from './filterService.js?v=20260312a';
 import {
   updateToggleImage,
   updatePlatformSettingsVisibility,
   initPlatformSettingsUI,
   initHeaderDependentUI,
   loadPlatformSettingsUIFromServer
-} from './uiController.js?v=20260301a';
+} from './uiController.js?v=20260312d';
 
-if ('serviceWorker' in navigator) {
+function isAndroidApp() {
+  try {
+    return typeof window !== 'undefined' && window.MaiApp && typeof window.MaiApp.isAndroidApp === 'function' && window.MaiApp.isAndroidApp();
+  } catch {
+    return false;
+  }
+}
+
+if (isAndroidApp() && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => r.unregister());
+  }).catch(() => {});
+}
+
+if (!isAndroidApp() && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js')
     .then(reg => {
       console.log('[SW] registered:', reg.scope);
@@ -23,7 +37,6 @@ if ('serviceWorker' in navigator) {
       console.error('[SW] register failed:', err);
     });
 }
-
 /* =========================
  * グローバル状態
  * ========================= */
@@ -164,29 +177,39 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   /* =========================
-   * 通知トグル（Push）
+   * 通知トグル（Push / Android）
    * ========================= */
   if ($toggleNotify) {
     let enabled = false;
+    const isAndroid = isAndroidApp();
 
-    try {
-      const sw = await navigator.serviceWorker.ready;
-      let sub = await sw.pushManager.getSubscription();
-
-      if (!sub) {
-        const raw = localStorage.getItem('pushSubscription');
-        if (raw) {
-          try { sub = JSON.parse(raw); } catch {}
-        }
-      }
-
-      if (sub) {
+    if (isAndroid) {
+      try {
+        enabled = !!window.MaiApp.isNotificationsEnabled();
+      } catch {
         enabled = true;
-        const serialized = sub.toJSON ? sub.toJSON() : sub;
-        await sendSubscriptionToServer(serialized);
-        localStorage.setItem('pushSubscription', JSON.stringify(serialized));
       }
-    } catch {}
+      showLinked(false);
+    } else {
+      try {
+        const sw = await navigator.serviceWorker.ready;
+        let sub = await sw.pushManager.getSubscription();
+
+        if (!sub) {
+          const raw = localStorage.getItem('pushSubscription');
+          if (raw) {
+            try { sub = JSON.parse(raw); } catch {}
+          }
+        }
+
+        if (sub) {
+          enabled = true;
+          const serialized = sub.toJSON ? sub.toJSON() : sub;
+          await sendSubscriptionToServer(serialized);
+          localStorage.setItem('pushSubscription', JSON.stringify(serialized));
+        }
+      } catch {}
+    }
 
     if (areAllPlatformsDisabledSafe()) {
       enabled = false;
@@ -203,18 +226,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       processing = true;
 
       try {
-        if ($toggleNotify.checked) {
-          await initPush();
-          if (!(await savePlatformSettings())) throw new Error();
-
-          const input = document.getElementById('subscriber-name-input');
-          const name = input?.value?.trim();
-          if (name) await saveNameToServer(getClientId(), name);
-
-          showLinked(true);
-        } else {
-          await unsubscribePush();
+        if (isAndroid) {
+          if (typeof window.MaiApp.setNotificationsEnabled === 'function') {
+            window.MaiApp.setNotificationsEnabled($toggleNotify.checked);
+          }
+          if ($toggleNotify.checked) {
+            await savePlatformSettings();
+          }
           showLinked(false);
+        } else {
+          if ($toggleNotify.checked) {
+            await initPush();
+            if (!(await savePlatformSettings())) throw new Error();
+
+            const input = document.getElementById('subscriber-name-input');
+            const name = input?.value?.trim();
+            if (name) await saveNameToServer(getClientId(), name);
+
+            showLinked(true);
+          } else {
+            await unsubscribePush();
+            showLinked(false);
+          }
         }
       } catch {
         $toggleNotify.checked = false;

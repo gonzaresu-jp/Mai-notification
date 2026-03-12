@@ -22,7 +22,7 @@
   const root   = document.querySelector('.left-mai');
   if (!root) return;
 
-  const btn    = root.querySelector('div.open');
+  const btn    = root.querySelector('button.open');
   const imgbtn = root.querySelector('.mask');
 
   const toggle = e => {
