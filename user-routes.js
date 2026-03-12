@@ -223,6 +223,36 @@ async function migrateSubscription(db, clientId, userId) {
 }
 
 // ============================================================
+// ログアウト時の紐づけ解除
+// ============================================================
+async function unlinkUserDevices(db, userId, { clientId, fcmToken } = {}) {
+  if (!userId) return;
+
+  const cid = clientId ? String(clientId).trim() : '';
+  const fcm = fcmToken ? String(fcmToken).trim() : '';
+
+  if (cid) {
+    await dbRun(db,
+      'DELETE FROM user_subscriptions WHERE client_id = ? AND user_id = ?',
+      [cid, userId]
+    ).catch(() => {});
+
+    await dbRun(db,
+      'UPDATE android_devices SET user_id = NULL WHERE client_id = ? AND user_id = ?',
+      [cid, userId]
+    ).catch(() => {});
+  }
+
+  if (fcm) {
+    await dbRun(db,
+      'UPDATE android_devices SET user_id = NULL WHERE fcm_token = ? AND user_id = ?',
+      [fcm, userId]
+    ).catch(() => {});
+  }
+}
+
+
+// ============================================================
 // Upsert user
 // ============================================================
 async function upsertUser(db, googleUser) {
@@ -287,6 +317,11 @@ function register(app, db, authLimiter) {
       // 匿名 client_id があれば紐づけ
       if (stateData.clientId) {
         await migrateSubscription(db, stateData.clientId, user.id);
+        // Android 端末が同じ client_id を使っている場合も紐づける
+        await dbRun(db,
+          'UPDATE android_devices SET user_id = ?, updated_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP WHERE client_id = ?',
+          [user.id, stateData.clientId]
+        ).catch(() => {});
       }
 
       const token = auth.signToken({ userId: user.id, email: user.email || user.google_id });
@@ -303,13 +338,36 @@ function register(app, db, authLimiter) {
   // ──────────────────────────────────────────
   // 3. ログアウト
   // ──────────────────────────────────────────
-  app.post('/auth/logout', (req, res) => {
+  app.post('/auth/logout', auth.optionalAuth, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const clientId = body.clientId || body.client_id || req.query?.clientId || req.query?.client_id || '';
+      const fcmToken = body.fcmToken || req.query?.fcmToken || '';
+
+      if (req.userId && (clientId || fcmToken)) {
+        await unlinkUserDevices(db, req.userId, { clientId, fcmToken });
+      }
+    } catch (e) {
+      console.warn('[auth/logout] unlink failed:', e && e.message ? e.message : e);
+    }
+
     res.clearCookie(auth.COOKIE_NAME);
     res.json({ success: true });
   });
 
   // GET でもログアウトできるようにする（リンクからのアクセス対応）
-  app.get('/auth/logout', limiter, (req, res) => {
+  app.get('/auth/logout', limiter, auth.optionalAuth, async (req, res) => {
+    try {
+      const clientId = req.query?.clientId || req.query?.client_id || '';
+      const fcmToken = req.query?.fcmToken || '';
+
+      if (req.userId && (clientId || fcmToken)) {
+        await unlinkUserDevices(db, req.userId, { clientId, fcmToken });
+      }
+    } catch (e) {
+      console.warn('[auth/logout] unlink failed:', e && e.message ? e.message : e);
+    }
+
     res.clearCookie(auth.COOKIE_NAME);
     safeRedirect(res, req.query.returnTo);
   });
@@ -725,6 +783,28 @@ function register(app, db, authLimiter) {
     }
   });
 
+  // Android端末とログインユーザーを紐づけ
+  app.post('/api/android/link-user', auth.requireAuth, async (req, res) => {
+    try {
+      const { clientId, fcmToken } = req.body || {};
+      if (!clientId && !fcmToken) {
+        return res.status(400).json({ error: 'clientId or fcmToken required' });
+      }
+
+      const sql = fcmToken
+        ? 'UPDATE android_devices SET user_id = ?, updated_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP WHERE fcm_token = ?'
+        : 'UPDATE android_devices SET user_id = ?, updated_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP WHERE client_id = ?';
+      const param = fcmToken ? String(fcmToken).trim() : String(clientId).trim();
+
+      const result = await dbRun(db, sql, [req.userId, param]);
+      if (result.changes === 0) {
+        return res.json({ success: true, updated: false, message: 'No android device found' });
+      }
+      return res.json({ success: true, updated: true });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
   console.log('[user-routes] all routes registered');
 }
 

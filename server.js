@@ -3,6 +3,7 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const webpush = require('web-push');
+const admin = require('firebase-admin');
 const fs = require('fs');
 const twitcasting = require('./twitcasting');
 const MilestoneScheduler = require('./milestone');
@@ -10,16 +11,16 @@ require('dotenv').config();
 const adminAuth = require('./admin/admin');
 const cookieParser = require('cookie-parser');
 const userRoutes   = require('./user-routes');
+const auth = require('./auth');
 
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 // 認証エンドポイント用レートリミット（1分に20回まで）
 const authLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
-  keyGenerator: (req) => {
-    return req.ip || req.headers['x-forwarded-for']?.split(',')?.[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-  },
+  keyGenerator: (req) => ipKeyGenerator(req),
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -155,7 +156,42 @@ try {
   vapidConfig = { vapidPublicKey: 'test-key', vapidPrivateKey: 'test-key' };
   webpush.setVapidDetails('mailto:admin@honna-yuzuki.com', vapidConfig.vapidPublicKey, vapidConfig.vapidPrivateKey);
 }
+const FCM_SERVICE_ACCOUNT_JSON = process.env.FCM_SERVICE_ACCOUNT_JSON || null;
+const FCM_SERVICE_ACCOUNT_PATH = process.env.FCM_SERVICE_ACCOUNT_PATH || null;
+let fcmMessaging = null;
+let fcmInitAttempted = false;
 
+function initFcm() {
+  if (fcmMessaging) return fcmMessaging;
+  if (fcmInitAttempted) return null;
+  fcmInitAttempted = true;
+
+  try {
+    let serviceAccount = null;
+
+    if (FCM_SERVICE_ACCOUNT_JSON) {
+      serviceAccount = JSON.parse(FCM_SERVICE_ACCOUNT_JSON);
+    } else if (FCM_SERVICE_ACCOUNT_PATH && fs.existsSync(FCM_SERVICE_ACCOUNT_PATH)) {
+      serviceAccount = JSON.parse(fs.readFileSync(FCM_SERVICE_ACCOUNT_PATH, 'utf8'));
+    }
+
+    if (!serviceAccount) {
+      console.warn('FCM disabled: service account not configured');
+      return null;
+    }
+
+    if (!admin.apps.length) {
+      admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    }
+
+    fcmMessaging = admin.messaging();
+    console.log('FCM initialized');
+    return fcmMessaging;
+  } catch (e) {
+    console.warn('FCM init failed:', e && e.message ? e.message : e);
+    return null;
+  }
+}
 
 let milestoneScheduler;
 
@@ -179,6 +215,7 @@ db.serialize(() => {
 
   db.run(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
     client_id TEXT NOT NULL UNIQUE,
     endpoint TEXT NOT NULL UNIQUE,
     subscription_json TEXT,
@@ -187,6 +224,20 @@ db.serialize(() => {
   )`, (err) => {
     if (err) console.error('subscriptions create err:', err.message);
     else console.log('subscriptions table ensured');
+  });
+  db.run(`CREATE TABLE IF NOT EXISTS android_devices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    client_id TEXT NOT NULL,
+    fcm_token TEXT NOT NULL UNIQUE,
+    device_name TEXT,
+    settings_json TEXT DEFAULT '{}',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at DATETIME
+  )`, (err) => {
+    if (err) console.error('android_devices create err:', err.message);
+    else console.log('android_devices table ensured');
   });
 
   db.run(`CREATE TABLE IF NOT EXISTS scheduled_notifications (
@@ -334,12 +385,66 @@ function ensureScheduledSchema() {
 
 
 // ----------------------------
+// ----------------------------
+// subscriptions
+// ----------------------------
+function ensureSubscriptionsSchema() {
+  db.all("PRAGMA table_info(subscriptions)", [], (err, columns) => {
+    if (err) {
+      console.error('PRAGMA subscriptions err:', err.message);
+      return;
+    }
+
+    const colNames = columns.map(c => c.name);
+
+    if (!colNames.includes('user_id')) {
+      db.run("ALTER TABLE subscriptions ADD COLUMN user_id INTEGER", (alterErr) => {
+        if (alterErr) console.error('subscriptions.user_id 追加失敗:', alterErr.message);
+        else console.log('✅ subscriptions.user_id 追加');
+      });
+    }
+  });
+}
+
+
+// ----------------------------
+// android_devices
+// ----------------------------
+function ensureAndroidSchema() {
+  db.all("PRAGMA table_info(android_devices)", [], (err, columns) => {
+    if (err) {
+      console.error('PRAGMA android_devices err:', err.message);
+      return;
+    }
+
+    const colNames = columns.map(c => c.name);
+
+    if (!colNames.includes('user_id')) {
+      db.run("ALTER TABLE android_devices ADD COLUMN user_id INTEGER", (alterErr) => {
+        if (alterErr) console.error('android_devices.user_id 追加失敗:', alterErr.message);
+        else console.log('✅ android_devices.user_id 追加');
+      });
+    }
+  });
+}
 // Indexes
 // ----------------------------
 function ensureIndexes() {
   db.run(
     `CREATE INDEX IF NOT EXISTS idx_subscriptions_client_id 
      ON subscriptions (client_id)`
+  );
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id 
+     ON subscriptions (user_id)`
+  );
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_android_devices_client_id 
+     ON android_devices (client_id)`
+  );
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_android_devices_user_id 
+     ON android_devices (user_id)`
   );
 
   db.run(
@@ -449,6 +554,8 @@ function backfillPlatformSettingsDefaults() {
 ensureNotificationsSchema();
 ensureScheduledSchema();   // ← ★ これが今回の本命
 ensureEventsSchema();
+ensureSubscriptionsSchema();
+ensureAndroidSchema();
 ensureIndexes();
 cleanupDuplicates();
 backfillPlatformSettingsDefaults();
@@ -508,6 +615,53 @@ async function sendPushNotification(subscription, payload, dbRef, isTest = false
     }
 
     return false;
+  }
+}
+
+function buildFcmData(payload, type, settingKey) {
+  const data = payload || {};
+  const out = {};
+
+  function put(key, value) {
+    if (value === undefined || value === null) return;
+    out[key] = String(value);
+  }
+
+  put('title', data.title);
+  put('body', data.body);
+  put('url', data.url);
+  put('icon', data.icon);
+  if (type) put('type', type);
+  if (settingKey) put('settingKey', settingKey);
+
+  return out;
+}
+
+function isInvalidFcmError(err) {
+  const code = err && err.code ? String(err.code) : '';
+  return (
+    code === 'messaging/registration-token-not-registered' ||
+    code === 'messaging/invalid-registration-token' ||
+    code === 'messaging/invalid-argument'
+  );
+}
+
+async function sendFcmNotification(messaging, token, payload, type, settingKey, isTest = false) {
+  if (!messaging || !token) return { sent: false, reason: 'fcm_disabled_or_missing_token' };
+
+  const data = buildFcmData(payload, type, settingKey);
+
+  const message = {
+    token,
+    data,
+    android: { priority: 'high' }
+  };
+
+  try {
+    await messaging.send(message, isTest === true);
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, error: err };
   }
 }
 
@@ -985,7 +1139,145 @@ app.delete('/api/save-platform-settings', (req, res) => {
   });
 });
 
+// --- Android通知デバイス登録 ---
+app.post('/api/android/register', auth.optionalAuth, (req, res) => {
+  const { clientId, fcmToken, deviceName, settings } = req.body || {};
 
+  if (!clientId || typeof clientId !== 'string') {
+    return res.status(400).json({ error: 'clientId required' });
+  }
+  if (!fcmToken || typeof fcmToken !== 'string') {
+    return res.status(400).json({ error: 'fcmToken required' });
+  }
+
+  const trimmedClientId = clientId.trim();
+  const trimmedToken = fcmToken.trim();
+  if (!trimmedClientId || trimmedClientId.length > 256) {
+    return res.status(400).json({ error: 'invalid clientId' });
+  }
+  if (trimmedToken.length < 20 || trimmedToken.length > 4096) {
+    return res.status(400).json({ error: 'invalid fcmToken' });
+  }
+
+  const mergedSettings = settings
+    ? parseAndMergePlatformSettings(settings)
+    : { ...DEFAULT_PLATFORM_SETTINGS };
+  const settingsJson = JSON.stringify(mergedSettings);
+
+  const upsertSql = `
+    INSERT INTO android_devices (client_id, fcm_token, device_name, settings_json, updated_at, last_seen_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT(fcm_token) DO UPDATE SET
+      client_id = excluded.client_id,
+      device_name = excluded.device_name,
+      settings_json = excluded.settings_json,
+      updated_at = CURRENT_TIMESTAMP,
+      last_seen_at = CURRENT_TIMESTAMP
+  `;
+
+  const params = [trimmedClientId, trimmedToken, deviceName || null, settingsJson];
+
+  function linkUserIfPossible() {
+    if (!req.userId) return;
+    db.run(
+      'UPDATE android_devices SET user_id = ?, updated_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP WHERE fcm_token = ?',
+      [req.userId, trimmedToken],
+      (linkErr) => {
+        if (linkErr) console.warn('[android] link user failed:', linkErr.message);
+      }
+    );
+  }
+
+  db.run(upsertSql, params, function (err) {
+    if (!err) {
+      linkUserIfPossible();
+      linkUserIfPossible();
+            return res.json({ success: true, message: 'Android device registered' });
+    }
+
+    console.warn('android register upsert failed, fallback:', err.message);
+
+    db.run(
+      'UPDATE android_devices SET client_id = ?, device_name = ?, settings_json = ?, updated_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP WHERE fcm_token = ?',
+      [trimmedClientId, deviceName || null, settingsJson, trimmedToken],
+      function (updateErr) {
+        if (updateErr) {
+          return res.status(500).json({ error: 'DB update error', detail: updateErr.message });
+        }
+        if (this.changes > 0) {
+          linkUserIfPossible();
+          return res.json({ success: true, message: 'Android device updated' });
+        }
+
+        db.run(
+          'INSERT INTO android_devices (client_id, fcm_token, device_name, settings_json, updated_at, last_seen_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+          params,
+          function (insertErr) {
+            if (insertErr) {
+              return res.status(500).json({ error: 'DB insert error', detail: insertErr.message });
+            }
+            linkUserIfPossible();
+      linkUserIfPossible();
+            return res.json({ success: true, message: 'Android device registered' });
+          }
+        );
+      }
+    );
+  });
+});
+
+// --- Android通知デバイス削除 ---
+app.delete('/api/android/register', (req, res) => {
+  const fcmToken = (req.body && req.body.fcmToken) || req.query.fcmToken;
+  const clientId = (req.body && req.body.clientId) || req.query.clientId;
+
+  if (!fcmToken && !clientId) {
+    return res.status(400).json({ error: 'fcmToken or clientId required' });
+  }
+
+  const sql = fcmToken
+    ? 'DELETE FROM android_devices WHERE fcm_token = ?'
+    : 'DELETE FROM android_devices WHERE client_id = ?';
+  const param = fcmToken ? String(fcmToken).trim() : String(clientId).trim();
+
+  db.run(sql, [param], function (err) {
+    if (err) {
+      return res.status(500).json({ error: 'DB delete error', detail: err.message });
+    }
+    return res.json({ success: true, deleted: this.changes || 0 });
+  });
+});
+
+// --- Android通知設定更新 ---
+app.patch('/api/android/settings', (req, res) => {
+  const { clientId, fcmToken, settings } = req.body || {};
+
+  if (!settings || typeof settings !== 'object') {
+    return res.status(400).json({ error: 'settings required' });
+  }
+
+  if (!clientId && !fcmToken) {
+    return res.status(400).json({ error: 'clientId or fcmToken required' });
+  }
+
+  const merged = parseAndMergePlatformSettings(settings);
+  const settingsJson = JSON.stringify(merged);
+
+  const sql = fcmToken
+    ? 'UPDATE android_devices SET settings_json = ?, updated_at = CURRENT_TIMESTAMP WHERE fcm_token = ?'
+    : 'UPDATE android_devices SET settings_json = ?, updated_at = CURRENT_TIMESTAMP WHERE client_id = ?';
+  const param = fcmToken ? String(fcmToken).trim() : String(clientId).trim();
+
+  db.run(sql, [settingsJson, param], function (err) {
+    if (err) {
+      return res.status(500).json({ error: 'DB update error', detail: err.message });
+    }
+    if (this.changes === 0) {
+      return res.json({ success: true, updated: false, message: 'No android device found' });
+    }
+    return res.json({ success: true, updated: true });
+  });
+});
 // --- プラットフォーム別設定取得 (改善版) ---
 app.get('/api/get-platform-settings', (req, res) => {
   let clientId = req.query.clientId;
@@ -1742,6 +2034,36 @@ app.post('/api/send-test', (req, res) => {
     }
   });
 });
+// --- Android テスト通知 ---
+app.post('/api/android/send-test', async (req, res) => {
+  const fcmToken = (req.body && req.body.fcmToken) ? String(req.body.fcmToken).trim() : null;
+  if (!fcmToken) return res.status(400).json({ error: 'fcmToken required' });
+
+  const messaging = initFcm();
+  if (!messaging) {
+    return res.status(503).json({ error: 'FCM not configured' });
+  }
+
+  const payload = {
+    title: 'テスト通知',
+    body: 'この通知をタップしてURLに飛べるか確認！',
+    url: 'https://mai.honna-yuzuki.com/test/',
+    icon: `${req.protocol}://${req.get('host')}/icon.webp`
+  };
+
+  try {
+    const result = await sendFcmNotification(messaging, fcmToken, payload, 'test', null, false);
+    if (!result.sent && result.error && isInvalidFcmError(result.error)) {
+      db.run('DELETE FROM android_devices WHERE fcm_token = ?', [fcmToken], function (delErr) {
+        if (delErr) console.error('android_devices delete err:', delErr.message);
+      });
+    }
+    return res.json({ success: !!result.sent });
+  } catch (e) {
+    console.error('/api/android/send-test error:', e && e.message ? e.message : e);
+    return res.status(500).json({ error: 'Send error' });
+  }
+});
 
 const SCHEDULE_INTERVAL_MS = 5000; // 5秒毎にチェック
 
@@ -1901,9 +2223,7 @@ function getNotificationHash(data = {}, settingKey) {
 const notifyLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 10,
-  keyGenerator: rateLimit.ipKeyGenerator || ((req) => {
-    return req.ip || req.headers['x-forwarded-for']?.split(',')?.[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-  }),
+  keyGenerator: (req) => ipKeyGenerator(req),
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -2194,8 +2514,6 @@ db.run(
     const total = Array.isArray(rows) ? rows.length : 0;
     console.log(`[/api/notify] 購読者数: ${total}人`);
 
-    if (!total) return res.json({ success: true, message: 'No subscribers', sentCount: 0, totalCount: 0 });
-
     // 同時実行数（環境変数 or デフォルト）
     const CONCURRENCY = Math.max(1, parseInt(process.env.NOTIFY_CONCURRENCY, 10) || 20);
 
@@ -2256,24 +2574,76 @@ db.run(
     // 並列制御付きで送信
     const results = await mapWithLimit(rows, CONCURRENCY, sendForRow);
 
-    // 集計
-    const sentCount = results.filter(r => r && r.sent).length;
-    console.log(`[/api/notify] 完了: ${sentCount}/${total}人に送信`);
+    const webSentCount = results.filter(r => r && r.sent).length;
+    let androidSentCount = 0;
+    let androidTotal = 0;
+
+    const fcm = initFcm();
+    if (fcm) {
+      try {
+        const androidRows = await new Promise((resolve, reject) => {
+          db.all('SELECT client_id, fcm_token, settings_json FROM android_devices', [], (err2, rows2) => {
+            if (err2) reject(err2);
+            else resolve(rows2 || []);
+          });
+        });
+
+        androidTotal = androidRows.length;
+        if (androidTotal) {
+          console.log('[/api/notify] Android devices: ' + androidTotal);
+          const ANDROID_CONCURRENCY = Math.max(1, parseInt(process.env.ANDROID_NOTIFY_CONCURRENCY, 10) || 20);
+
+          async function sendForAndroidRow(row) {
+            if (!row || !row.fcm_token) {
+              return { sent: false, reason: 'no_token' };
+            }
+
+            if (settingKey) {
+              const settings = parseAndMergePlatformSettings(row.settings_json);
+              if (settings[settingKey] === false) {
+                return { sent: false, reason: 'disabled' };
+              }
+            }
+
+            const result = await sendFcmNotification(fcm, row.fcm_token, data, type, settingKey, false);
+            if (!result.sent && result.error && isInvalidFcmError(result.error)) {
+              db.run('DELETE FROM android_devices WHERE fcm_token = ?', [row.fcm_token], function (delErr) {
+                if (delErr) console.error('android_devices delete err:', delErr.message);
+              });
+            }
+
+            return { sent: result.sent };
+          }
+
+          const androidResults = await mapWithLimit(androidRows, ANDROID_CONCURRENCY, sendForAndroidRow);
+          androidSentCount = androidResults.filter(r => r && r.sent).length;
+        }
+      } catch (e) {
+        console.error('[/api/notify] Android send error:', e && e.message ? e.message : e);
+      }
+    } else {
+      console.log('[/api/notify] FCM not configured; skipping Android devices');
+    }
+
+    const sentCount = webSentCount + androidSentCount;
+    const totalCount = total + androidTotal;
+    console.log('[/api/notify] 完了: ' + sentCount + '/' + totalCount + '人に送信 (web=' + webSentCount + ', android=' + androidSentCount + ')');
 
     return res.json({
       success: true,
-      message: `Notification sent to ${sentCount} clients`,
+      message: 'Notification sent to ' + sentCount + ' clients',
       sentCount,
-      totalCount: total,
+      totalCount,
       detailsSummary: {
-        attempted: total,
+        attempted: totalCount,
         succeeded: sentCount,
-        failed: total - sentCount
-      }
+        failed: totalCount - sentCount
+      },
+      webPush: { sentCount: webSentCount, totalCount: total },
+      android: { sentCount: androidSentCount, totalCount: androidTotal }
     });
   });
 });
-
 
 // --- 管理用: 購読リスト (認証必須、ページング) ---
 app.get('/api/subscriptions', adminAuth.requireAuth, (req, res) => {
@@ -2425,12 +2795,7 @@ async function handleAdminNotify(body, adminUser = 'scheduler') {
   });
 
   const total = rows.length;
-
-  if (!total) {
-    return { sentCount: 0, totalCount: 0 };
-  }
-
-  const CONCURRENCY =
+const CONCURRENCY =
     Math.max(1, parseInt(process.env.NOTIFY_CONCURRENCY, 10) || 20);
 
   async function mapWithLimit(items, limit, iterator) {
@@ -2476,11 +2841,67 @@ async function handleAdminNotify(body, adminUser = 'scheduler') {
   }
 
   const results = await mapWithLimit(rows, CONCURRENCY, sendForRow);
-  const sentCount = results.filter(r => r.sent).length;
 
-  console.log(`[Admin Notification] 完了: ${sentCount}/${total}人`);
+  const webSentCount = results.filter(r => r.sent).length;
+  let androidSentCount = 0;
+  let androidTotal = 0;
 
-  return { sentCount, totalCount: total };
+  const fcm = initFcm();
+  if (fcm) {
+    try {
+      let androidSelectSql = 'SELECT client_id, fcm_token, settings_json FROM android_devices';
+      let androidSelectParams = [];
+
+      if (isTargetedSend) {
+        const placeholders = clientIds.map(() => '?').join(', ');
+        androidSelectSql += ' WHERE client_id IN (' + placeholders + ')';
+        androidSelectParams = clientIds;
+      }
+
+      const androidRows = await new Promise((resolve, reject) => {
+        db.all(androidSelectSql, androidSelectParams, (err, r) => {
+          if (err) reject(err);
+          else resolve(r || []);
+        });
+      });
+
+      androidTotal = androidRows.length;
+      if (androidTotal) {
+        const ANDROID_CONCURRENCY = Math.max(1, parseInt(process.env.ANDROID_NOTIFY_CONCURRENCY, 10) || 20);
+
+        async function sendForAndroidRow(row) {
+          if (!row || !row.fcm_token) return { sent: false };
+
+          if (settingKey) {
+            const settings = parseAndMergePlatformSettings(row.settings_json);
+            if (settings[settingKey] === false) {
+              return { sent: false, reason: 'disabled' };
+            }
+          }
+
+          const result = await sendFcmNotification(fcm, row.fcm_token, data, type, settingKey, false);
+          if (!result.sent && result.error && isInvalidFcmError(result.error)) {
+            db.run('DELETE FROM android_devices WHERE fcm_token = ?', [row.fcm_token], function (delErr) {
+              if (delErr) console.error('android_devices delete err:', delErr.message);
+            });
+          }
+          return { sent: result.sent };
+        }
+
+        const androidResults = await mapWithLimit(androidRows, ANDROID_CONCURRENCY, sendForAndroidRow);
+        androidSentCount = androidResults.filter(r => r && r.sent).length;
+      }
+    } catch (e) {
+      console.error('[Admin Notification] Android send error:', e && e.message ? e.message : e);
+    }
+  }
+
+  const sentCount = webSentCount + androidSentCount;
+  const totalCount = total + androidTotal;
+
+  console.log('[Admin Notification] 完了: ' + sentCount + '/' + totalCount + '人 (web=' + webSentCount + ', android=' + androidSentCount + ')');
+
+  return { sentCount, totalCount, webSentCount, webTotal: total, androidSentCount, androidTotal };
 }
 
 async function sendUserScheduleReminders() {
@@ -2539,6 +2960,8 @@ async function sendUserScheduleReminders() {
     if (!locked) continue;
 
     try {
+      const clientIdSet = new Set();
+
       const clientRows = await new Promise((resolve, reject) => {
         db.all(
           `SELECT us.client_id
@@ -2554,21 +2977,26 @@ async function sendUserScheduleReminders() {
         );
       });
 
-      if (!clientRows.length) {
-        await new Promise((resolve) => {
-          db.run(
-            'UPDATE user_schedules SET reminder_sent_at = NULL WHERE id = ? AND reminder_sent_at = ?',
-            [row.id, lockToken],
-            () => resolve()
-          );
-        });
-        continue;
+      for (const r of clientRows) {
+        if (r && r.client_id) clientIdSet.add(r.client_id);
       }
 
-      const clientId = clientRows
-        .map(r => r.client_id)
-        .filter(Boolean)
-        .join(',');
+      const androidRows = await new Promise((resolve, reject) => {
+        db.all(
+          'SELECT client_id FROM android_devices WHERE user_id = ?',
+          [row.user_id],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
+
+      for (const r of androidRows) {
+        if (r && r.client_id) clientIdSet.add(r.client_id);
+      }
+
+      const clientId = Array.from(clientIdSet).join(',');
 
       if (!clientId) {
         await new Promise((resolve) => {
@@ -2580,7 +3008,6 @@ async function sendUserScheduleReminders() {
         });
         continue;
       }
-
       const payload = {
         type: 'event',
         settingKey: 'schedule',
