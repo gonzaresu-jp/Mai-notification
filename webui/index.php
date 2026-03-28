@@ -9,7 +9,7 @@
          SEO: タイトル・概要
          ===================================================== -->
     <title>まいちゃん通知 | 恋乃夜まい 配信・活動通知サービス</title>
-    <meta name="description" content="恋乃夜まい（koinoyamai）の配信・活動をリアルタイムで通知。YouTube・TwitCasting・Twitch・Twitter・Pixiv Fanboxなど複数プラットフォームに対応した非公式ファンサービスです。" />
+    <meta name="description" content="恋乃夜まい（koinoyamai）の配信・活動をリアルタイムで通知する非公式ファンサービス。YouTube・TwitCasting・Twitch・Twitter・Pixiv Fanboxなど複数プラットフォームに対応。" />
     <meta name="keywords" content="恋乃夜まい,koinoyamai,まいちゃん,まいちゃん通知,配信通知,ライブ通知,YouTube通知,TwitCasting,Twitch,Vtuber,バーチャルYouTuber,ファンサイト" />
 
     <!-- canonical：重複URLペナルティ防止 -->
@@ -24,7 +24,7 @@
     <meta property="og:url"         content="https://mai.honna-yuzuki.com/" />
     <meta property="og:type"        content="website" />
     <meta property="og:title"       content="まいちゃん通知 | 恋乃夜まい 配信・活動通知サービス" />
-    <meta property="og:description" content="恋乃夜まい（koinoyamai）の配信・活動をリアルタイムで通知。YouTube・TwitCasting・Twitch・Twitter・Pixiv Fanboxなど複数プラットフォームに対応した非公式ファンサービスです。" />
+    <meta property="og:description" content="恋乃夜まい（koinoyamai）の配信・活動をリアルタイムで通知する非公式ファンサービス。YouTube・TwitCasting・Twitch・Twitter・Pixiv Fanboxなど複数プラットフォームに対応。" />
     <meta property="og:site_name"   content="まいちゃん通知" />
     <meta property="og:image"       content="https://mai.honna-yuzuki.com/social.jpg" />
     <meta property="og:image:alt"   content="まいちゃん通知 ロゴ" />
@@ -36,7 +36,7 @@
     <meta name="twitter:card"        content="summary_large_image" />
     <meta name="twitter:site"        content="@Yuzuki_Mai_17" />
     <meta name="twitter:title"       content="まいちゃん通知 | 恋乃夜まい 配信・活動通知サービス" />
-    <meta name="twitter:description" content="恋乃夜まい（koinoyamai）の配信・活動をリアルタイムで通知。YouTube・TwitCasting・Twitch・Twitterなど複数プラットフォーム対応。" />
+    <meta name="twitter:description" content="恋乃夜まい（koinoyamai）の配信・活動をリアルタイムで通知する非公式ファンサービス。YouTube・TwitCasting・Twitch・Twitter・Pixiv Fanboxなど複数プラットフォームに対応。" />
     <meta name="twitter:image"       content="https://mai.honna-yuzuki.com/social.jpg" />
     <meta name="twitter:image:alt"   content="まいちゃん通知 ロゴ" />
 
@@ -80,8 +80,8 @@
     <!-- =====================================================
          CSS
          ===================================================== -->
-    <link rel="stylesheet" href="./style.v2.98.css" />
-    <link rel="stylesheet" href="./top-card.v2.50.css" />
+    <link rel="stylesheet" href="./style.v3.00.css" />
+    <link rel="stylesheet" href="./top-card.v2.58.css" />
 
     <!-- =====================================================
          preconnect（実際に外部フェッチが発生するホストのみ）
@@ -131,142 +131,153 @@
 
                 <!-- ✅ カルーセルに role="region" + aria-label、ドットに role="tablist" -->
                 <div class="stats-carousel" role="region" aria-label="情報カルーセル" aria-roledescription="carousel">
-                    <div class="stats-carousel-inner">
+                    <div class="stats-carousel-viewport">
+                        <div class="stats-carousel-inner">
 
-                        <!-- ===== ページ1：カウント ===== -->
-                        <!-- ✅ role="tabpanel" + aria-label でスクリーンリーダー対応 -->
-                        <div class="stats-page count-page" role="tabpanel" aria-label="カウント" aria-roledescription="スライド">
-                            <h2 class="marker" style="margin-top:0;font-size:1.5rem;">カウント</h2>
+                            <!-- ===== ページ1：カウント ===== -->
+                            <!-- ✅ role="tabpanel" + aria-label でスクリーンリーダー対応 -->
+                            <div class="stats-page count-page" role="tabpanel" aria-label="カウント" aria-roledescription="スライド">
+                                <h2 class="marker">カウント</h2>
 
-                            <div class="stats-grid">
-                                <div class="stat-item">
-                                    <button type="button" class="stat-copy-btn" data-copy-target="days-since-debut" aria-label="デビューからの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
-                                    <div class="label">デビューから</div>
-                                    <div class="value" id="days-since-debut" aria-live="polite" aria-atomic="true">0</div>
-                                </div>
-
-                                <div class="stat-item">
-                                    <button type="button" class="stat-copy-btn" data-copy-target="days-to-birthday" aria-label="お誕生日までの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
-                                    <div class="label">お誕生日まで</div>
-                                    <div class="value" id="days-to-birthday" aria-live="polite" aria-atomic="true">0</div>
-                                </div>
-
-                                <div class="stat-item">
-                                    <button type="button" class="stat-copy-btn" data-copy-target="days-to-anniversary" aria-label="周年記念までの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
-                                    <div class="label">周年記念まで</div>
-                                    <div class="value" id="days-to-anniversary" aria-live="polite" aria-atomic="true">0</div>
-                                </div>
-
-                                <div class="stat-item">
-                                    <button type="button" class="stat-copy-btn" data-copy-target="days-to-meet" aria-label="推してからの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
-                                    <div class="label">推してから</div>
-                                    <div class="value" id="days-to-meet" aria-live="polite" aria-atomic="true">0</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- ===== ページ2：週間予定表 ===== -->
-                        <div class="stats-page" role="tabpanel" aria-label="スケジュール" aria-roledescription="スライド">
-                            <h2 class="week-title marker">スケジュール</h2>
-                            <div class="week-head">
-                                <!-- ✅ aria-label を追加（アイコンのみのボタン対応） -->
-                                <button onclick="navigateWeek(-1)" class="week-arrow" type="button" aria-label="前の週へ">
-                                    <i class="fa-solid fa-angle-left" style="color: #040300;" aria-hidden="true"></i>
-                                </button>
-
-                                <button onclick="navigateWeek(1)" class="week-arrow" type="button" aria-label="次の週へ">
-                                    <i class="fa-solid fa-angle-right" style="color: #040300;" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                            <div class="week-content">
-                                <button id="week-add-user-schedule" class="week-add-btn" type="button" aria-label="予定を追加">+</button>
-                                <div id="weekly-schedule" aria-live="polite" aria-atomic="false"></div>
-                                <div id="weekly-message" role="status" aria-live="polite"></div>
-                            </div>
-                        </div>
-
-                        <!-- ===== ページ3：チャンネル登録者数 ===== -->
-                        <div class="stats-page sub-page" role="tabpanel" aria-label="登録者推移" aria-roledescription="スライド">
-
-                            <div class="sub-header">
-                                <h2 class="sub-title marker" >登録者推移</h2>
-                                <!-- ✅ role="status" で読み込み状態をスクリーンリーダーに伝える -->
-                                <span class="sub-loading-badge" id="sub-loading-badge" role="status" aria-live="polite">読込中…</span>
-                            </div>
-
-                            <!-- ✅ プラットフォームタブに role="tablist" -->
-                            <div class="sub-platform-tabs" id="sub-platform-tabs" role="tablist" aria-label="プラットフォーム選択">
-
-                                <button class="sub-tab is-active" data-platform="youtube-main"
-                                    role="tab" aria-selected="true" aria-controls="sub-graph-card">
-                                    <span class="sub-tab-icon"><i class="fa-brands fa-youtube" aria-hidden="true"></i></span>
-                                    <span class="sub-tab-body">
-                                        <span class="sub-tab-name">YouTube(@koinoyamaich)</span>
-                                        <span class="sub-tab-count" id="sub-count-youtube-main" aria-label="登録者数">--</span>
-                                    </span>
-                                </button>
-
-                                <button class="sub-tab" data-platform="youtube-sub"
-                                    role="tab" aria-selected="false" aria-controls="sub-graph-card">
-                                    <span class="sub-tab-icon"><i class="fa-brands fa-youtube" aria-hidden="true"></i></span>
-                                    <span class="sub-tab-body">
-                                        <span class="sub-tab-name">YouTube(@koinoyamaisub)</span>
-                                        <span class="sub-tab-count" id="sub-count-youtube-sub" aria-label="登録者数">--</span>
-                                    </span>
-                                </button>
-
-                                <button class="sub-tab" data-platform="twitch"
-                                    role="tab" aria-selected="false" aria-controls="sub-graph-card">
-                                    <span class="sub-tab-icon"><i class="fa-brands fa-twitch" aria-hidden="true"></i></span>
-                                    <span class="sub-tab-body">
-                                        <span class="sub-tab-name">Twitch</span>
-                                        <span class="sub-tab-count" id="sub-count-twitch" aria-label="フォロワー数">--</span>
-                                    </span>
-                                </button>
-
-                            </div>
-
-                            <!-- グラフカード -->
-                            <div class="sub-graph-card" id="sub-graph-card" role="tabpanel">
-                                <div class="sub-range-row" role="group" aria-label="表示期間">
-                                    <button class="sub-range-btn is-active" data-range="all" aria-pressed="true">全期間</button>
-                                    <button class="sub-range-btn" data-range="1y" aria-pressed="false">1年</button>
-                                    <button class="sub-range-btn" data-range="6m" aria-pressed="false">6ヶ月</button>
-                                    <button class="sub-range-btn" data-range="3m" aria-pressed="false">3ヶ月</button>
-                                </div>
-                                <div class="sub-canvas-wrap">
-                                    <!-- ✅ canvas に role="img" + aria-label -->
-                                    <canvas id="sub-main-canvas" role="img" aria-label="登録者数推移グラフ"></canvas>
-                                    <div id="sub-tooltip" class="sub-tooltip" style="display:none;" role="tooltip">
-                                        <div class="sub-tooltip-date" id="sub-tt-date"></div>
-                                        <div class="sub-tooltip-val" id="sub-tt-val"></div>
+                                <div class="stats-grid">
+                                    <div class="stat-item">
+                                        <button type="button" class="stat-copy-btn" data-copy-target="days-since-debut" aria-label="デビューからの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
+                                        <div class="label">デビューから</div>
+                                        <div class="value" id="days-since-debut" aria-live="polite" aria-atomic="true">0</div>
                                     </div>
-                                    <!-- ✅ aria-live でデータなし状態を通知 -->
-                                    <div id="sub-no-data" class="sub-no-data" style="display:none;" role="status" aria-live="polite">データなし</div>
-                                </div>
-                                <div class="sub-milestones-legend" aria-label="凡例">
-                                    <span class="sub-ms-item"><span class="sub-ms-dot debut" aria-hidden="true"></span>デビュー</span>
-                                    <span class="sub-ms-item"><span class="sub-ms-dot milestone" aria-hidden="true"></span>節目</span>
+
+                                    <div class="stat-item">
+                                        <button type="button" class="stat-copy-btn" data-copy-target="days-to-birthday" aria-label="お誕生日までの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
+                                        <div class="label">お誕生日まで</div>
+                                        <div class="value" id="days-to-birthday" aria-live="polite" aria-atomic="true">0</div>
+                                    </div>
+
+                                    <div class="stat-item">
+                                        <button type="button" class="stat-copy-btn" data-copy-target="days-to-anniversary" aria-label="周年記念までの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
+                                        <div class="label">周年記念まで</div>
+                                        <div class="value" id="days-to-anniversary" aria-live="polite" aria-atomic="true">0</div>
+                                    </div>
+
+                                    <div class="stat-item">
+                                        <button type="button" class="stat-copy-btn" data-copy-target="days-to-meet" aria-label="推してからの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
+                                        <div class="label">推してから</div>
+                                        <div class="value" id="days-to-meet" aria-live="polite" aria-atomic="true">0</div>
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- 記録カード -->
-                            <div class="sub-records">
-                                <div class="sub-rec-card">
-                                    <div class="sub-rec-label">ピーク</div>
-                                    <div class="sub-rec-value" id="sub-rec-peak">--</div>
-                                    <div class="sub-rec-unit" id="sub-rec-peak-unit">万人</div>
+                            <!-- ===== ページ2：週間予定表 ===== -->
+                            <div class="stats-page" role="tabpanel" aria-label="スケジュール" aria-roledescription="スライド">
+                                <h2 class="week-title marker">スケジュール</h2>
+                                <div class="week-head">
+                                    <!-- ✅ aria-label を追加（アイコンのみのボタン対応） -->
+                                    <button onclick="navigateSchedule(-1)" class="week-arrow" type="button" aria-label="前の週/月へ">
+                                        <i class="fa-solid fa-angle-left" style="color: #040300;" aria-hidden="true"></i>
+                                    </button>
+
+                                    <div style="display:flex;align-items:center;gap:8px;flex:1;justify-content:center;">
+                                        <div class="view-mode-tabs" role="group" aria-label="表示切り替え">
+                                            <button class="view-mode-btn is-active" id="view-btn-week" type="button" onclick="switchViewMode('week')">週間</button>
+                                            <button class="view-mode-btn" id="view-btn-month" type="button" onclick="switchViewMode('month')">月間</button>
+                                        </div>
+                                    </div>
+
+                                    <button onclick="navigateSchedule(1)" class="week-arrow" type="button" aria-label="次の週/月へ">
+                                        <i class="fa-solid fa-angle-right" style="color: #040300;" aria-hidden="true"></i>
+                                    </button>
                                 </div>
-                                <div class="sub-rec-card">
-                                    <div class="sub-rec-label">計測データ数</div>
-                                    <div class="sub-rec-value" id="sub-rec-count">--</div>
-                                    <div class="sub-rec-unit">件</div>
+
+                                <div id="schedule-month-label" class="schedule-month-label" style="display:none;"></div>
+                                <div class="week-content">
+                                    <button id="week-add-user-schedule" class="week-add-btn" type="button" aria-label="予定を追加">+</button>
+                                    <div id="weekly-schedule" aria-live="polite" aria-atomic="false"></div>
+                                    <div id="weekly-message" role="status" aria-live="polite"></div>
                                 </div>
                             </div>
 
-                        </div><!-- /.sub-page -->
+                            <!-- ===== ページ3：チャンネル登録者数 ===== -->
+                            <div class="stats-page sub-page" role="tabpanel" aria-label="登録者推移" aria-roledescription="スライド">
 
-                    </div><!-- /.stats-carousel-inner -->
+                                <div class="sub-header">
+                                    <h2 class="sub-title marker" >登録者推移</h2>
+                                    <!-- ✅ role="status" で読み込み状態をスクリーンリーダーに伝える -->
+                                    <span class="sub-loading-badge" id="sub-loading-badge" role="status" aria-live="polite">読込中…</span>
+                                </div>
+
+                                <!-- ✅ プラットフォームタブに role="tablist" -->
+                                <div class="sub-platform-tabs" id="sub-platform-tabs" role="tablist" aria-label="プラットフォーム選択">
+
+                                    <button class="sub-tab is-active" data-platform="youtube-main"
+                                        role="tab" aria-selected="true" aria-controls="sub-graph-card">
+                                        <span class="sub-tab-icon"><i class="fa-brands fa-youtube" aria-hidden="true"></i></span>
+                                        <span class="sub-tab-body">
+                                            <span class="sub-tab-name">YouTube(@koinoyamaich)</span>
+                                            <span class="sub-tab-count" id="sub-count-youtube-main" aria-label="登録者数">--</span>
+                                        </span>
+                                    </button>
+
+                                    <button class="sub-tab" data-platform="youtube-sub"
+                                        role="tab" aria-selected="false" aria-controls="sub-graph-card">
+                                        <span class="sub-tab-icon"><i class="fa-brands fa-youtube" aria-hidden="true"></i></span>
+                                        <span class="sub-tab-body">
+                                            <span class="sub-tab-name">YouTube(@koinoyamaisub)</span>
+                                            <span class="sub-tab-count" id="sub-count-youtube-sub" aria-label="登録者数">--</span>
+                                        </span>
+                                    </button>
+
+                                    <button class="sub-tab" data-platform="twitch"
+                                        role="tab" aria-selected="false" aria-controls="sub-graph-card">
+                                        <span class="sub-tab-icon"><i class="fa-brands fa-twitch" aria-hidden="true"></i></span>
+                                        <span class="sub-tab-body">
+                                            <span class="sub-tab-name">Twitch</span>
+                                            <span class="sub-tab-count" id="sub-count-twitch" aria-label="フォロワー数">--</span>
+                                        </span>
+                                    </button>
+
+                                </div>
+
+                                <!-- グラフカード -->
+                                <div class="sub-graph-card" id="sub-graph-card" role="tabpanel">
+                                    <div class="sub-range-row" role="group" aria-label="表示期間">
+                                        <button class="sub-range-btn is-active" data-range="all" aria-pressed="true">全期間</button>
+                                        <button class="sub-range-btn" data-range="1y" aria-pressed="false">1年</button>
+                                        <button class="sub-range-btn" data-range="6m" aria-pressed="false">6ヶ月</button>
+                                        <button class="sub-range-btn" data-range="3m" aria-pressed="false">3ヶ月</button>
+                                    </div>
+                                    <div class="sub-canvas-wrap">
+                                        <!-- ✅ canvas に role="img" + aria-label -->
+                                        <canvas id="sub-main-canvas" role="img" aria-label="登録者数推移グラフ"></canvas>
+                                        <div id="sub-tooltip" class="sub-tooltip" style="display:none;" role="tooltip">
+                                            <div class="sub-tooltip-date" id="sub-tt-date"></div>
+                                            <div class="sub-tooltip-val" id="sub-tt-val"></div>
+                                        </div>
+                                        <!-- ✅ aria-live でデータなし状態を通知 -->
+                                        <div id="sub-no-data" class="sub-no-data" style="display:none;" role="status" aria-live="polite">データなし</div>
+                                    </div>
+                                    <div class="sub-milestones-legend" aria-label="凡例">
+                                        <span class="sub-ms-item"><span class="sub-ms-dot debut" aria-hidden="true"></span>デビュー</span>
+                                        <span class="sub-ms-item"><span class="sub-ms-dot milestone" aria-hidden="true"></span>節目</span>
+                                    </div>
+                                </div>
+
+                                <!-- 記録カード -->
+                                <div class="sub-records">
+                                    <div class="sub-rec-card">
+                                        <div class="sub-rec-label">ピーク</div>
+                                        <div class="sub-rec-value" id="sub-rec-peak">--</div>
+                                        <div class="sub-rec-unit" id="sub-rec-peak-unit">万人</div>
+                                    </div>
+                                    <div class="sub-rec-card">
+                                        <div class="sub-rec-label">計測データ数</div>
+                                        <div class="sub-rec-value" id="sub-rec-count">--</div>
+                                        <div class="sub-rec-unit">件</div>
+                                    </div>
+                                </div>
+
+                            </div><!-- /.sub-page -->
+
+                        </div><!-- /.stats-carousel-inner -->
+                    </div><!-- /.stats-carousel-view -->
                 </div><!-- /.stats-carousel -->
             </div><!-- /.stats-card -->
             <!-- ✅ カルーセルドットに role="tablist" -->

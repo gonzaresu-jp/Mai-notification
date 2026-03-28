@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Update logs</title>
     <link rel="icon" href="../icon.webp">
-    <link rel="stylesheet" href="/style.v2.98.css" />
+    <link rel="stylesheet" href="/style.v3.00.css" />
     <style type="text/css">
         dt {font-size: 24px;}
         @media(max-width: 800px){dt{font-size: 16px} .card{display: block;} img{ max-width: 80vw!important;}}
