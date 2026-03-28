@@ -8,27 +8,30 @@
 *****************************************************************/
 
 const axios = require('axios');
+const crypto = require('crypto');
 const fs = require('fs');
 const https = require('https');
+const path = require('path');
 require('dotenv').config();
 
 /* =========================================================
    設定
 ========================================================= */
 
-const UID = '1900434152';
-const STATE_FILE = './bilibili-dynamic-state.json';
+const DEFAULT_UID = '1900434152';
+const LOGS_DIR = path.join(__dirname, 'logs');
+const STATE_FILE = path.join(LOGS_DIR, 'bilibili-state.json');
 
-const COOKIE = process.env.BILI_COOKIE;
+const DEFAULT_NOTIFY_CONFIG = {
+  token: null,
+  apiUrl: 'http://localhost:8080/api/notify',
+  hmacSecret: null
+};
 
-const BASE_INTERVAL_MS = Number(process.env.BILI_DYNAMIC_INTERVAL_MS || 90000);
+// 30分間隔
+const BASE_INTERVAL_MS = Number(process.env.BILI_DYNAMIC_INTERVAL_MS || 30 * 60 * 1000); // 30分 = 1800秒 = 1,800,000ms
 const JITTER_MS = Number(process.env.BILI_DYNAMIC_JITTER_MS || 30000);
 const MAX_BACKOFF_MS = Number(process.env.BILI_DYNAMIC_MAX_BACKOFF_MS || 30 * 60 * 1000);
-
-if (!COOKIE) {
-  console.error('❌ BILI_COOKIE 未設定。終了します。');
-  process.exit(1);
-}
 
 /* =========================================================
    状態
@@ -37,6 +40,9 @@ if (!COOKIE) {
 let lastId = null;
 let timer = null;
 let backoffMs = 0;
+let notifyConfig = { ...DEFAULT_NOTIFY_CONFIG };
+let uid = DEFAULT_UID;
+let cookie = null;
 
 if (fs.existsSync(STATE_FILE)) {
   lastId = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')).lastId || null;
@@ -46,28 +52,31 @@ if (fs.existsSync(STATE_FILE)) {
    axios client
 ========================================================= */
 
-const client = axios.create({
-  timeout: 10000,
-  httpsAgent: new https.Agent({ keepAlive: true }),
-  headers: {
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
-    'Referer': `https://space.bilibili.com/${UID}/dynamic`,
-    'Accept': 'application/json, text/plain, */*',
-    'Cookie': COOKIE
-  }
-});
+function createClient() {
+  return axios.create({
+    timeout: 10000,
+    httpsAgent: new https.Agent({ keepAlive: true }),
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
+      'Referer': `https://space.bilibili.com/${uid}/dynamic`,
+      'Accept': 'application/json, text/plain, */*',
+      'Cookie': cookie
+    }
+  });
+}
 
 /* =========================================================
    polymer API fetch
 ========================================================= */
 
 async function fetchDynamicList() {
+  const client = createClient();
   const res = await client.get(
     'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space',
     {
       params: {
-        host_mid: UID
+        host_mid: uid
       }
     }
   );
@@ -115,7 +124,8 @@ function parseDynamic(item) {
   return {
     id,
     time,
-    text: text.slice(0, 200)
+    text: text.slice(0, 200),
+    url: id ? `https://t.bilibili.com/${id}` : null
   };
 }
 
@@ -188,8 +198,9 @@ async function fetchDynamic() {
       console.log(`${parsed.time} | ${parsed.id}`);
       console.log(parsed.text);
 
-      /* ===== 通知処理を書く場所 ===== */
-      // notify(parsed)
+      if (notifyConfig?.apiUrl && notifyConfig?.token) {
+        await sendNotify(parsed);
+      }
     }
 
     backoffMs = 0;
@@ -222,6 +233,11 @@ async function fetchDynamic() {
 ========================================================= */
 
 function saveState() {
+  try {
+    if (!fs.existsSync(LOGS_DIR)) {
+      fs.mkdirSync(LOGS_DIR, { recursive: true });
+    }
+  } catch (_) {}
   fs.writeFileSync(
     STATE_FILE,
     JSON.stringify({ lastId }, null, 2)
@@ -236,6 +252,46 @@ function getNextDelayMs() {
 }
 
 /* =========================================================
+   notify
+========================================================= */
+
+async function sendNotify(parsed) {
+  const payload = {
+    type: 'bilibili',
+    settingKey: 'bilibili',
+    data: {
+      title: '【Bilibili】新規投稿',
+      body: parsed?.text || '',
+      url: parsed?.url || `https://space.bilibili.com/${uid}/dynamic`,
+      icon: './icon.webp'
+    }
+  };
+
+  const bodyString = JSON.stringify(payload);
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Notify-Token': notifyConfig.token || ''
+  };
+
+  if (notifyConfig.hmacSecret) {
+    const hmac = crypto.createHmac('sha256', notifyConfig.hmacSecret);
+    hmac.update(bodyString);
+    headers['X-Signature'] = `sha256=${hmac.digest('hex')}`;
+  }
+
+  try {
+    await axios.post(notifyConfig.apiUrl, payload, {
+      headers,
+      timeout: 10000
+    });
+    console.log('[bilibili-dynamic] notify sent:', parsed?.id);
+  } catch (e) {
+    console.error('[bilibili-dynamic] notify failed:', e?.message || e);
+  }
+}
+
+/* =========================================================
    polling loop
 ========================================================= */
 
@@ -247,7 +303,25 @@ async function runLoop() {
   timer = setTimeout(runLoop, delay);
 }
 
-runLoop();
+function startBilibiliDynamicWatcher(config = {}) {
+  uid = String(config.uid || process.env.BILI_UID || DEFAULT_UID);
+  cookie = config.cookie || process.env.BILI_COOKIE || null;
+  notifyConfig = { ...DEFAULT_NOTIFY_CONFIG, ...(config.notifyConfig || {}) };
+
+  if (!cookie) {
+    console.error('[bilibili-dynamic] BILI_COOKIE 未設定。スキップします。');
+    return false;
+  }
+
+  console.log('[bilibili-dynamic] watching uid:', uid);
+  runLoop();
+  return true;
+}
+
+function stopBilibiliDynamicWatcher() {
+  if (timer) clearTimeout(timer);
+  timer = null;
+}
 
 process.on('SIGINT', () => {
   if (timer) clearTimeout(timer);
@@ -257,3 +331,14 @@ process.on('SIGTERM', () => {
   if (timer) clearTimeout(timer);
   process.exit(0);
 });
+
+if (require.main === module) {
+  const ok = startBilibiliDynamicWatcher();
+  if (!ok) process.exit(1);
+}
+
+module.exports = {
+  startBilibiliDynamicWatcher,
+  stopBilibiliDynamicWatcher
+};
+
