@@ -11,6 +11,11 @@ const jsonCache = {
   limit: 20  // JSONの最大件数
 };
 
+function clearJsonCache() {
+  jsonCache.data = null;
+  jsonCache.timestamp = 0;
+}
+
 // =========================
 // SSE（任意）: サーバが対応しているなら UI を自動更新
 // =========================
@@ -39,6 +44,19 @@ export function setupHistorySse($logsEl, $statusEl) {
 }
 
 // =========================
+// HTMLエスケープユーティリティ
+// =========================
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// =========================
 // UI生成
 // =========================
 export function createLogItem(log) {
@@ -55,24 +73,27 @@ export function createLogItem(log) {
   });
 
   const iconHtml = log.icon
-    ? `<img src="${log.icon}" alt="icon" class="icon" loading="lazy" />`
+    ? `<img src="${escapeHtml(log.icon)}" alt="icon" class="icon" loading="lazy" />`
     : '';
 
+  const safeTitle = escapeHtml(log.title || '通知');
+  const safeBody = escapeHtml(log.body || 'メッセージなし');
+  
   const titleHtml = log.url
-    ? `<a href="${log.url}" target="_blank" rel="noopener noreferrer">${log.title || '通知'}</a>`
-    : (log.title || '通知');
+    ? `<a href="${escapeHtml(log.url)}" target="_blank" rel="noopener noreferrer">${safeTitle}</a>`
+    : safeTitle;
 
   const statusClass = log.status === 'fail' ? ' status-fail' : '';
   const platformData = normalizePlatformName(log.platform || '不明');
 
   return `
-    <div class="card${statusClass}" data-platform="${platformData}">
+    <div class="card${statusClass}" data-platform="${escapeHtml(platformData)}">
       ${iconHtml}
       <div class="card-content">
         <div class="title">${titleHtml}</div>
-        <p class="body">${log.body || 'メッセージなし'}</p>
+        <p class="body">${safeBody}</p>
         <div class="meta">
-          <span class="platform">${log.platform || '不明'}</span>
+          <span class="platform">${escapeHtml(log.platform || '不明')}</span>
           <span class="time">${dateStr}</span>
           ${log.status === 'fail' ? '<span class="status-badge">送信失敗</span>' : ''}
         </div>
