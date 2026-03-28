@@ -138,6 +138,44 @@ app.use('/pushweb', express.static(path.join(__dirname, 'pushweb')));
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
 app.set('trust proxy', true);
 app.use('/webui', express.static(path.join(__dirname, 'webui')));
+
+// --- CSRF Protection for API (State Changing Requests) ---
+app.use('/api/', (req, res, next) => {
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+    const origin = req.headers.origin;
+    const referer = req.headers.referer;
+    const allowedOrigin = process.env.PUBLIC_URL || (req.protocol + '://' + req.get('host'));
+    
+    // Check if Origin exists and matches expected host, or fallback to referer
+    if (origin && !origin.startsWith(allowedOrigin)) {
+      console.warn(`[Security] Blocked CSRF attempt from origin: ${origin}`);
+      return res.status(403).json({ error: 'CSRF token mismatch or unauthorized origin' });
+    } else if (!origin && referer && !referer.startsWith(allowedOrigin)) {
+      console.warn(`[Security] Blocked CSRF attempt from referer: ${referer}`);
+      return res.status(403).json({ error: 'CSRF token mismatch or unauthorized referer' });
+    }
+  }
+  next();
+});
+
+// --- API Rate Limiter ---
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 150, // limit each IP to 150 API requests per minute
+  keyGenerator: (req) => {
+    if (process.env.TRUST_PROXY === 'true') {
+      const forwarded = req.headers['x-forwarded-for'];
+      if (forwarded) return forwarded.split(',')[0].trim();
+    }
+    return req.headers['x-real-ip'] || req.socket?.remoteAddress || req.ip;
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many API requests, please try again later.' }
+});
+
+app.use('/api/', apiLimiter);
+
 userRoutes.register(app, db, authLimiter);
 
 
