@@ -270,6 +270,7 @@ db.serialize(() => {
 });
 // インデックス作成
 db.run(`CREATE INDEX IF NOT EXISTS idx_events_start_time ON events (start_time DESC)`);
+db.run(`CREATE INDEX IF NOT EXISTS idx_events_start_time_asc ON events (start_time ASC, status)`);
 db.run(`CREATE INDEX IF NOT EXISTS idx_events_status ON events (status)`);
 db.run(`CREATE INDEX IF NOT EXISTS idx_events_platform ON events (platform)`);
 db.run(`CREATE TABLE IF NOT EXISTS weekly_messages (
@@ -1684,18 +1685,20 @@ app.post('/api/admin/events', adminAuth.requireAuth, (req, res) => {
   const endTimeValue = end_time && end_time.trim() !== '' ? end_time : null;
   
   // confirmed ステータスの判定
-  let confirmed = null;
-  
-  // status が 'ended' の場合は必ず confirmed = true
-  if (status === 'ended') {
-    confirmed = true;
-  }
-  // それ以外で start_time が設定されている場合
-  else if (startTimeValue) {
+  // リクエストで明示的に指定された場合はそれを優先
+  let confirmed;
+  if (req.body.confirmed !== undefined && req.body.confirmed !== null) {
+    confirmed = req.body.confirmed ? 1 : 0;
+  } else if (status === 'ended') {
+    // status が 'ended' の場合は必ず confirmed = true
+    confirmed = 1;
+  } else if (startTimeValue) {
+    // start_time が過去なら confirmed = true、それ以外は null（未定）
     const eventDate = new Date(startTimeValue);
     const now = new Date();
-    // 過去の日時なら confirmed = true
-    confirmed = eventDate < now ? true : null;
+    confirmed = eventDate < now ? 1 : null;
+  } else {
+    confirmed = null;
   }
   
   const sql = `
@@ -1890,11 +1893,10 @@ app.get('/api/history', (req, res) => {
   const MAX_LIMIT = 100;
   if (limit > MAX_LIMIT) limit = MAX_LIMIT;
 const tStart = Date.now();
-  // 件数取得
-  db.get('SELECT COUNT(*) AS cnt FROM notifications', [], (countErr, countRow) => {
-const tAfterCount = Date.now()
+  // 件数取得をO(1)の MAX(id) に変更
+  db.get('SELECT MAX(id) AS cnt FROM notifications', [], (countErr, countRow) => {
     if (countErr) {
-      console.error('/api/history COUNT err:', countErr.message);
+      console.error('/api/history MAX(id) err:', countErr.message);
       return res.status(500).json({ error: 'DB error', detail: countErr.message });
     }
 
@@ -1904,53 +1906,35 @@ const tAfterCount = Date.now()
     if (!total) {
       return res.json({ logs: [], total: 0, hasMore: false });
     }
-const tBeforePragma = Date.now();
-    // カラム存在チェック（堅牢に）
-    db.all("PRAGMA table_info(notifications)", [], (pragmaErr, columns) => {
-const tAfterPragma = Date.now();
-console.log('/api/history timing after PRAGMA:', tAfterPragma - tBeforePragma, 'ms');
-      if (pragmaErr) {
-        console.error('/api/history PRAGMA err:', pragmaErr.message);
-        return res.status(500).json({ error: 'DB error', detail: pragmaErr.message });
+
+    // 起動時に platform, status カラムは追加保証されているため、PRAGMAチェックを省略してハードコード
+    const selectFields = "id, title, body, url, icon, strftime('%s', created_at) AS timestamp, platform, status";
+    const sql = `SELECT ${selectFields} FROM notifications ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+
+    db.all(sql, [limit, offset], (err, rows) => {
+      console.log('/api/history total server time:', Date.now() - tStart, 'ms');
+      if (err) {
+        console.error('/api/history SELECT err:', err.message);
+        return res.status(500).json({ error: 'DB error', detail: err.message });
       }
 
-      const colArray = Array.isArray(columns) ? columns : [];
-      const hasPlatform = colArray.some(col => col && col.name === 'platform');
-      const hasStatus = colArray.some(col => col && col.name === 'status');
+      // rows が未定義の場合に備える
+      const safeRows = Array.isArray(rows) ? rows : [];
 
-      let selectFields = "id, title, body, url, icon, strftime('%s', created_at) AS timestamp";
-      if (hasPlatform) selectFields += ', platform';
-      if (hasStatus) selectFields += ', status';
+      const hasMore = offset + safeRows.length < total;
+      const logs = safeRows.map(r => ({
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        url: r.url,
+        icon: r.icon,
+        platform: r.platform || '不明',
+        status: r.status || 'success',
+        // timestamp が null/undefined の場合は 0 を返す
+        timestamp: r.timestamp ? parseInt(r.timestamp, 10) : 0
+      }));
 
-      const sql = `SELECT ${selectFields} FROM notifications ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-const tBeforeSelect = Date.now();
-      db.all(sql, [limit, offset], (err, rows) => {
-const tAfterSelect = Date.now();
-console.log('/api/history timing after SELECT:', tAfterSelect - tBeforeSelect, 'ms');
-console.log('/api/history total server time:', Date.now() - tStart, 'ms');
-        if (err) {
-          console.error('/api/history SELECT err:', err.message);
-          return res.status(500).json({ error: 'DB error', detail: err.message });
-        }
-
-        // rows が未定義の場合に備える
-        const safeRows = Array.isArray(rows) ? rows : [];
-
-        const hasMore = offset + safeRows.length < total;
-        const logs = safeRows.map(r => ({
-          id: r.id,
-          title: r.title,
-          body: r.body,
-          url: r.url,
-          icon: r.icon,
-          platform: (hasPlatform ? (r.platform || '不明') : '不明'),
-          status: (hasStatus ? (r.status || 'success') : 'success'),
-          // timestamp が null/undefined の場合は 0 を返す
-          timestamp: r.timestamp ? parseInt(r.timestamp, 10) : 0
-        }));
-
-        return res.json({ logs, total, hasMore });
-      });
+      return res.json({ logs, total, hasMore });
     });
   });
 });

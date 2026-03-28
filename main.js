@@ -4,10 +4,13 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const cron = require('node-cron');
+const axios = require('axios');
+const crypto = require('crypto');
 
 const youtube = require('./youtube');
 const youtubeCommunity = require('./ytcommunity');
 const { startBilibiliWatcher } = require('./bilibili-live');
+const { startBilibiliDynamicWatcher } = require('./bilibili-dynamic');
 const twitcasting = require('./twitcasting');
 const twitter = require('./twitter');
 const fanbox = require('./fanbox');
@@ -72,6 +75,53 @@ async function main() {
     token: LOCAL_API_TOKEN,
     hmacSecret: process.env.NOTIFY_HMAC_SECRET || null,
     apiUrl: process.env.NOTIFY_API_URL || `http://localhost:${PORT}/api/notify`,
+    notifyFn: async (payload) => {
+      try {
+        const bodyString = JSON.stringify(payload || {});
+        const headers = {
+          'Content-Type': 'application/json',
+          'X-Notify-Token': LOCAL_API_TOKEN || ''
+        };
+
+        if (process.env.NOTIFY_HMAC_SECRET) {
+          const hmac = crypto.createHmac('sha256', process.env.NOTIFY_HMAC_SECRET);
+          hmac.update(bodyString);
+          headers['X-Signature'] = `sha256=${hmac.digest('hex')}`;
+        }
+
+        await axios.post(process.env.NOTIFY_API_URL || `http://localhost:${PORT}/api/notify`, payload, {
+          headers,
+          timeout: 8000
+        });
+      } catch (e) {
+        console.error('notifyFn failed:', e?.message || e);
+      }
+    }
+  };
+
+  const sendNotifyApi = async (payload) => {
+    try {
+      const bodyString = JSON.stringify(payload || {});
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-Notify-Token': notifyConfig.token || ''
+      };
+
+      if (notifyConfig.hmacSecret) {
+        const hmac = crypto.createHmac('sha256', notifyConfig.hmacSecret);
+        hmac.update(bodyString);
+        headers['X-Signature'] = `sha256=${hmac.digest('hex')}`;
+      }
+
+      await axios.post(notifyConfig.apiUrl, payload, {
+        headers,
+        timeout: 8000
+      });
+      return true;
+    } catch (e) {
+      console.error('notify failed:', e?.message || e);
+      return false;
+    }
   };
 
 // --- Twitch 設定 ---
@@ -223,7 +273,14 @@ if (typeof youtubeCommunity.pollAndNotify === 'function') {
 
       await run(); // 起動直後1回
 
-      setInterval(run, intervalMs).unref();
+      const schedule = async () => {
+        await run();
+        const t = setTimeout(schedule, intervalMs);
+        if (t && typeof t.unref === 'function') t.unref();
+      };
+
+      const t = setTimeout(schedule, intervalMs);
+      if (t && typeof t.unref === 'function') t.unref();
 
       console.log(`YouTube Community polling 起動 (${intervalMs/60000} min)`);
 
@@ -331,21 +388,58 @@ if (typeof twitcasting.startWatcher === 'function') {
 
 
 // bilibili
-/*
-startBilibiliWatcher({
-  roomId: process.env.BILIBILI_ROOM_ID,
+if (typeof startBilibiliWatcher === 'function' && process.env.BILIBILI_ROOM_ID) {
+  startPromises.push((async () => {
+    try {
+      startBilibiliWatcher({
+        roomId: process.env.BILIBILI_ROOM_ID,
+        onLiveStart: async () => {
+          console.log('[Notify] bilibili live start detected');
 
-  onLiveStart: async () => {
-    console.log('[Notify] bilibili live start detected');
+          const payload = {
+            type: 'bilibili',
+            settingKey: 'bilibili',
+            data: {
+              title: 'まいちゃん配信開始',
+              body: '',
+              url: `https://live.bilibili.com/${process.env.BILIBILI_ROOM_ID}`,
+              icon: './icon.webp'
+            }
+          };
 
-    await notify({
-      platform: 'bilibili',
-      title: 'まいちゃん配信開始',
-      url: `https://live.bilibili.com/${process.env.BILIBILI_ROOM_ID}`
-    });
-  }
-});
-*/
+          await sendNotifyApi(payload);
+        }
+      });
+      console.log('Bilibili live watcher 起動');
+    } catch (e) {
+      console.error('Bilibili live 起動エラー:', e && e.message ? e.message : e);
+      throw e;
+    }
+  })());
+} else {
+  console.log('Bilibili live: BILIBILI_ROOM_ID 未設定 または startBilibiliWatcher 未定義');
+}
+// bilibili dynamic
+if (typeof startBilibiliDynamicWatcher === 'function') {
+  startPromises.push((async () => {
+    try {
+      const started = startBilibiliDynamicWatcher({
+        uid: process.env.BILI_UID,
+        notifyConfig
+      });
+      if (started) {
+        console.log('Bilibili Dynamic polling 起動');
+      } else {
+        console.log('Bilibili Dynamic: BILI_COOKIE 未設定のためスキップ');
+      }
+    } catch (e) {
+      console.error('Bilibili Dynamic 起動エラー:', e && e.message ? e.message : e);
+      throw e;
+    }
+  })());
+} else {
+  console.log('bilibili-dynamic 未定義。');
+}
   // Fanbox
   try {
     if (typeof fanbox.startPolling === 'function') {
@@ -489,3 +583,6 @@ main().catch((e) => {
 });
 
 module.exports = { start: main, app };
+
+
+

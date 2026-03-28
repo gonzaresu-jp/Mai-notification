@@ -6,6 +6,7 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const PUPPETEER_EXECUTABLE_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || null;
 
 const SEEN_PATH = path.join(__dirname, 'twicas_seen.json');
 const CONFIG_PATH = path.join(__dirname, 'twitcasting-token.json');
@@ -38,7 +39,11 @@ async function getSharedBrowser() {
     browserInitPromise = (async () => {
         try {
             console.log('[Puppeteer] Initializing shared browser instance...');
+            if (PUPPETEER_EXECUTABLE_PATH) {
+                console.log('[Puppeteer] Using executablePath:', PUPPETEER_EXECUTABLE_PATH);
+            }
             sharedBrowser = await puppeteer.launch({
+                executablePath: PUPPETEER_EXECUTABLE_PATH || undefined,
                 headless: HEADLESS,
                 args: [
                     '--no-sandbox',
@@ -248,13 +253,24 @@ function startWatcher(screenId, intervalMs=CHECK_INTERVAL_MS){
 
     console.log(`[TwitCasting] ${screenId} の監視開始 (間隔: ${intervalMs/1000}秒)`);
 
-    setInterval(async()=>{
-        try{ await checkLiveStatus(screenId); }catch(e){ console.error(`[${screenId}] watcher error:`, e && (e.stack || e.message) ? (e.stack || e.message) : e); }
-    }, intervalMs);
+    let running = false;
 
-    (async()=>{ 
-        try{ await checkLiveStatus(screenId); }catch(e){ console.error(`[${screenId}] initial check error:`, e && (e.stack || e.message) ? (e.stack || e.message) : e); } 
-    })();
+    const loop = async () => {
+        if (running) return;
+        running = true;
+        try {
+            await checkLiveStatus(screenId);
+        } catch (e) {
+            console.error(`[${screenId}] watcher error:`, e && (e.stack || e.message) ? (e.stack || e.message) : e);
+        } finally {
+            running = false;
+        }
+
+        const t = setTimeout(loop, intervalMs);
+        if (t && typeof t.unref === 'function') t.unref();
+    };
+
+    loop();
 }
 
 async function checkLiveStatus(screenId){
@@ -366,3 +382,5 @@ async function checkLiveStatus(screenId){
 }
 
 module.exports = { checkLiveStatus, startWatcher, sendNotify, checkPrivateLive };
+
+

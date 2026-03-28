@@ -206,23 +206,33 @@ async function checkFanboxPosts() {
 
 function startPolling(interval = POLL_INTERVAL) {
   console.log(`Fanbox polling started for @${FANBOX_USER} (interval: ${interval/1000}s)`);
-  
-  // 初回実行
-  checkFanboxPosts().catch(e => console.error('Fanbox initial check error:', e));
-  
-  // 定期実行
-  setInterval(() => {
-    checkFanboxPosts().catch(e => console.error('Fanbox check error:', e));
-  }, interval);
+
+  let running = false;
+
+  const loop = async () => {
+    if (running) return;
+    running = true;
+    try {
+      await checkFanboxPosts();
+    } catch (e) {
+      console.error('Fanbox check error:', e);
+    } finally {
+      running = false;
+    }
+
+    const t = setTimeout(loop, interval);
+    if (t && typeof t.unref === 'function') t.unref();
+  };
+
+  loop();
 }
 
 // 直接実行された場合は自動起動
 if (require.main === module) {
-  (async () => {
-    await checkFanboxPosts();
-    setInterval(checkFanboxPosts, POLL_INTERVAL);
-    console.log(`Fanbox Puppeteer scraper running for @${FANBOX_USER}`);
-  })();
+  startPolling(POLL_INTERVAL);
+  console.log(`Fanbox Puppeteer scraper running for @${FANBOX_USER}`);
 }
 
 module.exports = { startPolling, checkFanboxPosts };
+
+
