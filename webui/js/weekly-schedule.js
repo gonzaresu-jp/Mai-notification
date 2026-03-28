@@ -49,6 +49,8 @@ function ensureUsmThumbPickerStyle() {
 let currentWeekOffset = 0;
 let currentWeekData = [];
 let currentUserSchedules = [];
+let currentViewMode = 'week'; // 'week' | 'month'
+let currentMonthOffset = 0;
 
 function formatLocalDate(d) {
   const y = d.getFullYear();
@@ -106,38 +108,82 @@ function waitAuthResolved() {
   });
 }
 
+let _weeklyFetchCache = new Map();
+
 async function loadWeeklySchedule(containerId = 'weekly-schedule', targetDate = new Date()) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  container.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">読み込み中...</div>';
+  const dateStr = formatLocalDate(targetDate);
+  const cacheKey = containerId + '_' + dateStr;
 
-  try {
-    const dateStr = formatLocalDate(targetDate);
-    const weekRes = await fetch(`/api/events/weekly?date=${dateStr}`);
-    if (!weekRes.ok) throw new Error('Failed to fetch weekly events');
-    const weekly = await weekRes.json();
-
-    const user = await waitAuthResolved();
-    let schedules = [];
-    if (user) {
-      const schRes = await fetch('/api/user/schedules', { credentials: 'include' });
-      if (schRes.ok) schedules = await schRes.json();
-    }
-
-    currentWeekData = weekly.week || [];
-    currentUserSchedules = schedules || [];
-
-    renderWeeklyView(container, currentWeekData, currentUserSchedules);
-    renderWeeklyMessage(weekly.weekMessage);
-    installScheduleControls();
-    toggleAddButton(Boolean(user));
-  } catch (error) {
-    console.error('Error loading weekly schedule:', error);
-    container.innerHTML = '<div style="text-align:center;padding:30px;color:#e53935;">エラーが発生しました</div>';
-    renderWeeklyMessage(null);
-    toggleAddButton(false);
+  if (_weeklyFetchCache.has(cacheKey)) {
+    return _weeklyFetchCache.get(cacheKey);
   }
+
+  const fetchPromise = (async () => {
+    // 今週の日付を計算してスケルトン行を表示（week-events 内に読み込み中を表示）
+    const dow = targetDate.getDay();
+    const weekStart = new Date(targetDate);
+    weekStart.setDate(targetDate.getDate() - dow + (dow === 0 ? 0 : 1)); // 日曜スタート
+    const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+    let skeletonHtml = '';
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      const isToday = formatLocalDate(d) === formatLocalDate(new Date());
+      const month = d.getMonth() + 1;
+      const day = d.getDate();
+      skeletonHtml += `<div class="${isToday ? 'week-row is-today' : 'week-row'}">
+        <div class="week-header">
+          <span>${DAY_NAMES[i]}</span>
+          <span class="week-date">${month}/${day}</span>
+        </div>
+        <div class="week-events"><div class="event none" style="color:#bbb;">読み込み中...</div></div>
+      </div>`;
+    }
+    container.classList.add('weekly-list', 'is-loading');
+    container.style.display = 'flex';
+    container.style.width = '100%';
+    container.innerHTML = skeletonHtml;
+
+    try {
+      const weekPromise = fetch(`/api/events/weekly?date=${dateStr}`).then(res => {
+        if (!res.ok) throw new Error('Failed to fetch weekly events');
+        return res.json();
+      });
+
+      const schPromise = waitAuthResolved().then(async user => {
+        if (!user) return { user: null, schedules: [] };
+        const res = await fetch('/api/user/schedules', { credentials: 'include' });
+        return { user, schedules: res.ok ? await res.json() : [] };
+      });
+
+      const [weekly, schResult] = await Promise.all([weekPromise, schPromise]);
+
+      currentWeekData = weekly.week || [];
+      currentUserSchedules = schResult.schedules || [];
+
+      container.classList.remove('is-loading');
+      renderWeeklyView(container, currentWeekData, currentUserSchedules);
+      renderWeeklyMessage(weekly.weekMessage);
+      installScheduleControls();
+      toggleAddButton(Boolean(schResult.user));
+      // 週間表示では年月ラベルを消す
+      const _ml = document.getElementById('schedule-month-label');
+      if (_ml) { _ml.textContent = ''; _ml.style.display = 'none'; }
+    } catch (error) {
+      console.error('Error loading weekly schedule:', error);
+      container.innerHTML = '<div style="text-align:center;padding:30px;color:#e53935;">エラーが発生しました</div>';
+      renderWeeklyMessage(null);
+      toggleAddButton(false);
+    } finally {
+      _weeklyFetchCache.delete(cacheKey);
+    }
+  })();
+
+  _weeklyFetchCache.set(cacheKey, fetchPromise);
+  return fetchPromise;
 }
 
 function mergeWeeklyAndUserSchedules(weekData, schedules) {
@@ -212,7 +258,7 @@ function renderWeeklyView(container, weekData, schedules) {
   });
 
   container.innerHTML = html;
-  if (typeof window.update === 'function') setTimeout(window.update, 50);
+  window.dispatchEvent(new CustomEvent('schedule:rendered', { detail: { mode: 'week' } }));
 }
 
 function renderEventCard(event) {
@@ -496,7 +542,7 @@ let _popupCurrentCard = null;
 
 function closeEventPopup() {
   const existing = document.getElementById('event-popup');
-  const overlay  = document.getElementById('event-popup-overlay');
+  const overlay = document.getElementById('event-popup-overlay');
   if (existing) {
     existing.classList.add('closing');
     existing.addEventListener('animationend', () => existing.remove(), { once: true });
@@ -513,17 +559,17 @@ function openEventPopup(card) {
   closeEventPopup();
 
   const rawAdmin = card.getAttribute('data-event-url');
-  const rawUser  = card.getAttribute('data-user-url');
+  const rawUser = card.getAttribute('data-user-url');
   const url = rawAdmin ? decodeURIComponent(rawAdmin) : rawUser ? decodeURIComponent(rawUser) : '';
 
   // カード内からデータを読み取る
-  const thumbEl  = card.querySelector('.event-thumb img');
-  const timeEl   = card.querySelector('.event-time');
-  const titleEl  = card.querySelector('.event-title');
+  const thumbEl = card.querySelector('.event-thumb img');
+  const timeEl = card.querySelector('.event-time');
+  const titleEl = card.querySelector('.event-title');
 
-  const thumbSrc = thumbEl  ? thumbEl.src  : '';
-  const timeHTML = timeEl   ? timeEl.innerHTML : '';
-  const titleText= titleEl  ? titleEl.textContent : '';
+  const thumbSrc = thumbEl ? thumbEl.src : '';
+  const timeHTML = timeEl ? timeEl.innerHTML : '';
+  const titleText = titleEl ? titleEl.textContent : '';
 
   // ポップアップHTML生成
   const popup = document.createElement('div');
@@ -531,7 +577,7 @@ function openEventPopup(card) {
   popup.innerHTML = `
     ${thumbSrc ? `<div class="popup-thumb"><img src="${thumbSrc}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>` : ''}
     <div class="popup-info">
-      ${timeHTML  ? `<div class="popup-time">${timeHTML}</div>` : ''}
+      ${timeHTML ? `<div class="popup-time">${timeHTML}</div>` : ''}
       ${titleText ? `<div class="popup-title">${escapeHtml(titleText)}</div>` : ''}
     </div>
     ${url ? `<button class="popup-link-btn" type="button">リンクを開く <i class="fa-solid fa-arrow-up-right-from-square"></i></button>` : ''}
@@ -573,7 +619,7 @@ function openEventPopup(card) {
   top = Math.max(margin, top);
 
   popup.style.left = `${left}px`;
-  popup.style.top  = `${top}px`;
+  popup.style.top = `${top}px`;
 
   // 吹き出し三角をカード中央に合わせる
   const cardCenterX = rect.left + rect.width / 2;
@@ -618,6 +664,50 @@ function installScheduleControls() {
     }
   });
 
+  // 月間表示の日付クリック → その週の週間表示へ
+  weekly.addEventListener('click', (e) => {
+    // 月間表示でなければ無視
+    if (currentViewMode !== 'month') return;
+
+    const cell = e.target.closest('[data-week-date]');
+    if (!cell) return;
+    // イベントカードのクリックは委譲先に任せる
+    if (e.target.closest('.event')) return;
+    e.stopPropagation();
+
+    const dateStr = cell.getAttribute('data-week-date');
+    if (!dateStr) return;
+
+    const clickedDate = new Date(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // クリックした日が属する月曜日を求める
+    const dow = clickedDate.getDay();
+    const mondayOfClicked = new Date(clickedDate);
+    mondayOfClicked.setDate(clickedDate.getDate() - (dow === 0 ? 6 : dow - 1));
+
+    // 今週の月曜日を求める
+    const todayDow = today.getDay();
+    const mondayOfToday = new Date(today);
+    mondayOfToday.setDate(today.getDate() - (todayDow === 0 ? 6 : todayDow - 1));
+
+    // 何週分ずれているか
+    const weekDiffMs = mondayOfClicked.getTime() - mondayOfToday.getTime();
+    currentWeekOffset = Math.round(weekDiffMs / (1000 * 60 * 60 * 24 * 7));
+
+    // ビューを週間に切り替え
+    currentViewMode = 'week';
+    const weekBtn = document.getElementById('view-btn-week');
+    const monthBtn = document.getElementById('view-btn-month');
+    if (weekBtn) weekBtn.classList.add('is-active');
+    if (monthBtn) monthBtn.classList.remove('is-active');
+    const addBtn = document.getElementById('week-add-user-schedule');
+    if (addBtn) addBtn.style.display = 'inline-block';
+
+    loadWeeklySchedule('weekly-schedule', clickedDate);
+  });
+
   const addBtn = document.getElementById('week-add-user-schedule');
   if (addBtn && addBtn.dataset.bound !== '1') {
     addBtn.dataset.bound = '1';
@@ -641,16 +731,93 @@ function navigateWeek(direction) {
   loadWeeklySchedule('weekly-schedule', targetDate);
 }
 
+// ビューモードに応じた汎用ナビゲーション（index.php から呼ばれる）
+function navigateSchedule(direction) {
+  if (currentViewMode === 'month') {
+    navigateMonth(direction);
+  } else {
+    navigateWeek(direction);
+  }
+}
+
+// 週間 / 月間 切り替え
+function switchViewMode(mode) {
+  if (currentViewMode === mode) return;
+  currentViewMode = mode;
+
+  const weekBtn = document.getElementById('view-btn-week');
+  const monthBtn = document.getElementById('view-btn-month');
+  if (weekBtn) weekBtn.classList.toggle('is-active', mode === 'week');
+  if (monthBtn) monthBtn.classList.toggle('is-active', mode === 'month');
+
+  // 「+」ボタンは週間のみ表示
+  const addBtn = document.getElementById('week-add-user-schedule');
+  if (addBtn) addBtn.style.display = mode === 'week' ? 'inline-block' : 'none';
+
+  // 週間モードに戻る場合はオフセットをリセット
+  if (mode === 'week') {
+    currentWeekOffset = 0;
+    loadWeeklySchedule('weekly-schedule');
+  } else {
+    currentMonthOffset = 0;
+    loadMonthlySchedule('weekly-schedule');
+  }
+}
+
+// 現在の週/月ラベルを更新
+function updateCurrentLabel() {
+  const el = document.getElementById('week-current-label');
+  const monthLabel = document.getElementById('schedule-month-label');
+  if (currentViewMode === 'month') {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + currentMonthOffset);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    if (el) el.textContent = `${y}年${m}月`;
+    if (monthLabel) {
+      monthLabel.textContent = `${y}年${m}月`;
+      monthLabel.style.display = 'block';
+    }
+  } else {
+    const d = new Date();
+    d.setDate(d.getDate() + currentWeekOffset * 7);
+    const dow = d.getDay();
+    const mon = new Date(d);
+    mon.setDate(d.getDate() - dow + (dow === 0 ? -6 : 1));
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    const fmt = (x) => `${x.getMonth() + 1}/${x.getDate()}`;
+    if (el) el.textContent = `${fmt(mon)}〜${fmt(sun)}`;
+    if (monthLabel) {
+      monthLabel.textContent = '';
+      monthLabel.style.display = 'none';
+    }
+  }
+}
+
+// 月を移動
+function navigateMonth(direction) {
+  currentMonthOffset += direction;
+  loadMonthlySchedule('weekly-schedule');
+}
+
 function resetToCurrentWeek() {
   currentWeekOffset = 0;
+  currentMonthOffset = 0;
+  currentViewMode = 'week';
   loadWeeklySchedule('weekly-schedule');
 }
 
 function enableAutoReload(intervalMinutes = 5) {
   setInterval(() => {
-    const targetDate = new Date();
-    targetDate.setDate(targetDate.getDate() + (currentWeekOffset * 7));
-    loadWeeklySchedule('weekly-schedule', targetDate);
+    if (currentViewMode === 'month') {
+      loadMonthlySchedule('weekly-schedule');
+    } else {
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + (currentWeekOffset * 7));
+      loadWeeklySchedule('weekly-schedule', targetDate);
+    }
   }, intervalMinutes * 60 * 1000);
 }
 
@@ -669,12 +836,191 @@ if (document.readyState === 'loading') {
   addRssFeedLink();
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+  document.body.classList.add("schedule-ready");
+});
+
 function renderWeeklyMessage(weekMessage) {
   const messageEl = document.getElementById('weekly-message');
   if (!messageEl) return;
   if (!weekMessage || !weekMessage.message) {
+    messageEl.classList.add('is-empty');
     messageEl.innerHTML = '';
     return;
   }
-  messageEl.innerHTML = `<span class="message">${escapeHtml(weekMessage.message)}</span>`;
+  messageEl.classList.remove('is-empty');
+  messageEl.innerHTML = `
+    <div class="weekly-message-bg" aria-hidden="true"></div>
+    <div class="weekly-message-inner">
+      <span class="message">${escapeHtml(weekMessage.message)}</span>
+    </div>
+  `;
+}
+
+// =============================================
+// 月間スケジュール
+// =============================================
+
+async function loadMonthlySchedule(containerId = 'weekly-schedule') {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // 対象月の計算
+  const base = new Date();
+  base.setDate(1);
+  base.setMonth(base.getMonth() + currentMonthOffset);
+  const year = base.getFullYear();
+  const month = base.getMonth(); // 0-indexed
+
+  // 月の最初の日・最後の日
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+
+  // 表示する最初の月曜日を計算（月初を含む週の月曜）
+  const startDow = firstDay.getDay(); // 0=日
+  const calStart = new Date(firstDay);
+  calStart.setDate(1 - (startDow === 0 ? 6 : startDow - 1));
+
+  // 表示する最後の日曜日（月末を含む週の日曜）
+  const endDow = lastDay.getDay();
+  const calEnd = new Date(lastDay);
+  calEnd.setDate(lastDay.getDate() + (endDow === 0 ? 0 : 7 - endDow));
+
+  // 週ごとに代表日を収集
+  const weekDates = [];
+  const cur = new Date(calStart);
+  while (cur <= calEnd) {
+    weekDates.push(new Date(cur));
+    cur.setDate(cur.getDate() + 7);
+  }
+
+  // スケルトン表示
+  container.classList.add('weekly-list');
+  container.classList.remove('monthly-grid');
+  container.style.display = 'block';
+  container.style.width = '100%';
+  container.innerHTML = `<div style="text-align:center;padding:20px;color:#bbb;">読み込み中...</div>`;
+
+  updateCurrentLabel();
+
+  try {
+    // 各週のデータを並列取得
+    const weeklyResults = await Promise.all(
+      weekDates.map(async (weekMon) => {
+        const dateStr = formatLocalDate(weekMon);
+        const res = await fetch(`/api/events/weekly?date=${dateStr}`);
+        if (!res.ok) return null;
+        return res.json();
+      })
+    );
+
+    const user = await waitAuthResolved();
+    let schedules = [];
+    if (user) {
+      const schRes = await fetch('/api/user/schedules', { credentials: 'include' });
+      if (schRes.ok) schedules = await schRes.json();
+    }
+
+    currentUserSchedules = schedules || [];
+
+    // 全週のデータを date -> events にまとめる
+    const allDays = new Map();
+    for (const result of weeklyResults) {
+      if (!result || !result.week) continue;
+      for (const day of result.week) {
+        if (!allDays.has(day.date)) allDays.set(day.date, day);
+      }
+    }
+
+    renderMonthlyView(container, allDays, schedules, year, month, calStart, calEnd);
+    renderWeeklyMessage(null); // 月間ではメッセージを非表示
+    installScheduleControls();
+    toggleAddButton(false); // 月間では追加ボタン非表示
+
+  } catch (error) {
+    console.error('Error loading monthly schedule:', error);
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#e53935;">エラーが発生しました</div>';
+  }
+}
+
+function renderMonthlyView(container, allDays, schedules, year, month, calStart, calEnd) {
+  const todayStr = formatLocalDate(new Date());
+  const targetMonth = month; // 0-indexed
+
+  // ユーザースケジュールを date -> events にまとめる
+  const userByDate = new Map();
+  (schedules || []).forEach((s) => {
+    const dt = new Date(s.scheduled_at || s.start_time || '');
+    if (!Number.isFinite(dt.getTime())) return;
+    const key = formatLocalDate(dt);
+    if (!userByDate.has(key)) userByDate.set(key, []);
+    userByDate.get(key).push({
+      __kind: 'user_schedule',
+      schedule_id: s.id,
+      title: s.title || s.event_title || 'マイスケジュール',
+      note: s.note || '',
+      url: s.url || '',
+      thumbnail_url: s.thumbnail_url || '',
+      start_time: s.scheduled_at || s.start_time,
+      reminder_minutes: s.reminder_minutes ?? 30,
+      editable: Boolean(s.editable),
+      source: s.source || (s.editable ? 'user' : 'admin')
+    });
+  });
+
+  // 曜日ヘッダー（日〜土）
+  const DOW_JP = ['日', '月', '火', '水', '木', '金', '土'];
+  let html = '<div class="monthly-grid">';
+  html += '<div class="month-dow-header">';
+  for (const d of DOW_JP) html += `<div class="month-dow-cell">${d}</div>`;
+  html += '</div>';
+
+  // 週ごとに行を生成
+  const cur = new Date(calStart);
+  while (cur <= calEnd) {
+    html += '<div class="month-week-row">';
+    for (let i = 0; i < 7; i++) {
+      const cellDate = new Date(cur);
+      const dateStr = formatLocalDate(cellDate);
+      const isCurrentMonth = cellDate.getMonth() === targetMonth;
+      const isToday = dateStr === todayStr;
+      const dow = cellDate.getDay();
+
+      let cellClass = 'month-day-cell';
+      if (isToday) cellClass += ' is-today';
+      if (!isCurrentMonth) cellClass += ' out-of-month';
+
+      let numClass = 'month-day-num';
+      if (dow === 0) numClass += ' is-sunday';
+      if (dow === 6) numClass += ' is-saturday';
+      if (isToday) numClass += ' is-today-num';
+
+      html += `<div class="${cellClass}" data-week-date="${dateStr}">`;
+      html += `<div class="${numClass}">${cellDate.getDate()}</div>`;
+      html += '<div class="week-events">';
+
+      // 管理者イベント
+      const dayData = allDays.get(dateStr);
+      if (dayData && dayData.events && dayData.events.length) {
+        for (const ev of dayData.events) {
+          html += renderEventCard({ ...ev, __kind: 'admin_event' });
+        }
+      }
+      // ユーザースケジュール
+      const userEvs = userByDate.get(dateStr) || [];
+      for (const ev of userEvs) html += renderEventCard(ev);
+
+      html += '</div>'; // .week-events
+      html += '</div>'; // .month-day-cell
+
+      cur.setDate(cur.getDate() + 1);
+    }
+    html += '</div>'; // .month-week-row
+  }
+  html += '</div>'; // .monthly-grid
+
+  container.classList.remove('weekly-list');
+  container.style.display = 'block';
+  container.innerHTML = html;
+  window.dispatchEvent(new CustomEvent('schedule:rendered', { detail: { mode: 'month' } }));
 }
