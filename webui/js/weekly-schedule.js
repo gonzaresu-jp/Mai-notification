@@ -125,7 +125,7 @@ async function loadWeeklySchedule(containerId = 'weekly-schedule', targetDate = 
     // 今週の日付を計算してスケルトン行を表示（week-events 内に読み込み中を表示）
     const dow = targetDate.getDay();
     const weekStart = new Date(targetDate);
-    weekStart.setDate(targetDate.getDate() - dow + (dow === 0 ? 0 : 1)); // 日曜スタート
+    weekStart.setDate(targetDate.getDate() - dow); // 日曜スタート
     const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
     let skeletonHtml = '';
     for (let i = 0; i < 7; i++) {
@@ -136,7 +136,7 @@ async function loadWeeklySchedule(containerId = 'weekly-schedule', targetDate = 
       const day = d.getDate();
       skeletonHtml += `<div class="${isToday ? 'week-row is-today' : 'week-row'}">
         <div class="week-header">
-          <span>${DAY_NAMES[i]}</span>
+          <span>${DAY_NAMES[d.getDay()]}</span>
           <span class="week-date">${month}/${day}</span>
         </div>
         <div class="week-events"><div class="event none" style="color:#bbb;">読み込み中...</div></div>
@@ -270,7 +270,7 @@ function renderEventCard(event) {
     const readonly = !event.editable;
     const safeUrl = toSafeHttpUrl(event.url);
     return `
-      <article class="event user-schedule ${readonly ? 'readonly' : ''} ${safeUrl ? 'has-link' : ''}" ${safeUrl ? `data-user-url="${encodeURIComponent(safeUrl)}"` : ''}>
+      <article class="event user-schedule has-link ${readonly ? 'readonly' : ''}" data-user-url="${safeUrl ? encodeURIComponent(safeUrl) : ''}">
         ${event.thumbnail_url ? `<div class="event-thumb"><img src="${escapeHtml(event.thumbnail_url)}" alt="${escapeHtml(event.title || '')}" loading="lazy" referrerpolicy="no-referrer"></div>` : ''}
         <div class="event-info">
           <div class="schedule-item-head">
@@ -281,7 +281,7 @@ function renderEventCard(event) {
             ${readonly ? '' : `<button class="schedule-edit-btn" type="button" data-schedule-edit="${event.schedule_id}"><i class="fa-regular fa-pen-to-square"></i></button>`}
           </div>
           
-          ${event.note ? `<div class="schedule-note">${escapeHtml(event.title || '')}</div>` : ''}
+          <div class="schedule-note">${escapeHtml(event.title || '')}</div>
         </div>
       </article>
     `;
@@ -370,10 +370,6 @@ function ensureScheduleModal() {
             </select>
           </label>
           <label class="field field-wide">
-            <span>テキスト</span>
-            <input type="text" id="usm-note" maxlength="200">
-          </label>
-          <label class="field field-wide">
             <span>URL</span>
             <input type="url" id="usm-url" maxlength="500" placeholder="https://...">
           </label>
@@ -410,7 +406,6 @@ function openScheduleModal(mode, schedule) {
   const titleEl = modal.querySelector('#usm-event-title');
   const timeEl = modal.querySelector('#usm-event-time');
   const reminderEl = modal.querySelector('#usm-reminder');
-  const noteEl = modal.querySelector('#usm-note');
   const urlEl = modal.querySelector('#usm-url');
   const thumbnailUrlEl = modal.querySelector('#usm-thumbnail-url');
   const deleteBtn = modal.querySelector('#usm-delete');
@@ -424,7 +419,6 @@ function openScheduleModal(mode, schedule) {
   titleEl.value = schedule?.title || '';
   timeEl.value = schedule?.scheduled_at ? toLocalDatetimeValue(schedule.scheduled_at) : '';
   reminderEl.value = String(schedule?.reminder_minutes ?? 30);
-  noteEl.value = schedule?.note || '';
   urlEl.value = schedule?.url || '';
   thumbnailUrlEl.value = schedule?.thumbnail_url || '';
 
@@ -500,7 +494,6 @@ function openScheduleModal(mode, schedule) {
         title: titleEl.value.trim(),
         scheduled_at: dt.toISOString(),
         reminder_minutes: Number(reminderEl.value || 30),
-        text: noteEl.value.trim() || null,
         url: urlEl.value.trim() || null,
         thumbnail_url: thumbnailUrlEl.value.trim() || null
       };
@@ -653,7 +646,7 @@ function installScheduleControls() {
   weekly.addEventListener('click', (e) => {
     if (e.target.closest('[data-schedule-edit]')) return;
 
-    const card = e.target.closest('.event.has-link[data-event-url], .event.has-link[data-user-url]');
+    const card = e.target.closest('.event.has-link[data-event-url], .event.user-schedule[data-user-url]');
     if (!card) return;
     e.stopPropagation();
 

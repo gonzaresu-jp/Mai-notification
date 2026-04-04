@@ -1,6 +1,6 @@
 // main.js - メイン初期化処理（header.html fetch 挿入対応版）
 
-import { PAGING, getClientId } from './config.js?v=20260312a';
+import { PAGING, getClientId } from './config.js?v=20260403';
 import { initPush, unsubscribePush, sendTestToMe, sendSubscriptionToServer } from './pushService.js?v=20260312a';
 import { savePlatformSettings, getPlatformSettings } from './settingsService.js?v=20260312c';
 import { saveNameToServer, initSubscriberNameUI } from './subscriberService.js?v=20260312a';
@@ -12,7 +12,7 @@ import {
   initPlatformSettingsUI,
   initHeaderDependentUI,
   loadPlatformSettingsUIFromServer
-} from './uiController.js?v=20260312d';
+} from './uiController.js?v=20260317a';
 
 function isAndroidApp() {
   try {
@@ -25,7 +25,7 @@ function isAndroidApp() {
 if (isAndroidApp() && 'serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(regs => {
     regs.forEach(r => r.unregister());
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 if (!isAndroidApp() && 'serviceWorker' in navigator) {
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   /* =========================
    * 購読者名UI
    * ========================= */
-  let showLinked = () => {};
+  let showLinked = () => { };
   try {
     const ui = await initSubscriberNameUI();
     if (ui?.showLinked) showLinked = ui.showLinked;
@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!sub) {
           const raw = localStorage.getItem('pushSubscription');
           if (raw) {
-            try { sub = JSON.parse(raw); } catch {}
+            try { sub = JSON.parse(raw); } catch { }
           }
         }
 
@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           await sendSubscriptionToServer(serialized);
           localStorage.setItem('pushSubscription', JSON.stringify(serialized));
         }
-      } catch {}
+      } catch { }
     }
 
     if (areAllPlatformsDisabledSafe()) {

@@ -11,11 +11,6 @@ const jsonCache = {
   limit: 20  // JSONの最大件数
 };
 
-function clearJsonCache() {
-  jsonCache.data = null;
-  jsonCache.timestamp = 0;
-}
-
 // =========================
 // SSE（任意）: サーバが対応しているなら UI を自動更新
 // =========================
