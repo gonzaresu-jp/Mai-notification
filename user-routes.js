@@ -805,6 +805,72 @@ function register(app, db, authLimiter) {
       return res.status(500).json({ error: e.message });
     }
   });
+
+  // ──────────────────────────────────────────
+  // 内部API: スケジュール自動作成（AIシステム用）
+  // ──────────────────────────────────────────
+  app.post('/api/internal/schedule/create', async (req, res) => {
+    // ADMIN_NOTIFY_TOKEN で認証
+    const INTERNAL_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
+    if (!INTERNAL_TOKEN) {
+      return res.status(503).json({ error: 'Internal API not configured' });
+    }
+
+    const authToken = req.headers['x-notify-token'] || req.query.token || '';
+    if (authToken !== INTERNAL_TOKEN) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const { user_id, title, scheduled_at, note, url, thumbnail_url, reminder_minutes } = req.body;
+      
+      // user_id 検証
+      if (!user_id) {
+        return res.status(400).json({ error: 'user_id required' });
+      }
+
+      // title と scheduled_at は必須
+      const normalizedTitle = normalizeRequiredTitle(title);
+      if (!normalizedTitle) {
+        return res.status(400).json({ error: 'title required' });
+      }
+      if (!scheduled_at || isNaN(new Date(scheduled_at).getTime())) {
+        return res.status(400).json({ error: 'valid scheduled_at required' });
+      }
+
+      const normalizedText = normalizeOptionalText(note, MAX_SCHEDULE_TEXT_LEN);
+      const normalizedUrl = normalizeOptionalHttpUrl(url);
+      const normalizedThumbUrl = normalizeOptionalHttpUrl(thumbnail_url);
+      const normalizedReminder = normalizeReminderMinutes(reminder_minutes, 30);
+
+      // ユーザー存在確認
+      const user = await dbGet(db, 'SELECT id FROM users WHERE id = ?', [user_id]);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const result = await dbRun(db,
+        `INSERT INTO user_schedules (user_id, source, title, note, url, thumbnail_url, scheduled_at, reminder_minutes)
+         VALUES (?, 'ai', ?, ?, ?, ?, ?, ?)`,
+        [user_id, normalizedTitle, normalizedText ?? null, normalizedUrl ?? null, normalizedThumbUrl ?? null, scheduled_at, normalizedReminder]
+      );
+
+      res.status(201).json({ success: true, id: result.lastID, source: 'ai' });
+    } catch (e) {
+      const msg = String(e && e.message ? e.message : '');
+      if (msg === 'URL_INVALID' || msg === 'URL_SCHEME_INVALID') {
+        return res.status(400).json({ error: 'URL must be http/https' });
+      }
+      if (msg === 'URL_TOO_LONG') {
+        return res.status(400).json({ error: `URL too long (max ${MAX_SCHEDULE_URL_LEN})` });
+      }
+      if (msg === 'REMINDER_INVALID') {
+        return res.status(400).json({ error: 'reminder_minutes must be one of: 60,30,10,5,3,0' });
+      }
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   console.log('[user-routes] all routes registered');
 }
 
