@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="ja">
+
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -7,31 +8,58 @@
     <link rel="icon" href="../icon.webp">
     <link rel="stylesheet" href="/style.v3.00.css" />
     <style type="text/css">
-        dt {font-size: 24px;}
-        @media(max-width: 800px){dt{font-size: 16px} .card{display: block;} img{ max-width: 80vw!important;}}
-        .bg {background-color:#B11E7C; min-width:3px; }
-        img {max-width: 40vw;}
-        #day {white-space: nowrap;}
+        dt {
+            font-size: 24px;
+        }
+
+        @media(max-width: 800px) {
+            dt {
+                font-size: 16px
+            }
+
+            .card {
+                display: block;
+            }
+
+            img {
+                max-width: 80vw !important;
+            }
+        }
+
+        .bg {
+            background-color: #B11E7C;
+            min-width: 3px;
+        }
+
+        img {
+            max-width: 40vw;
+        }
+
+        #day {
+            white-space: nowrap;
+        }
     </style>
 </head>
+
 <body id="app-body">
     <div id="header-slot">
-        <?php include __DIR__ . '/header.html'; ?>
+        <?php include __DIR__ . '/header.php'; ?>
     </div>
 
     <main>
         <div class="card"><a href="../mai-notification.apk" target="_blank" rel="noopener noreferrer">
-            <dl>
-                <dt class="header-left"><img src="/icon.webp" alt="まいちゃんロゴ" class="logo fade" fetchpriority="high" /></dt>
-            </dl>
-            <dl>
-                <dt>Androidアプリをダウンロード</dt>
-            </dl></a>
+                <dl>
+                    <dt class="header-left"><img src="/icon.webp" alt="まいちゃんロゴ" class="logo fade"
+                            fetchpriority="high" /></dt>
+                </dl>
+                <dl>
+                    <dt>Androidアプリをダウンロード</dt>
+                </dl>
+            </a>
         </div>
-        
-<a href="../" 
-   style="text-decoration:none; color:inherit; display:block;">
-    <div style="
+
+        <a href="../" style="text-decoration:none; color:inherit; display:block;">
+            <div style="
         background-color:#FFF;
         min-height:60px;
         display:flex;
@@ -39,9 +67,9 @@
         justify-content:center;
         padding:10px 20px; /* ←クリック範囲を広げる */
     ">
-        <h3 style="margin:0;">通知ダッシュボードに戻る</h3>
-    </div>
-</a>
+                <h3 style="margin:0;">通知ダッシュボードに戻る</h3>
+            </div>
+        </a>
 
 
 
@@ -49,307 +77,308 @@
     </main>
 
     <div id="footer-slot">
-        <?php include __DIR__ . '/footer.html'; ?>
+        <?php include __DIR__ . '/footer.php'; ?>
     </div>
 
-<!-- iOS Helper を main.js より先に読み込む -->
+    <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/ios-helper.js" defer></script>
     <script type="module" src="/js/main.js" defer></script>
     <script>
-const btn = document.getElementById('btn-log-settings');
-const menu = document.getElementById('log-settings-container');
+        const btn = document.getElementById('btn-log-settings');
+        const menu = document.getElementById('log-settings-container');
 
-btn.addEventListener('click', () => {
-  const open = menu.classList.toggle('is-open');
-  btn.setAttribute('aria-expanded', open);
-  menu.setAttribute('aria-hidden', !open);
-});
-
-// メニュー外クリックで閉じる
-document.addEventListener('click', (e) => {
-  if (!btn.contains(e.target) && !menu.contains(e.target)) {
-    menu.classList.remove('is-open');
-    btn.setAttribute('aria-expanded', false);
-    menu.setAttribute('aria-hidden', true);
-  }
-});
-
-</script>
-
-<script>
-function initOshiDays() {
-  const STORAGE_KEY = "maistart_date";
-  const DEFAULT_DATE = "2020-01-07";
-  const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-  const dateInput = document.getElementById("start");              // header内
-  const meetValueEl = document.getElementById("days-to-meet");     // main内
-  const meetStatItem = meetValueEl?.closest(".stat-item");
-
-  if (!meetValueEl || !meetStatItem) return; // 表示側がないなら何もしない
-  if (!dateInput) return;                    // headerが未挿入なら何もしない（待つ側で保証する）
-
-  function parseYMD(ymd) {
-    if (!ymd) return null;
-    const parts = ymd.split("-").map(Number);
-    if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
-    return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
-  }
-  function stripTime(d) {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-  }
-  function daysSinceLocal(date) {
-    const now = stripTime(new Date()).getTime();
-    const then = stripTime(date).getTime();
-    return Math.max(0, Math.floor((now - then) / MS_PER_DAY));
-  }
-
-  function loadAndApply() {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    let effective = stored || dateInput.value || null;
-
-    // DEFAULT_DATE を「未設定扱い」
-    if (!effective || effective === DEFAULT_DATE) {
-      meetStatItem.style.display = "none";
-      meetValueEl.textContent = "0 日";
-      if (!stored) dateInput.value = "";
-      return;
-    }
-
-    const parsed = parseYMD(effective);
-    if (!parsed) {
-      meetStatItem.style.display = "none";
-      return;
-    }
-
-    const since = daysSinceLocal(parsed);
-    meetValueEl.textContent = `${since} 日`;
-    meetStatItem.style.display = "";
-    if (dateInput.value !== effective) dateInput.value = effective;
-  }
-
-  function saveDate(value) {
-    if (!value || value === DEFAULT_DATE) localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, value);
-    loadAndApply();
-  }
-
-  // 多重登録防止
-  if (dateInput.dataset.boundOshiDays === "1") {
-    loadAndApply();
-    return;
-  }
-  dateInput.dataset.boundOshiDays = "1";
-
-  loadAndApply();
-  dateInput.addEventListener("change", (e) => saveDate(e.target.value));
-
-  // 「保存」ボタン（ユーザー名保存と共用）でも保存したいなら
-  const saveBtn = document.getElementById("subscriber-name-submit");
-  if (saveBtn && !saveBtn.dataset.boundOshiDays) {
-    saveBtn.dataset.boundOshiDays = "1";
-    saveBtn.addEventListener("click", () => saveDate(dateInput.value));
-  }
-
-  // 日付跨ぎ対策
-  setInterval(loadAndApply, 60 * 1000);
-}
-
-
-(async () => {
-  const load = async (id, url) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const res = await fetch(url, { cache: 'no-cache' });
-    el.innerHTML = await res.text();
-  };
-})();
-</script>
-<script>
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./service-worker.js')
-            .then(reg => console.log('Service Worker 登録成功', reg))
-            .catch(err => console.error('Service Worker 登録失敗', err));
-    }
-
-// 1. フェードイン用関数（定義するだけ。ロード時は呼ばない）
-    function applyHamburgerSequentialFadeIn() {
-        const menuItems = document.querySelectorAll('#nav-menu > .nav-list > li');
-        const delayIncrement = 100; 
-
-        menuItems.forEach((item, index) => {
-            const delay = index * delayIncrement;
-            setTimeout(() => {
-                item.classList.add('is-faded-in');
-            }, delay);
+        btn.addEventListener('click', () => {
+            const open = menu.classList.toggle('is-open');
+            btn.setAttribute('aria-expanded', open);
+            menu.setAttribute('aria-hidden', !open);
         });
-    }
 
-    document.addEventListener('DOMContentLoaded', () => {
-    const body = document.getElementById('app-body');
-
-    // 1) 初期はトランジション無効（bodyに class を付けておく）
-    //    ここでは最小遅延で「初回描画を挟んで」トランジションを有効にする。
-    requestAnimationFrame(() => {
-        // 1フレーム待ってからさらに次フレームで class を除去 → トランジションが発火するのは以降の操作だけ
-        requestAnimationFrame(() => {
-            body.classList.remove('menu-transitions-disabled');
+        // メニュー外クリックで閉じる
+        document.addEventListener('click', (e) => {
+            if (!btn.contains(e.target) && !menu.contains(e.target)) {
+                menu.classList.remove('is-open');
+                btn.setAttribute('aria-expanded', false);
+                menu.setAttribute('aria-hidden', true);
+            }
         });
-    });
 
-    // --- 以下は既存の初期化処理（メニュー初期化等） ---
-    const toggle = document.getElementById('hamburger-toggle');
-    const overlay = document.getElementById('menu-overlay');
-    const notifyToggle = document.getElementById('toggle-notify');
+    </script>
 
-    // メニュー項目集合
-    const menuItems = document.querySelectorAll('#nav-menu > .nav-list > li');
-    // 初期状態として is-faded-in を外しておく（念のため）
-    menuItems.forEach(item => item.classList.remove('is-faded-in'));
+    <script>
+        function initOshiDays() {
+            const STORAGE_KEY = "maistart_date";
+            const DEFAULT_DATE = "2020-01-07";
+            const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-    function applyHamburgerSequentialFadeIn() {
-        const delayIncrement = 100;
-        menuItems.forEach((item, index) => {
-            const delay = index * delayIncrement;
-            setTimeout(() => {
-                item.classList.add('is-faded-in');
-            }, delay);
-        });
-    }
+            const dateInput = document.getElementById("start");              // header内
+            const meetValueEl = document.getElementById("days-to-meet");     // main内
+            const meetStatItem = meetValueEl?.closest(".stat-item");
 
-    function toggleMenu(isOpen) {
-        if (isOpen) {
-            // 開くときはまずクラスを外して確実に 0 → 1 の遷移が発生するように
-            menuItems.forEach(item => item.classList.remove('is-faded-in'));
+            if (!meetValueEl || !meetStatItem) return; // 表示側がないなら何もしない
+            if (!dateInput) return;                    // headerが未挿入なら何もしない（待つ側で保証する）
 
-            body.classList.add('menu-open');
-            toggle.setAttribute('aria-expanded', 'true');
-            overlay.style.display = 'block';
+            function parseYMD(ymd) {
+                if (!ymd) return null;
+                const parts = ymd.split("-").map(Number);
+                if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+                return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+            }
+            function stripTime(d) {
+                return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+            }
+            function daysSinceLocal(date) {
+                const now = stripTime(new Date()).getTime();
+                const then = stripTime(date).getTime();
+                return Math.max(0, Math.floor((now - then) / MS_PER_DAY));
+            }
 
-            // スライド等の外枠アニメーションがあるなら遅延（既定値の 300ms 等）
-            setTimeout(() => applyHamburgerSequentialFadeIn(), 300);
-        } else {
-            body.classList.remove('menu-open');
-            toggle.setAttribute('aria-expanded', 'false');
-            overlay.style.display = 'none';
-            menuItems.forEach(item => item.classList.remove('is-faded-in'));
-        }
-    }
+            function loadAndApply() {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                let effective = stored || dateInput.value || null;
 
-    // --- 右端スワイプでメニュー開閉 ---
-// 挿入場所: document.addEventListener('DOMContentLoaded', ...) 内、toggleMenu 定義の直後
-(function installRightEdgeSwipeMenu() {
-    const EDGE_START = 270;
-    const OPEN_THRESHOLD = 60;
-    const CLOSE_THRESHOLD = 60;
-    const MAX_VERTICAL_DELTA = 30;
-    let pointerActive = false;
-    let startX = 0, startY = 0;
-    let trackingForOpen = false;
-    let trackingForClose = false;
+                // DEFAULT_DATE を「未設定扱い」
+                if (!effective || effective === DEFAULT_DATE) {
+                    meetStatItem.style.display = "none";
+                    meetValueEl.textContent = "0 日";
+                    if (!stored) dateInput.value = "";
+                    return;
+                }
 
-    function isMenuOpen() {
-        return document.body.classList.contains('menu-open');
-    }
+                const parsed = parseYMD(effective);
+                if (!parsed) {
+                    meetStatItem.style.display = "none";
+                    return;
+                }
 
-    function onPointerDown(e) {
-        const x = e.clientX || (e.touches && e.touches[0].clientX);
-        const y = e.clientY || (e.touches && e.touches[0].clientY);
+                const since = daysSinceLocal(parsed);
+                meetValueEl.textContent = `${since} 日`;
+                meetStatItem.style.display = "";
+                if (dateInput.value !== effective) dateInput.value = effective;
+            }
 
-        startX = x; startY = y;
-        pointerActive = true;
-        trackingForOpen = false;
-        trackingForClose = false;
+            function saveDate(value) {
+                if (!value || value === DEFAULT_DATE) localStorage.removeItem(STORAGE_KEY);
+                else localStorage.setItem(STORAGE_KEY, value);
+                loadAndApply();
+            }
 
-        if (!isMenuOpen() && startX >= (window.innerWidth - EDGE_START)) {
-            trackingForOpen = true;
+            // 多重登録防止
+            if (dateInput.dataset.boundOshiDays === "1") {
+                loadAndApply();
+                return;
+            }
+            dateInput.dataset.boundOshiDays = "1";
+
+            loadAndApply();
+            dateInput.addEventListener("change", (e) => saveDate(e.target.value));
+
+            // 「保存」ボタン（ユーザー名保存と共用）でも保存したいなら
+            const saveBtn = document.getElementById("subscriber-name-submit");
+            if (saveBtn && !saveBtn.dataset.boundOshiDays) {
+                saveBtn.dataset.boundOshiDays = "1";
+                saveBtn.addEventListener("click", () => saveDate(dateInput.value));
+            }
+
+            // 日付跨ぎ対策
+            setInterval(loadAndApply, 60 * 1000);
         }
 
-        if (isMenuOpen()) {
-            const menu = document.getElementById('nav-menu');
+
+        (async () => {
+            const load = async (id, url) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const res = await fetch(url, { cache: 'no-cache' });
+                el.innerHTML = await res.text();
+            };
+        })();
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./service-worker.js')
+                .then(reg => console.log('Service Worker 登録成功', reg))
+                .catch(err => console.error('Service Worker 登録失敗', err));
+        }
+
+        // 1. フェードイン用関数（定義するだけ。ロード時は呼ばない）
+        function applyHamburgerSequentialFadeIn() {
+            const menuItems = document.querySelectorAll('#nav-menu > .nav-list > li');
+            const delayIncrement = 100;
+
+            menuItems.forEach((item, index) => {
+                const delay = index * delayIncrement;
+                setTimeout(() => {
+                    item.classList.add('is-faded-in');
+                }, delay);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const body = document.getElementById('app-body');
+
+            // 1) 初期はトランジション無効（bodyに class を付けておく）
+            //    ここでは最小遅延で「初回描画を挟んで」トランジションを有効にする。
+            requestAnimationFrame(() => {
+                // 1フレーム待ってからさらに次フレームで class を除去 → トランジションが発火するのは以降の操作だけ
+                requestAnimationFrame(() => {
+                    body.classList.remove('menu-transitions-disabled');
+                });
+            });
+
+            // --- 以下は既存の初期化処理（メニュー初期化等） ---
+            const toggle = document.getElementById('hamburger-toggle');
             const overlay = document.getElementById('menu-overlay');
-            const target = e.target || (e.touches && e.touches[0].target);
-            
-            if (overlay && overlay.style.display !== 'none' && overlay.contains(target)) {
-                trackingForClose = true;
-            } else if (menu) {
-                const r = menu.getBoundingClientRect();
-                if (startX >= r.left && startX <= r.right && startY >= r.top && startY <= r.bottom) {
-                    trackingForClose = true;
+            const notifyToggle = document.getElementById('toggle-notify');
+
+            // メニュー項目集合
+            const menuItems = document.querySelectorAll('#nav-menu > .nav-list > li');
+            // 初期状態として is-faded-in を外しておく（念のため）
+            menuItems.forEach(item => item.classList.remove('is-faded-in'));
+
+            function applyHamburgerSequentialFadeIn() {
+                const delayIncrement = 100;
+                menuItems.forEach((item, index) => {
+                    const delay = index * delayIncrement;
+                    setTimeout(() => {
+                        item.classList.add('is-faded-in');
+                    }, delay);
+                });
+            }
+
+            function toggleMenu(isOpen) {
+                if (isOpen) {
+                    // 開くときはまずクラスを外して確実に 0 → 1 の遷移が発生するように
+                    menuItems.forEach(item => item.classList.remove('is-faded-in'));
+
+                    body.classList.add('menu-open');
+                    toggle.setAttribute('aria-expanded', 'true');
+                    overlay.style.display = 'block';
+
+                    // スライド等の外枠アニメーションがあるなら遅延（既定値の 300ms 等）
+                    setTimeout(() => applyHamburgerSequentialFadeIn(), 300);
+                } else {
+                    body.classList.remove('menu-open');
+                    toggle.setAttribute('aria-expanded', 'false');
+                    overlay.style.display = 'none';
+                    menuItems.forEach(item => item.classList.remove('is-faded-in'));
                 }
             }
-        }
-    }
 
-    function onPointerMove(e) {
-        if (!pointerActive) return;
-        
-        const x = e.clientX || (e.touches && e.touches[0].clientX);
-        const y = e.clientY || (e.touches && e.touches[0].clientY);
-        const dx = x - startX;
-        const dy = y - startY;
+            // --- 右端スワイプでメニュー開閉 ---
+            // 挿入場所: document.addEventListener('DOMContentLoaded', ...) 内、toggleMenu 定義の直後
+            (function installRightEdgeSwipeMenu() {
+                const EDGE_START = 270;
+                const OPEN_THRESHOLD = 60;
+                const CLOSE_THRESHOLD = 60;
+                const MAX_VERTICAL_DELTA = 30;
+                let pointerActive = false;
+                let startX = 0, startY = 0;
+                let trackingForOpen = false;
+                let trackingForClose = false;
 
-        if (Math.abs(dy) > MAX_VERTICAL_DELTA) {
-            trackingForOpen = false;
-            trackingForClose = false;
-            return;
-        }
+                function isMenuOpen() {
+                    return document.body.classList.contains('menu-open');
+                }
 
-        if (trackingForOpen && dx < -OPEN_THRESHOLD) {
-            toggleMenu(true);
-            trackingForOpen = false;
-            pointerActive = false;
-            if (e.cancelable) e.preventDefault();
-            return;
-        }
+                function onPointerDown(e) {
+                    const x = e.clientX || (e.touches && e.touches[0].clientX);
+                    const y = e.clientY || (e.touches && e.touches[0].clientY);
 
-        if (trackingForClose && dx > CLOSE_THRESHOLD) {
-            toggleMenu(false);
-            trackingForClose = false;
-            pointerActive = false;
-            if (e.cancelable) e.preventDefault();
-            return;
-        }
-    }
+                    startX = x; startY = y;
+                    pointerActive = true;
+                    trackingForOpen = false;
+                    trackingForClose = false;
 
-    function onPointerUp() {
-        pointerActive = false;
-        trackingForOpen = false;
-        trackingForClose = false;
-    }
+                    if (!isMenuOpen() && startX >= (window.innerWidth - EDGE_START)) {
+                        trackingForOpen = true;
+                    }
 
-    // タッチデバイス優先で登録
-    if ('ontouchstart' in window) {
-        // タッチデバイスの場合
-        document.addEventListener('touchstart', onPointerDown, { passive: true });
-        document.addEventListener('touchmove', onPointerMove, { passive: false }); // passive: false が重要
-        document.addEventListener('touchend', onPointerUp, { passive: true });
-        document.addEventListener('touchcancel', onPointerUp, { passive: true });
-    } else if (window.PointerEvent) {
-        // Pointer Events 対応デバイス
-        document.addEventListener('pointerdown', onPointerDown, { passive: true });
-        document.addEventListener('pointermove', onPointerMove, { passive: false });
-        document.addEventListener('pointerup', onPointerUp, { passive: true });
-        document.addEventListener('pointercancel', onPointerUp, { passive: true });
-    }
-})();
+                    if (isMenuOpen()) {
+                        const menu = document.getElementById('nav-menu');
+                        const overlay = document.getElementById('menu-overlay');
+                        const target = e.target || (e.touches && e.touches[0].target);
 
-    toggle.addEventListener('click', () => {
-        const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
-        toggleMenu(!isExpanded);
-    });
-    overlay.addEventListener('click', () => toggleMenu(false));
+                        if (overlay && overlay.style.display !== 'none' && overlay.contains(target)) {
+                            trackingForClose = true;
+                        } else if (menu) {
+                            const r = menu.getBoundingClientRect();
+                            if (startX >= r.left && startX <= r.right && startY >= r.top && startY <= r.bottom) {
+                                trackingForClose = true;
+                            }
+                        }
+                    }
+                }
 
-    if (notifyToggle) {
-        function updateToggleImage() {
-            if (notifyToggle.checked) body.classList.add('notifications-enabled');
-            else body.classList.remove('notifications-enabled');
-        }
-        notifyToggle.addEventListener('change', updateToggleImage);
-        setTimeout(updateToggleImage, 100);
-    }
-});
+                function onPointerMove(e) {
+                    if (!pointerActive) return;
 
-</script>
+                    const x = e.clientX || (e.touches && e.touches[0].clientX);
+                    const y = e.clientY || (e.touches && e.touches[0].clientY);
+                    const dx = x - startX;
+                    const dy = y - startY;
+
+                    if (Math.abs(dy) > MAX_VERTICAL_DELTA) {
+                        trackingForOpen = false;
+                        trackingForClose = false;
+                        return;
+                    }
+
+                    if (trackingForOpen && dx < -OPEN_THRESHOLD) {
+                        toggleMenu(true);
+                        trackingForOpen = false;
+                        pointerActive = false;
+                        if (e.cancelable) e.preventDefault();
+                        return;
+                    }
+
+                    if (trackingForClose && dx > CLOSE_THRESHOLD) {
+                        toggleMenu(false);
+                        trackingForClose = false;
+                        pointerActive = false;
+                        if (e.cancelable) e.preventDefault();
+                        return;
+                    }
+                }
+
+                function onPointerUp() {
+                    pointerActive = false;
+                    trackingForOpen = false;
+                    trackingForClose = false;
+                }
+
+                // タッチデバイス優先で登録
+                if ('ontouchstart' in window) {
+                    // タッチデバイスの場合
+                    document.addEventListener('touchstart', onPointerDown, { passive: true });
+                    document.addEventListener('touchmove', onPointerMove, { passive: false }); // passive: false が重要
+                    document.addEventListener('touchend', onPointerUp, { passive: true });
+                    document.addEventListener('touchcancel', onPointerUp, { passive: true });
+                } else if (window.PointerEvent) {
+                    // Pointer Events 対応デバイス
+                    document.addEventListener('pointerdown', onPointerDown, { passive: true });
+                    document.addEventListener('pointermove', onPointerMove, { passive: false });
+                    document.addEventListener('pointerup', onPointerUp, { passive: true });
+                    document.addEventListener('pointercancel', onPointerUp, { passive: true });
+                }
+            })();
+
+            toggle.addEventListener('click', () => {
+                const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+                toggleMenu(!isExpanded);
+            });
+            overlay.addEventListener('click', () => toggleMenu(false));
+
+            if (notifyToggle) {
+                function updateToggleImage() {
+                    if (notifyToggle.checked) body.classList.add('notifications-enabled');
+                    else body.classList.remove('notifications-enabled');
+                }
+                notifyToggle.addEventListener('change', updateToggleImage);
+                setTimeout(updateToggleImage, 100);
+            }
+        });
+
+    </script>
 </body>
+
 </html>
