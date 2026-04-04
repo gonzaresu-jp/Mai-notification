@@ -1,7 +1,7 @@
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
-const puppeteer = require('puppeteer');
+const { getSharedBrowser, closeSharedBrowser } = require('./browser');
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
@@ -21,83 +21,16 @@ const API_BASE_URL = 'https://apiv2.twitcasting.tv';
 const CLIENT_ID = process.env.TWITCASTING_CLIENT_ID;
 const CLIENT_SECRET = process.env.TWITCASTING_CLIENT_SECRET;
 
-// 🔧 ブラウザインスタンスを再利用するためのグローバル変数
-let sharedBrowser = null;
-let browserInitPromise = null;
-
-// ブラウザの初期化（1度だけ起動）
-async function getSharedBrowser() {
-    if (sharedBrowser && sharedBrowser.isConnected()) {
-        return sharedBrowser;
-    }
-
-    // 既に初期化中の場合は待つ
-    if (browserInitPromise) {
-        return await browserInitPromise;
-    }
-
-    browserInitPromise = (async () => {
-        try {
-            console.log('[Puppeteer] Initializing shared browser instance...');
-            if (PUPPETEER_EXECUTABLE_PATH) {
-                console.log('[Puppeteer] Using executablePath:', PUPPETEER_EXECUTABLE_PATH);
-            }
-            sharedBrowser = await puppeteer.launch({
-                executablePath: PUPPETEER_EXECUTABLE_PATH || undefined,
-                headless: HEADLESS,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage', // メモリ節約
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu',
-                    // 🔧 ディスク書き込み抑制
-                    '--disk-cache-size=0',           // ディスクキャッシュを無効化
-                    '--media-cache-size=0',          // メディアキャッシュを無効化
-                    '--disable-application-cache',   // アプリケーションキャッシュを無効化
-                    '--disable-background-networking', // バックグラウンド通信を無効化
-                    '--disable-sync',                // 同期を無効化
-                    '--disable-translate',           // 翻訳機能を無効化
-                    '--disable-extensions',          // 拡張機能を無効化
-                    '--blink-settings=imagesEnabled=false' // 画像読み込みを無効化（軽量化）
-                ]
-            });
-
-            // ブラウザが予期せず終了した場合の処理
-            sharedBrowser.on('disconnected', () => {
-                console.warn('[Puppeteer] Browser disconnected, will reinitialize on next use');
-                sharedBrowser = null;
-                browserInitPromise = null;
-            });
-
-            console.log('[Puppeteer] Shared browser ready');
-            return sharedBrowser;
-        } catch (e) {
-            console.error('[Puppeteer] Failed to initialize browser:', e);
-            browserInitPromise = null;
-            throw e;
-        }
-    })();
-
-    return await browserInitPromise;
-}
-
 // プロセス終了時にブラウザをクリーンアップ
 process.on('SIGINT', async () => {
     console.log('\n[Shutdown] Closing browser...');
-    if (sharedBrowser) {
-        await sharedBrowser.close();
-    }
+    await closeSharedBrowser();
     process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
     console.log('\n[Shutdown] Closing browser...');
-    if (sharedBrowser) {
-        await sharedBrowser.close();
-    }
+    await closeSharedBrowser();
     process.exit(0);
 });
 
@@ -203,7 +136,13 @@ async function checkPrivateLive(screenId){
     const url = `https://twitcasting.tv/${screenId}/movie/latest`;
     let page;
     try{
-        const browser = await getSharedBrowser();
+const browser = await getSharedBrowser({
+      executablePath: PUPPETEER_EXECUTABLE_PATH || undefined,
+      headless: HEADLESS,
+      userDataDir: process.platform === 'linux'
+        ? '/dev/shm/puppeteer-profile-twitcasting'
+        : path.join(__dirname, 'tmp', 'puppeteer-twitcasting')
+    });
         page = await browser.newPage();
         
         // 🔧 ディスク書き込みを最小限に抑える設定

@@ -2,12 +2,13 @@
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
-const puppeteer = require('puppeteer');
+const { getSharedBrowser, closeSharedBrowser } = require('./browser');
 const fetch = require('node-fetch');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const os = require('os');
 const fs = require('fs');
+const { analyzeTweet, extractScheduleFromAnalysis } = require('./gemma-analyzer');
 
 const PROFILE_PATH = '/var/lib/mai-push/puppeteer-profile';
 const COOKIE_DB = path.join(PROFILE_PATH, 'cookies.sqlite');
@@ -20,63 +21,21 @@ const NOTIFY_ENDPOINT = 'http://localhost:8080/api/notify';
 const ICON_URL = './icon.webp';
 const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
 
-// 🔧 ブラウザインスタンスを再利用するためのグローバル変数
-let sharedBrowser = null;
-let browserInitPromise = null;
+// 🔧 スケジュール自動作成関連
+const SCHEDULE_ENDPOINT = 'http://localhost:8080/api/internal/schedule/create';
+const SCHEDULE_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
+const ENABLE_SCHEDULE_AUTO_CREATE = process.env.ENABLE_SCHEDULE_AUTO_CREATE !== 'false'; // デフォルト: 有効
+const DEFAULT_SCHEDULE_USER_ID = process.env.SCHEDULE_USER_ID || 1; // デフォルト: user_id=1
 
 // 🔧 Cookie キャッシュ（メモリ上に保持）
 let cachedCookies = null;
 let lastCookieLoadTime = 0;
 const COOKIE_CACHE_TTL = 10 * 60 * 1000; // 10分間キャッシュ
 
-// ブラウザの初期化（1度だけ起動）
-async function getSharedBrowser() {
-    if (sharedBrowser && sharedBrowser.isConnected()) {
-        return sharedBrowser;
-    }
-
-    // 既に初期化中の場合は待つ
-    if (browserInitPromise) {
-        return await browserInitPromise;
-    }
-
-    browserInitPromise = (async () => {
-        try {
-            console.log('[Puppeteer] Initializing shared Firefox browser instance...');
-            sharedBrowser = await puppeteer.launch({
-                headless: HEADLESS,
-                product: 'firefox',
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox'
-                ]
-            });
-
-            // ブラウザが予期せず終了した場合の処理
-            sharedBrowser.on('disconnected', () => {
-                console.warn('[Puppeteer] Browser disconnected, will reinitialize on next use');
-                sharedBrowser = null;
-                browserInitPromise = null;
-            });
-
-            console.log('[Puppeteer] Shared Firefox browser ready');
-            return sharedBrowser;
-        } catch (e) {
-            console.error('[Puppeteer] Failed to initialize browser:', e);
-            browserInitPromise = null;
-            throw e;
-        }
-    })();
-
-    return await browserInitPromise;
-}
-
 // プロセス終了時にブラウザをクリーンアップ
 process.on('SIGINT', async () => {
     console.log('\n[Shutdown] Closing browser...');
-    if (sharedBrowser) {
-        await sharedBrowser.close();
-    }
+    await closeSharedBrowser();
     // 一時ファイルの削除
     try {
         if (fs.existsSync(TMP_DB)) fs.unlinkSync(TMP_DB);
@@ -86,9 +45,7 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
     console.log('\n[Shutdown] Closing browser...');
-    if (sharedBrowser) {
-        await sharedBrowser.close();
-    }
+    await closeSharedBrowser();
     // 一時ファイルの削除
     try {
         if (fs.existsSync(TMP_DB)) fs.unlinkSync(TMP_DB);
@@ -286,6 +243,61 @@ async function sendNotify(username, tweet, settingKey, sendText) {
   }
 }
 
+// --- スケジュール自動作成 ---
+async function createScheduleFromTweet(username, tweet, analysis) {
+  if (!ENABLE_SCHEDULE_AUTO_CREATE) return;
+  if (!analysis) return;
+
+  // スケジュール抽出
+  const scheduleInfo = extractScheduleFromAnalysis(analysis, new Date());
+  if (!scheduleInfo) {
+    console.log(`[${username}] No schedule info extracted from analysis`);
+    return;
+  }
+
+  let agent;
+  try {
+    const parsed = new URL(SCHEDULE_ENDPOINT);
+    if (parsed.protocol === 'https:') agent = new https.Agent({ keepAlive: false });
+    else if (parsed.protocol === 'http:') agent = new http.Agent({ keepAlive: false });
+  } catch (e) {
+    console.warn('createScheduleFromTweet: failed to parse SCHEDULE_ENDPOINT', e && e.message);
+    agent = undefined;
+  }
+
+  const payload = {
+    user_id: DEFAULT_SCHEDULE_USER_ID,
+    title: scheduleInfo.title,
+    scheduled_at: scheduleInfo.scheduled_at,
+    note: `[Gemma分析] ツイート: ${tweet.text.substring(0, 100)}...`,
+    url: `https://x.com/${username}/status/${tweet.id}`,
+    reminder_minutes: 30
+  };
+
+  try {
+    const res = await retryAsync(() => fetch(SCHEDULE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Notify-Token': SCHEDULE_TOKEN
+      },
+      body: JSON.stringify(payload),
+      agent,
+      timeout: 15000
+    }), 2, 300);
+
+    if (!res.ok) {
+      const text = await res.text().catch(()=>'<no body>');
+      console.error(`[${username}] schedule creation failed:`, res.status, text);
+    } else {
+      const result = await res.json().catch(()=>({}));
+      console.log(`[${username}] ✅ schedule created (id: ${result.id}) - ${scheduleInfo.title} at ${scheduleInfo.scheduled_at}`);
+    }
+  } catch (e) {
+    console.error(`[${username}] schedule creation error:`, e.stack || e);
+  }
+}
+
 // --- 単一ユーザのチェック ---
 async function checkOneUser(page, username, seenState) {
   try {
@@ -352,7 +364,11 @@ async function check(username, isRetry = false) {
   let page;
   try {
     // 🔧 ブラウザを再利用（新しいページだけ開く）
-    const browser = await getSharedBrowser();
+    const browser = await getSharedBrowser({
+      product: 'firefox',
+      headless: HEADLESS,
+      userDataDir: PROFILE_PATH
+    });
     page = await browser.newPage();
 
     // 🔧 改善: キャッシュされた Cookie を使用（ディスク書き込みなし）
@@ -416,6 +432,22 @@ async function check(username, isRetry = false) {
 
       for (const t of newTweets.slice().reverse()) {
         console.log(`[${username}] 新しいツイート: ${summarizeTweetForLog(t)}`);
+        
+        // 🤖 Gemma4 で分析
+        let analysis = null;
+        try {
+          analysis = await analyzeTweet(t.text);
+          console.log(`[${username}] Gemma analysis: category=${analysis.category}, status=${analysis.status}, time=${analysis.start_time}`);
+        } catch (err) {
+          console.warn(`[${username}] Gemma analysis error:`, err.message);
+        }
+        
+        // 📅 分析結果からスケジュール作成
+        if (analysis) {
+          await createScheduleFromTweet(username, t, analysis);
+        }
+        
+        // 🔔 通知送信
         await sendNotify(username, t, settingKey, sendText);
       }
     } else {

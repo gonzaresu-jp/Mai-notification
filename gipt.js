@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const puppeteer = require('puppeteer');
+const { getSharedBrowser, closeSharedBrowser } = require('./browser');
 
 // ====== 固定設定 ======
 const TARGET_URL = 'https://gi-pt.com/main/wishlist/fan-view/3a0fdc24-209e-d962-896b-cdd7d7828943';
@@ -16,10 +16,6 @@ let debugDirDefault = path.join(__dirname, 'gipt_debug');
 
 // 通知（initで注入）
 let notifyConfig = null;
-
-// 共有Browser
-let sharedBrowser = null;
-let browserInitPromise = null;
 
 // 二重実行抑止
 const inFlight = new Set();
@@ -59,55 +55,6 @@ function normalizeWebHost(s) {
   return t.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
 }
 
-// ====== Browser（共有）======
-async function getSharedBrowser() {
-  if (sharedBrowser && sharedBrowser.isConnected()) return sharedBrowser;
-  if (browserInitPromise) return await browserInitPromise;
-
-  browserInitPromise = (async () => {
-    try {
-      console.log('[Puppeteer/Gipt] Initializing shared browser instance...');
-      sharedBrowser = await puppeteer.launch({
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu',
-          '--disk-cache-size=0',
-          '--disable-application-cache',
-          '--incognito'
-        ],
-      });
-
-      sharedBrowser.on('disconnected', () => {
-        console.warn('[Puppeteer/Gipt] Browser disconnected, will reinitialize on next use');
-        sharedBrowser = null;
-        browserInitPromise = null;
-      });
-
-      console.log('[Puppeteer/Gipt] Shared browser ready');
-      return sharedBrowser;
-    } catch (e) {
-      console.error('[Puppeteer/Gipt] Failed to initialize browser:', e);
-      browserInitPromise = null;
-      throw e;
-    }
-  })();
-
-  return await browserInitPromise;
-}
-
-async function closeSharedBrowser() {
-  if (sharedBrowser) {
-    try { await sharedBrowser.close(); } catch {}
-  }
-  sharedBrowser = null;
-  browserInitPromise = null;
-}
 
 process.on('SIGINT', async () => {
   console.log('\n[Shutdown/Gipt] Closing browser...');
@@ -198,7 +145,11 @@ async function fetchGipts(opts = {}) {
   };
 
   try {
-    const browser = await getSharedBrowser();
+    const browser = await getSharedBrowser({
+      userDataDir: process.platform === 'linux'
+        ? '/dev/shm/puppeteer-profile-gipt'
+        : path.join(__dirname, 'tmp', 'puppeteer-gipt')
+    });
     page = await browser.newPage();
     await page.setViewport({ width: 1200, height: 900 });
 
