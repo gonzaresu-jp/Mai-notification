@@ -4,6 +4,8 @@
 'use strict';
 
 const auth = require('./auth');
+const admin = require('./admin/admin');
+
 
 // ============================================================
 // Promise ラッパー
@@ -630,7 +632,7 @@ function register(app, db, authLimiter) {
         [req.userId]
       );
       res.json(rows.map((row) => {
-        const editable = !row.event_id && row.source !== 'admin';
+        const editable = admin.isAdminRequest(req) || (!row.event_id && row.source !== 'admin');
         return { ...row, editable };
       }));
     } catch (e) {
@@ -705,6 +707,15 @@ function register(app, db, authLimiter) {
         return res.status(400).json({ error: 'valid scheduled_at required' });
       }
 
+      const target = await dbGet(db,
+        'SELECT source FROM user_schedules WHERE id = ? AND user_id = ?',
+        [req.params.id, req.userId]
+      );
+      if (!target) return res.status(404).json({ error: 'Schedule not found' });
+      if (target.source === 'admin' && !admin.isAdminRequest(req)) {
+        return res.status(403).json({ error: 'Permission denied' });
+      }
+
       const result = await dbRun(db,
         `UPDATE user_schedules
          SET title = COALESCE(?, title),
@@ -716,7 +727,6 @@ function register(app, db, authLimiter) {
              reminder_sent_at = NULL,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ? AND user_id = ?
-           AND COALESCE(source, 'user') = 'user'
            AND event_id IS NULL`,
         [
           normalizedTitle ?? null,
@@ -730,7 +740,7 @@ function register(app, db, authLimiter) {
         ]
       );
       if (result.changes === 0) {
-        return res.status(403).json({ error: 'Admin schedules are read-only' });
+        return res.status(403).json({ error: 'Permission denied' });
       }
       res.json({ success: true });
     } catch (e) {
@@ -752,14 +762,16 @@ function register(app, db, authLimiter) {
     try {
       // 削除前にレコードを取得して存在・権限確認
       const schedule = await dbGet(db,
-        `SELECT id, reminder_sent_at FROM user_schedules
+        `SELECT id, source, reminder_sent_at FROM user_schedules
          WHERE id = ? AND user_id = ?
-           AND COALESCE(source, 'user') = 'user'
            AND event_id IS NULL`,
         [req.params.id, req.userId]
       );
       if (!schedule) {
-        return res.status(403).json({ error: 'Admin schedules are read-only' });
+        return res.status(404).json({ error: 'Schedule not found' });
+      }
+      if (schedule.source === 'admin' && !admin.isAdminRequest(req)) {
+        return res.status(403).json({ error: 'Permission denied' });
       }
 
       // sendUserScheduleReminders() がこのスケジュールを掴まないよう
@@ -807,9 +819,9 @@ function register(app, db, authLimiter) {
   });
 
   // ──────────────────────────────────────────
-  // 内部API: スケジュール自動作成（AIシステム用）
+  // 内部API: イベント自動作成（AIシステム用）
   // ──────────────────────────────────────────
-  app.post('/api/internal/schedule/create', async (req, res) => {
+  app.post('/api/internal/events/create', async (req, res) => {
     // ADMIN_NOTIFY_TOKEN で認証
     const INTERNAL_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
     if (!INTERNAL_TOKEN) {
@@ -822,13 +834,8 @@ function register(app, db, authLimiter) {
     }
 
     try {
-      const { user_id, title, scheduled_at, note, url, thumbnail_url, reminder_minutes } = req.body;
+      const { title, scheduled_at, note, url, thumbnail_url, platform, external_id } = req.body;
       
-      // user_id 検証
-      if (!user_id) {
-        return res.status(400).json({ error: 'user_id required' });
-      }
-
       // title と scheduled_at は必須
       const normalizedTitle = normalizeRequiredTitle(title);
       if (!normalizedTitle) {
@@ -841,21 +848,20 @@ function register(app, db, authLimiter) {
       const normalizedText = normalizeOptionalText(note, MAX_SCHEDULE_TEXT_LEN);
       const normalizedUrl = normalizeOptionalHttpUrl(url);
       const normalizedThumbUrl = normalizeOptionalHttpUrl(thumbnail_url);
-      const normalizedReminder = normalizeReminderMinutes(reminder_minutes, 30);
-
-      // ユーザー存在確認
-      const user = await dbGet(db, 'SELECT id FROM users WHERE id = ?', [user_id]);
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
+      
+      // eventsテーブル用の値
+      const eventPlatform = platform || 'twitter';
+      const eventType = 'live'; 
+      const status = 'scheduled';
+      const confirmed = null; // 未確定
 
       const result = await dbRun(db,
-        `INSERT INTO user_schedules (user_id, source, title, note, url, thumbnail_url, scheduled_at, reminder_minutes)
-         VALUES (?, 'ai', ?, ?, ?, ?, ?, ?)`,
-        [user_id, normalizedTitle, normalizedText ?? null, normalizedUrl ?? null, normalizedThumbUrl ?? null, scheduled_at, normalizedReminder]
+        `INSERT INTO events (title, start_time, description, url, thumbnail_url, platform, event_type, status, external_id, confirmed)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [normalizedTitle, scheduled_at, normalizedText ?? null, normalizedUrl ?? null, normalizedThumbUrl ?? null, eventPlatform, eventType, status, external_id ?? null, confirmed]
       );
 
-      res.status(201).json({ success: true, id: result.lastID, source: 'ai' });
+      res.status(201).json({ success: true, id: result.lastID, platform: eventPlatform });
     } catch (e) {
       const msg = String(e && e.message ? e.message : '');
       if (msg === 'URL_INVALID' || msg === 'URL_SCHEME_INVALID') {
@@ -864,17 +870,14 @@ function register(app, db, authLimiter) {
       if (msg === 'URL_TOO_LONG') {
         return res.status(400).json({ error: `URL too long (max ${MAX_SCHEDULE_URL_LEN})` });
       }
-      if (msg === 'REMINDER_INVALID') {
-        return res.status(400).json({ error: 'reminder_minutes must be one of: 60,30,10,5,3,0' });
-      }
       res.status(500).json({ error: e.message });
     }
   });
 
   // ──────────────────────────────────────────
-  // 内部API: 重複スケジュール検索
+  // 内部API: 既存イベント重複検索
   // ──────────────────────────────────────────
-  app.get('/api/internal/schedule/find-duplicate', async (req, res) => {
+  app.get('/api/internal/events/find-duplicate', async (req, res) => {
     const INTERNAL_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
     if (!INTERNAL_TOKEN) {
       return res.status(503).json({ error: 'Internal API not configured' });
@@ -886,41 +889,48 @@ function register(app, db, authLimiter) {
     }
 
     try {
-      const { user_id, scheduled_at, title } = req.query;
+      const { external_id, scheduled_at, title } = req.query;
       
-      if (!user_id || !scheduled_at) {
-        return res.status(400).json({ error: 'user_id and scheduled_at required' });
+      if (!scheduled_at) {
+        return res.status(400).json({ error: 'scheduled_at required' });
       }
 
-      // 検索対象の時刻（±1時間範囲）
-      const targetDate = new Date(scheduled_at);
-      const minTime = new Date(targetDate.getTime() - 60*60*1000); // -1時間
-      const maxTime = new Date(targetDate.getTime() + 60*60*1000); // +1時間
+      let rows = [];
+      
+      // external_idでの検索を優先
+      if (external_id) {
+        rows = await dbAll(db,
+          `SELECT * FROM events WHERE external_id = ?`, [external_id]
+        );
+      }
 
-      const rows = await dbAll(db,
-        `SELECT id, title, scheduled_at, source FROM user_schedules
-         WHERE user_id = ?
-           AND scheduled_at BETWEEN ? AND ?
-           AND source IN ('ai', 'user')
-         ORDER BY scheduled_at DESC`,
-        [user_id, minTime.toISOString(), maxTime.toISOString()]
-      );
+      if (rows.length === 0) {
+        // 検索対象の時刻（±4時間範囲）で類似を探す
+        const targetDate = new Date(scheduled_at);
+        const minTime = new Date(targetDate.getTime() - 4*60*60*1000); // -4時間
+        const maxTime = new Date(targetDate.getTime() + 4*60*60*1000); // +4時間
 
-      // タイトルの類似度チェック（簡易版："配信" キーワード含有判定）
-      const isLiveRelated = (str) => {
-        return /配信|ライブ|生放送|stream|live/i.test(str);
-      };
+        const timeRows = await dbAll(db,
+          `SELECT * FROM events
+           WHERE start_time BETWEEN ? AND ?
+           ORDER BY start_time DESC`,
+          [minTime.toISOString(), maxTime.toISOString()]
+        );
 
-      const duplicates = rows.filter(r => {
-        // AI作成スケジュール同士の場合は無視（新規作成）
-        if (r.source === 'ai') return true;
-        // タイトルが関連性あれば重複候補
-        return isLiveRelated(r.title) && isLiveRelated(title || '');
-      });
+        // タイトルの類似度チェック
+        const isLiveRelated = (str) => {
+          return /配信|ライブ|生放送|stream|live|🔴/i.test(str);
+        };
+
+        rows = timeRows.filter(r => {
+          if (r.platform === 'twitter') return true;
+          return isLiveRelated(r.title) && isLiveRelated(title || '');
+        });
+      }
 
       res.json({ 
-        found: duplicates.length > 0, 
-        duplicates: duplicates || [],
+        found: rows.length > 0, 
+        duplicates: rows || [],
         near: rows.length
       });
     } catch (e) {
@@ -929,9 +939,9 @@ function register(app, db, authLimiter) {
   });
 
   // ──────────────────────────────────────────
-  // 内部API: スケジュール更新（AIシステム用）
+  // 内部API: イベント更新（AIシステム用）
   // ──────────────────────────────────────────
-  app.put('/api/internal/schedule/update', async (req, res) => {
+  app.put('/api/internal/events/update', async (req, res) => {
     const INTERNAL_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
     if (!INTERNAL_TOKEN) {
       return res.status(503).json({ error: 'Internal API not configured' });
@@ -943,7 +953,7 @@ function register(app, db, authLimiter) {
     }
 
     try {
-      const { schedule_id, title, scheduled_at, note, url, reminder_minutes } = req.body;
+      const { schedule_id, title, scheduled_at, note, url, platform, thumbnail_url } = req.body;
       
       if (!schedule_id) {
         return res.status(400).json({ error: 'schedule_id required' });
@@ -952,17 +962,16 @@ function register(app, db, authLimiter) {
       const normalizedTitle = normalizeOptionalText(title, MAX_SCHEDULE_TITLE_LEN);
       const normalizedText = normalizeOptionalText(note, MAX_SCHEDULE_TEXT_LEN);
       const normalizedUrl = normalizeOptionalHttpUrl(url);
-      const normalizedReminder = reminder_minutes !== undefined 
-        ? normalizeReminderMinutes(reminder_minutes, 30)
-        : undefined;
+      const normalizedThumbUrl = normalizeOptionalHttpUrl(thumbnail_url);
 
       const result = await dbRun(db,
-        `UPDATE user_schedules
+        `UPDATE events
          SET title = COALESCE(?, title),
-             scheduled_at = COALESCE(?, scheduled_at),
-             note = COALESCE(?, note),
+             start_time = COALESCE(?, start_time),
+             description = COALESCE(?, description),
              url = COALESCE(?, url),
-             reminder_minutes = COALESCE(?, reminder_minutes),
+             thumbnail_url = COALESCE(?, thumbnail_url),
+             platform = COALESCE(?, platform),
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
@@ -970,13 +979,14 @@ function register(app, db, authLimiter) {
           scheduled_at ?? null,
           normalizedText ?? null,
           normalizedUrl ?? null,
-          normalizedReminder ?? null,
+          normalizedThumbUrl ?? null,
+          platform ?? null,
           schedule_id
         ]
       );
 
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Schedule not found' });
+        return res.status(404).json({ error: 'Event not found' });
       }
 
       res.json({ success: true, updated: true });
