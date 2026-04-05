@@ -871,6 +871,124 @@ function register(app, db, authLimiter) {
     }
   });
 
+  // ──────────────────────────────────────────
+  // 内部API: 重複スケジュール検索
+  // ──────────────────────────────────────────
+  app.get('/api/internal/schedule/find-duplicate', async (req, res) => {
+    const INTERNAL_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
+    if (!INTERNAL_TOKEN) {
+      return res.status(503).json({ error: 'Internal API not configured' });
+    }
+
+    const authToken = req.headers['x-notify-token'] || req.query.token || '';
+    if (authToken !== INTERNAL_TOKEN) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const { user_id, scheduled_at, title } = req.query;
+      
+      if (!user_id || !scheduled_at) {
+        return res.status(400).json({ error: 'user_id and scheduled_at required' });
+      }
+
+      // 検索対象の時刻（±1時間範囲）
+      const targetDate = new Date(scheduled_at);
+      const minTime = new Date(targetDate.getTime() - 60*60*1000); // -1時間
+      const maxTime = new Date(targetDate.getTime() + 60*60*1000); // +1時間
+
+      const rows = await dbAll(db,
+        `SELECT id, title, scheduled_at, source FROM user_schedules
+         WHERE user_id = ?
+           AND scheduled_at BETWEEN ? AND ?
+           AND source IN ('ai', 'user')
+         ORDER BY scheduled_at DESC`,
+        [user_id, minTime.toISOString(), maxTime.toISOString()]
+      );
+
+      // タイトルの類似度チェック（簡易版："配信" キーワード含有判定）
+      const isLiveRelated = (str) => {
+        return /配信|ライブ|生放送|stream|live/i.test(str);
+      };
+
+      const duplicates = rows.filter(r => {
+        // AI作成スケジュール同士の場合は無視（新規作成）
+        if (r.source === 'ai') return true;
+        // タイトルが関連性あれば重複候補
+        return isLiveRelated(r.title) && isLiveRelated(title || '');
+      });
+
+      res.json({ 
+        found: duplicates.length > 0, 
+        duplicates: duplicates || [],
+        near: rows.length
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ──────────────────────────────────────────
+  // 内部API: スケジュール更新（AIシステム用）
+  // ──────────────────────────────────────────
+  app.put('/api/internal/schedule/update', async (req, res) => {
+    const INTERNAL_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
+    if (!INTERNAL_TOKEN) {
+      return res.status(503).json({ error: 'Internal API not configured' });
+    }
+
+    const authToken = req.headers['x-notify-token'] || req.query.token || '';
+    if (authToken !== INTERNAL_TOKEN) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const { schedule_id, title, scheduled_at, note, url, reminder_minutes } = req.body;
+      
+      if (!schedule_id) {
+        return res.status(400).json({ error: 'schedule_id required' });
+      }
+
+      const normalizedTitle = normalizeOptionalText(title, MAX_SCHEDULE_TITLE_LEN);
+      const normalizedText = normalizeOptionalText(note, MAX_SCHEDULE_TEXT_LEN);
+      const normalizedUrl = normalizeOptionalHttpUrl(url);
+      const normalizedReminder = reminder_minutes !== undefined 
+        ? normalizeReminderMinutes(reminder_minutes, 30)
+        : undefined;
+
+      const result = await dbRun(db,
+        `UPDATE user_schedules
+         SET title = COALESCE(?, title),
+             scheduled_at = COALESCE(?, scheduled_at),
+             note = COALESCE(?, note),
+             url = COALESCE(?, url),
+             reminder_minutes = COALESCE(?, reminder_minutes),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [
+          normalizedTitle ?? null,
+          scheduled_at ?? null,
+          normalizedText ?? null,
+          normalizedUrl ?? null,
+          normalizedReminder ?? null,
+          schedule_id
+        ]
+      );
+
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'Schedule not found' });
+      }
+
+      res.json({ success: true, updated: true });
+    } catch (e) {
+      const msg = String(e && e.message ? e.message : '');
+      if (msg === 'URL_INVALID' || msg === 'URL_SCHEME_INVALID') {
+        return res.status(400).json({ error: 'URL must be http/https' });
+      }
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   console.log('[user-routes] all routes registered');
 }
 

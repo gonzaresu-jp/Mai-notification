@@ -8,7 +8,7 @@ const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const os = require('os');
 const fs = require('fs');
-const { analyzeTweet, extractScheduleFromAnalysis } = require('./gemma-analyzer');
+const { analyzeTweet, extractScheduleFromAnalysis, extractUrlsFromTweet } = require('./gemma-analyzer');
 
 const PROFILE_PATH = '/var/lib/mai-push/puppeteer-profile';
 const COOKIE_DB = path.join(PROFILE_PATH, 'cookies.sqlite');
@@ -243,18 +243,117 @@ async function sendNotify(username, tweet, settingKey, sendText) {
   }
 }
 
+// --- スケジュール重複検索 ---
+async function findDuplicateSchedule(username, scheduleInfo) {
+  if (!scheduleInfo) return null;
+
+  let agent;
+  try {
+    const parsed = new URL('http://localhost:8080/api/internal/schedule/find-duplicate');
+    if (parsed.protocol === 'https:') agent = new https.Agent({ keepAlive: false });
+    else if (parsed.protocol === 'http:') agent = new http.Agent({ keepAlive: false });
+  } catch (e) {
+    return null;
+  }
+
+  try {
+    const queryParams = new URLSearchParams({
+      user_id: DEFAULT_SCHEDULE_USER_ID,
+      scheduled_at: scheduleInfo.scheduled_at,
+      title: scheduleInfo.title,
+      token: SCHEDULE_TOKEN
+    });
+
+    const res = await retryAsync(() => fetch(`http://localhost:8080/api/internal/schedule/find-duplicate?${queryParams}`, {
+      method: 'GET',
+      headers: {
+        'X-Notify-Token': SCHEDULE_TOKEN
+      },
+      agent,
+      timeout: 10000
+    }), 2, 300);
+
+    if (!res.ok) return null;
+
+    const result = await res.json().catch(() => null);
+    return result?.duplicates?.[0] || null;
+  } catch (e) {
+    console.warn(`[${username}] duplicate search error:`, e.message);
+    return null;
+  }
+}
+
+// --- スケジュール更新 ---
+async function updateSchedule(username, scheduleId, scheduleInfo, urls) {
+  let agent;
+  try {
+    const parsed = new URL('http://localhost:8080/api/internal/schedule/update');
+    if (parsed.protocol === 'https:') agent = new https.Agent({ keepAlive: false });
+    else if (parsed.protocol === 'http:') agent = new http.Agent({ keepAlive: false });
+  } catch (e) {
+    return false;
+  }
+
+  const payload = {
+    schedule_id: scheduleId,
+    title: scheduleInfo.title,
+    scheduled_at: scheduleInfo.scheduled_at,
+    note: `[Gemma再分析] 時刻更新`,
+    url: urls[0] || null,
+    reminder_minutes: 30
+  };
+
+  try {
+    const res = await retryAsync(() => fetch('http://localhost:8080/api/internal/schedule/update', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Notify-Token': SCHEDULE_TOKEN
+      },
+      body: JSON.stringify(payload),
+      agent,
+      timeout: 10000
+    }), 2, 300);
+
+    if (!res.ok) {
+      console.warn(`[${username}] schedule update failed:`, res.status);
+      return false;
+    }
+
+    console.log(`[${username}] ✏️ schedule updated (id: ${scheduleId}) - ${scheduleInfo.title} at ${scheduleInfo.scheduled_at}`);
+    return true;
+  } catch (e) {
+    console.error(`[${username}] schedule update error:`, e.message);
+    return false;
+  }
+}
+
 // --- スケジュール自動作成 ---
 async function createScheduleFromTweet(username, tweet, analysis) {
   if (!ENABLE_SCHEDULE_AUTO_CREATE) return;
   if (!analysis) return;
 
+  // URL抽出
+  const urls = extractUrlsFromTweet(tweet.text || '');
+  
   // スケジュール抽出
-  const scheduleInfo = extractScheduleFromAnalysis(analysis, new Date());
+  const scheduleInfo = extractScheduleFromAnalysis(analysis, new Date(), urls);
   if (!scheduleInfo) {
     console.log(`[${username}] No schedule info extracted from analysis`);
     return;
   }
 
+  // 重複スケジュール検索
+  const duplicate = await findDuplicateSchedule(username, scheduleInfo);
+  
+  if (duplicate) {
+    // 既存スケジュールを更新
+    console.log(`[${username}] Found duplicate: id=${duplicate.id}, updating...`);
+    await updateSchedule(username, duplicate.id, scheduleInfo, urls);
+    return;
+  }
+
+  // 新規作成
   let agent;
   try {
     const parsed = new URL(SCHEDULE_ENDPOINT);
@@ -270,7 +369,7 @@ async function createScheduleFromTweet(username, tweet, analysis) {
     title: scheduleInfo.title,
     scheduled_at: scheduleInfo.scheduled_at,
     note: `[Gemma分析] ツイート: ${tweet.text.substring(0, 100)}...`,
-    url: `https://x.com/${username}/status/${tweet.id}`,
+    url: urls[0] || `https://x.com/${username}/status/${tweet.id}`,
     reminder_minutes: 30
   };
 
@@ -291,7 +390,7 @@ async function createScheduleFromTweet(username, tweet, analysis) {
       console.error(`[${username}] schedule creation failed:`, res.status, text);
     } else {
       const result = await res.json().catch(()=>({}));
-      console.log(`[${username}] ✅ schedule created (id: ${result.id}) - ${scheduleInfo.title} at ${scheduleInfo.scheduled_at}`);
+      console.log(`[${username}] ✅ schedule created (id: ${result.id}) - ${scheduleInfo.title} at ${scheduleInfo.scheduled_at}${urls.length ? ` [${urls.length} URL]` : ''}`);
     }
   } catch (e) {
     console.error(`[${username}] schedule creation error:`, e.stack || e);
