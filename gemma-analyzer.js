@@ -215,12 +215,29 @@ function validateEnum(value, validValues, defaultValue) {
 }
 
 /**
+ * ツイートテキストからURL を抽出
+ * @param {string} text - ツイートテキスト
+ * @returns {Array<string>} - 抽出されたURL配列
+ */
+function extractUrlsFromTweet(text) {
+  if (!text) return [];
+  
+  // URL正規表現（http/https）
+  const urlRegex = /https?:\/\/[^\s]+/g;
+  const matches = text.match(urlRegex) || [];
+  
+  // 重複を除去
+  return Array.from(new Set(matches));
+}
+
+/**
  * 分析結果からスケジュール情報を抽出
  * @param {Object} analysis - 分析結果
  * @param {Date} tweetDate - ツイート投稿日時
+ * @param {Array<string>} urls - ツイートに含まれるURL
  * @returns {Object|null} - スケジュール作成情報、またはnull（作成不要の場合）
  */
-function extractScheduleFromAnalysis(analysis, tweetDate) {
+function extractScheduleFromAnalysis(analysis, tweetDate, urls = []) {
   // 配信関連でない、または配信情報がないのなら null
   if (analysis.category !== 'LIVE' || analysis.status === 'NONE') {
     return null;
@@ -245,9 +262,14 @@ function extractScheduleFromAnalysis(analysis, tweetDate) {
     scheduleDate.setDate(scheduleDate.getDate() + 1);
   }
 
+  // 優先度順のURL（YouTube > その他）
+  const primaryUrl = urls.find(u => u.includes('youtube.com') || u.includes('youtu.be')) || urls[0] || null;
+
   return {
     title: '🔴 配信',
     scheduled_at: scheduleDate.toISOString(),
+    url: primaryUrl,
+    urls: urls, // 全URL
     sentiment: analysis.sentiment,
     confidence: analysis.confidence,
     status: analysis.status
@@ -256,5 +278,6 @@ function extractScheduleFromAnalysis(analysis, tweetDate) {
 
 module.exports = {
   analyzeTweet,
-  extractScheduleFromAnalysis
+  extractScheduleFromAnalysis,
+  extractUrlsFromTweet
 };
