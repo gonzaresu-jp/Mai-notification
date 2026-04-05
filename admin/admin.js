@@ -113,6 +113,28 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// -------------------------------------------------
+// 管理者リクエストか判定するヘルパー
+// -------------------------------------------------
+function isAdminRequest(req) {
+  if (req.adminUser) {
+    return true;
+  }
+  const token = req.headers['x-admin-token'] || req.cookies?.adminToken;
+  if (!token) {
+    return false;
+  }
+  if (process.env.ADMIN_NOTIFY_TOKEN && token === process.env.ADMIN_NOTIFY_TOKEN) {
+    return true;
+  }
+  const session = sessions.get(token);
+  if (session && Date.now() <= session.expiresAt) {
+    return true;
+  }
+  return false;
+}
+
+
 // ログイン処理
 async function login(req, res) {
   console.log("[DEBUG] ADMIN_PASSWORD_HASH:", process.env.ADMIN_PASSWORD_HASH ? "SET" : "NOT SET");
@@ -217,4 +239,5 @@ module.exports = {
   login,
   logout,
   generatePasswordHash,
+  isAdminRequest,
 };
