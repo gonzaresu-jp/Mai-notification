@@ -24,7 +24,7 @@ const RETRY_DELAY_MS = 1000; // 1秒ごと
 async function callOllama(prompt, retries = RETRY_TIMES) {
   let lastError;
   const maxRetries = retries;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
@@ -58,12 +58,12 @@ async function callOllama(prompt, retries = RETRY_TIMES) {
     } catch (err) {
       lastError = err;
       const isTimeout = err.name === 'AbortError' || err.message.includes('abort');
-      const isConnectionError = err.message.includes('ECONNREFUSED') || 
-                                err.message.includes('EHOSTUNREACH') ||
-                                err.message.includes('ENOTFOUND') ||
-                                err.message.includes('network timeout') ||
-                                err.message.includes('connection');
-      
+      const isConnectionError = err.message.includes('ECONNREFUSED') ||
+        err.message.includes('EHOSTUNREACH') ||
+        err.message.includes('ENOTFOUND') ||
+        err.message.includes('network timeout') ||
+        err.message.includes('connection');
+
       if (isTimeout || isConnectionError) {
         const isFirstAttempt = attempt === 0;
         console.warn(`[Ollama] Attempt ${attempt + 1}/${maxRetries + 1} failed: ${err.message}${isFirstAttempt ? ' (初回は遅延する場合があります)' : ''}`);
@@ -93,6 +93,7 @@ async function analyzeTweet(tweetText) {
       status: 'NONE',
       start_time: null,
       previous_time: null,
+      title: null,
       sentiment: 'NEUTRAL',
       confidence: 0
     };
@@ -118,7 +119,10 @@ async function analyzeTweet(tweetText) {
 5. 感情
    (POSITIVE / NEUTRAL / NEGATIVE)
 
-6. 信頼度
+6. 配信タイトル（任意）
+   (配信のタイトルや内容、ゲーム名などが推測できる場合。不明なら null)
+
+7. 信頼度
    (0〜1)
 
 判断基準:
@@ -150,6 +154,7 @@ async function analyzeTweet(tweetText) {
   "status": "",
   "start_time": null,
   "previous_time": null,
+  "title": null,
   "sentiment": "",
   "confidence": 0.0
 }
@@ -159,7 +164,7 @@ ${tweetText}`;
 
   try {
     console.log('[Gemma] Analyzing tweet:', tweetText.substring(0, 80) + '...');
-    
+
     // 初回呼び出しは より多くのリトライを行う（Ollama初期化時間を考慮）
     let response;
     try {
@@ -168,38 +173,40 @@ ${tweetText}`;
       console.warn('[Gemma] 初回分析失敗、リトライ回数を減らして再試行:', err.message);
       response = await callOllama(systemPrompt, RETRY_TIMES);
     }
-    
+
     // JSON抽出（```json ... ```ブロックまたは直接JSON）
     let jsonStr = response;
     const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (jsonMatch) {
       jsonStr = jsonMatch[1];
     }
-    
+
     const result = JSON.parse(jsonStr);
-    
+
     // バリデーション
     const validated = {
       category: validateEnum(result.category, ['LIVE', 'NEWS', 'PROMOTION', 'REPOST', 'MORNING', 'DAILY', 'OTHER'], 'OTHER'),
       status: validateEnum(result.status, ['LIVE_NOW', 'LIVE_SOON', 'TIME_CHANGE', 'NONE'], 'NONE'),
       start_time: result.start_time || null,
       previous_time: result.previous_time || null,
+      title: result.title || null,
       sentiment: validateEnum(result.sentiment, ['POSITIVE', 'NEUTRAL', 'NEGATIVE'], 'NEUTRAL'),
       confidence: Math.min(1, Math.max(0, parseFloat(result.confidence) || 0))
     };
-    
+
     console.log('[Gemma] Analysis result:', validated);
     return validated;
   } catch (err) {
     console.error('[Gemma] Analysis failed:', err.message);
     console.error('[Gemma] Response was:', err.response || '(no response)');
-    
+
     // フォールバック：エラー時は NEUTRAL 結果を返す
     return {
       category: 'OTHER',
       status: 'NONE',
       start_time: null,
       previous_time: null,
+      title: null,
       sentiment: 'NEUTRAL',
       confidence: 0
     };
@@ -221,11 +228,11 @@ function validateEnum(value, validValues, defaultValue) {
  */
 function extractUrlsFromTweet(text) {
   if (!text) return [];
-  
+
   // URL正規表現（http/https）
   const urlRegex = /https?:\/\/[^\s]+/g;
   const matches = text.match(urlRegex) || [];
-  
+
   // 重複を除去
   return Array.from(new Set(matches));
 }
@@ -262,13 +269,37 @@ function extractScheduleFromAnalysis(analysis, tweetDate, urls = []) {
     scheduleDate.setDate(scheduleDate.getDate() + 1);
   }
 
-  // 優先度順のURL（YouTube > その他）
-  const primaryUrl = urls.find(u => u.includes('youtube.com') || u.includes('youtu.be')) || urls[0] || null;
+  // YouTube のURLが含まれる場合は、youtube.js が自動取得するためGemma側では作成しない
+  const isYouTube = urls.some(u => u.includes('youtube.com') || u.includes('youtu.be'));
+  if (isYouTube) {
+    console.log('[Gemma] YouTube URL found in tweet, skipping schedule creation because youtube.js will handle it.');
+    return null;
+  }
+
+  // TwitchやツイキャスのURLを飛ぶリンク先として設定する
+  let primaryUrl = null;
+  let platform = 'twitter'; // デフォルト
+
+  const twitchUrl = urls.find(u => u.includes('twitch.tv'));
+  const twitcasUrl = urls.find(u => u.includes('twitcasting.tv'));
+
+  if (twitchUrl) {
+    primaryUrl = twitchUrl;
+    platform = 'twitch';
+  } else if (twitcasUrl) {
+    primaryUrl = twitcasUrl;
+    platform = 'twitcasting';
+  } else {
+    primaryUrl = urls[0] || null;
+  }
+
+  const scheduleTitle = analysis.title ? `${analysis.title}` : '配信予定';
 
   return {
-    title: '🔴 配信',
+    title: scheduleTitle,
     scheduled_at: scheduleDate.toISOString(),
     url: primaryUrl,
+    platform: platform,
     urls: urls, // 全URL
     sentiment: analysis.sentiment,
     confidence: analysis.confidence,

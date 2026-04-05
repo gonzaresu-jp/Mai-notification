@@ -22,7 +22,7 @@ const ICON_URL = './icon.webp';
 const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
 
 // 🔧 スケジュール自動作成関連
-const SCHEDULE_ENDPOINT = 'http://localhost:8080/api/internal/schedule/create';
+const SCHEDULE_ENDPOINT = 'http://localhost:8080/api/internal/events/create';
 const SCHEDULE_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
 const ENABLE_SCHEDULE_AUTO_CREATE = process.env.ENABLE_SCHEDULE_AUTO_CREATE !== 'false'; // デフォルト: 有効
 const DEFAULT_SCHEDULE_USER_ID = process.env.SCHEDULE_USER_ID || 1; // デフォルト: user_id=1
@@ -244,12 +244,12 @@ async function sendNotify(username, tweet, settingKey, sendText) {
 }
 
 // --- スケジュール重複検索 ---
-async function findDuplicateSchedule(username, scheduleInfo) {
+async function findDuplicateSchedule(username, scheduleInfo, tweetId) {
   if (!scheduleInfo) return null;
 
   let agent;
   try {
-    const parsed = new URL('http://localhost:8080/api/internal/schedule/find-duplicate');
+    const parsed = new URL('http://localhost:8080/api/internal/events/find-duplicate');
     if (parsed.protocol === 'https:') agent = new https.Agent({ keepAlive: false });
     else if (parsed.protocol === 'http:') agent = new http.Agent({ keepAlive: false });
   } catch (e) {
@@ -257,14 +257,15 @@ async function findDuplicateSchedule(username, scheduleInfo) {
   }
 
   try {
+    const external_id = tweetId ? `gemma_${tweetId}` : '';
     const queryParams = new URLSearchParams({
-      user_id: DEFAULT_SCHEDULE_USER_ID,
+      external_id: external_id,
       scheduled_at: scheduleInfo.scheduled_at,
       title: scheduleInfo.title,
       token: SCHEDULE_TOKEN
     });
 
-    const res = await retryAsync(() => fetch(`http://localhost:8080/api/internal/schedule/find-duplicate?${queryParams}`, {
+    const res = await retryAsync(() => fetch(`http://localhost:8080/api/internal/events/find-duplicate?${queryParams}`, {
       method: 'GET',
       headers: {
         'X-Notify-Token': SCHEDULE_TOKEN
@@ -287,7 +288,7 @@ async function findDuplicateSchedule(username, scheduleInfo) {
 async function updateSchedule(username, scheduleId, scheduleInfo, urls) {
   let agent;
   try {
-    const parsed = new URL('http://localhost:8080/api/internal/schedule/update');
+    const parsed = new URL('http://localhost:8080/api/internal/events/update');
     if (parsed.protocol === 'https:') agent = new https.Agent({ keepAlive: false });
     else if (parsed.protocol === 'http:') agent = new http.Agent({ keepAlive: false });
   } catch (e) {
@@ -299,12 +300,13 @@ async function updateSchedule(username, scheduleId, scheduleInfo, urls) {
     title: scheduleInfo.title,
     scheduled_at: scheduleInfo.scheduled_at,
     note: `[Gemma再分析] 時刻更新`,
-    url: urls[0] || null,
-    reminder_minutes: 30
+    url: scheduleInfo.url || urls[0] || null,
+    thumbnail_url: scheduleInfo.thumbnail_url || null,
+    platform: scheduleInfo.platform || 'twitter'
   };
 
   try {
-    const res = await retryAsync(() => fetch('http://localhost:8080/api/internal/schedule/update', {
+    const res = await retryAsync(() => fetch('http://localhost:8080/api/internal/events/update', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -342,9 +344,14 @@ async function createScheduleFromTweet(username, tweet, analysis) {
     console.log(`[${username}] No schedule info extracted from analysis`);
     return;
   }
+  
+  // ツイートからの画像をサムネイルとして設定（あれば）
+  if (tweet.thumbnail_url) {
+    scheduleInfo.thumbnail_url = tweet.thumbnail_url;
+  }
 
   // 重複スケジュール検索
-  const duplicate = await findDuplicateSchedule(username, scheduleInfo);
+  const duplicate = await findDuplicateSchedule(username, scheduleInfo, tweet.id);
   
   if (duplicate) {
     // 既存スケジュールを更新
@@ -365,12 +372,13 @@ async function createScheduleFromTweet(username, tweet, analysis) {
   }
 
   const payload = {
-    user_id: DEFAULT_SCHEDULE_USER_ID,
     title: scheduleInfo.title,
     scheduled_at: scheduleInfo.scheduled_at,
     note: `[Gemma分析] ツイート: ${tweet.text.substring(0, 100)}...`,
-    url: urls[0] || `https://x.com/${username}/status/${tweet.id}`,
-    reminder_minutes: 30
+    url: scheduleInfo.url || urls[0] || `https://x.com/${username}/status/${tweet.id}`,
+    thumbnail_url: scheduleInfo.thumbnail_url || null,
+    platform: scheduleInfo.platform || 'twitter',
+    external_id: `gemma_${tweet.id}`
   };
 
   try {
@@ -432,7 +440,13 @@ async function checkOneUser(page, username, seenState) {
         let text = '';
         const tweetText = article.querySelector('div[lang]') || article;
         text = tweetText ? tweetText.innerText : article.innerText;
-        out.push({ id, text, datetime });
+        
+        // ツイート内の画像URL（メディア画像）を取得（アイコンや絵文字等を除外）
+        const mediaImg = Array.from(article.querySelectorAll('img'))
+                              .map(img => img.src)
+                              .find(src => src && src.includes('pbs.twimg.com/media/'));
+                              
+        out.push({ id, text, datetime, thumbnail_url: mediaImg || null });
       }
       return out.filter(t => !t.text.includes('固定'));
     });
