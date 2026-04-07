@@ -310,6 +310,7 @@ db.serialize(() => {
     if (err) console.error('subscriptions create err:', err.message);
     else console.log('subscriptions table ensured');
   });
+
   db.run(`CREATE TABLE IF NOT EXISTS android_devices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
@@ -323,6 +324,18 @@ db.serialize(() => {
   )`, (err) => {
     if (err) console.error('android_devices create err:', err.message);
     else console.log('android_devices table ensured');
+  });
+
+  db.run(`CREATE TABLE IF NOT EXISTS scraper_status (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    last_run DATETIME,
+    status TEXT,
+    message TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, (err) => {
+    if (err) console.error('scraper_status create err:', err.message);
+    else console.log('scraper_status table ensured');
   });
 
   db.run(`CREATE TABLE IF NOT EXISTS scheduled_notifications (
@@ -1849,6 +1862,49 @@ app.get('/api/admin/events', adminAuth.requireAuth, (req, res) => {
   });
 });
 
+
+// --- スクレイパー状況取得 API ---
+app.get('/api/scraper-status', (req, res) => {
+  db.all('SELECT * FROM scraper_status ORDER BY updated_at DESC', [], (err, rows) => {
+    if (err) {
+      console.error('/api/scraper-status GET err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+    res.json({ items: rows || [] });
+  });
+});
+
+// --- スクレイパー状況更新 API (内部用) ---
+app.post('/api/internal/scraper-status', (req, res) => {
+  const { id, name, status, message } = req.body || {};
+  const token = req.headers['x-local-api-token'] || req.headers['x-notify-token'];
+
+  if (!id) return res.status(400).json({ error: 'id required' });
+  if (LOCAL_API_TOKEN && token !== LOCAL_API_TOKEN) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const lastRun = (status === 'success' || status === 'running') ? new Date().toISOString() : null;
+
+  const sql = `
+    INSERT INTO scraper_status (id, name, status, message, last_run, updated_at)
+    VALUES (?, ?, ?, ?, COALESCE(?, (SELECT last_run FROM scraper_status WHERE id = ?)), CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET
+      name = COALESCE(excluded.name, scraper_status.name),
+      status = excluded.status,
+      message = excluded.message,
+      last_run = COALESCE(excluded.last_run, scraper_status.last_run),
+      updated_at = CURRENT_TIMESTAMP
+  `;
+
+  db.run(sql, [id, name, status, message, lastRun, id], function(err) {
+    if (err) {
+      console.error('/api/internal/scraper-status POST err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+    res.json({ success: true });
+  });
+});
 
 // --- 購読者名保存 ---
 app.post('/api/save-name', (req, res) => {
