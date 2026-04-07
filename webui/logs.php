@@ -1,44 +1,100 @@
+<?php
+$updateLogs = [
+    ['date' => '2026-04-07', 'details' => ['プラットフォーム毎のカスタムリンク機能（URLテンプレート）を実装', '通知履歴に「リンク設定」パネルを追加し、カスタムスキーム（youtube://等）に対応', '履歴の「もっと見る」で正常に20件以上取得できない不具合を修正', 'ヒートマップの時刻表示を日本時間（JST）に修正', 'ヒートマップと通知履歴にスケルトンローディング画面を追加', 'フッターの各プラットフォームアイコンにホバー時の名称表示を追加', 'スマホ表示時、通知履歴のスクロール位置がずれる問題を修正', 'コード行数約20,120行']],
+    ['date' => '2026-04-05', 'details' => ['通知受信システムの最適化', 'スケジュールにローカルAI(Gemma4)を導入', 'コード行数19,730行']],
+    ['date' => '2026-03-29', 'details' => ['セキュリティ強化', 'コード行数19,207行']],
+    ['date' => '2026-03-28', 'details' => ['DB周りの最適化', 'コード行数19,179行']],
+    ['date' => '2026-03-12', 'details' => ['Androidアプリをリリース', 'コード行数17,772行']],
+    ['date' => '2026-03-10', 'details' => ['スケジュールUI変更', '新規スケジュール追加時に必ず未定表示になる問題を修正', '管理者画面で全てのスケジュールが未定になる問題を修正', 'YT自動スケジュール追加の時に既存の10分以内のスケジュールを削除するよう変更', 'YT自動スケジュール追加を2週間のみに制限', 'スケジュールにまいちゃんのメモを追加', 'バックエンドでのセキュリティ強化']],
+    ['date' => '2026-03-07', 'details' => ['Androidアプリ実装準備のためのCSS最適化']],
+    ['date' => '2026-03-06', 'details' => ['Safariでの表示、スクロール問題を修正', 'UI改善']],
+    ['date' => '2026-03-03', 'details' => ['複数デバイスでの利便性向上のため、Googleアカウントによるログイン機能を追加', 'Googleアカウント別でスケジュール追加が可能になる', 'コード行数15684']],
+    ['date' => '2026-03-02', 'details' => ['管理者通知パネルのUIを大幅に改善', '通知ダッシュボードのUI改善', 'クリックで喋る3Dまいちゃん追加', 'スケジュールにまいちゃんの一言追加', 'チャンネル登録者数推移の情報を追加', 'デビューと推し日数に年月表記追加', 'コード行数約1.4万']],
+    ['date' => '2026-02-25', 'details' => ['スケジュール通知がadminとして通知や履歴を残す問題を修正', 'youtubeのAPIを大量に使用する不具合を修正']],
+    ['date' => '2026-02-24', 'details' => ['bilibli通知(現状配信のみ)追加', 'スケジュール通知追加']],
+    ['date' => '2026-02-07', 'details' => ['週間予定表の編集ページ追加', '予定表の自動追加(現時点でYTのみ)', 'rss対応', 'コード行数12312']],
+    ['date' => '2026-02-06', 'details' => ['週間予定表を追加']],
+    ['date' => '2026-02-05', 'details' => ['YouTubeのコミュニティ投稿の通知取得方法を変更、通知可能に']],
+    ['date' => '2026-02-03', 'details' => ['Twitchの複数通知バグの修正のためステータスのメモリ保存からストレージへの保存に変更']],
+    ['date' => '2026-02-01', 'details' => ['通知するプラットフォームにTwitchを追加', '管理者用ログインページからのリダイレクトを修正', '管理者通知送信フォームに予約通知追加']],
+    ['date' => '2026-01-16', 'details' => ['phpを導入し、一部htmlをphpに変更', 'コード行数10393']],
+    ['date' => '2026-01-15', 'details' => ['通知履歴最初の5件をhistory.htmlとして生成しておくことにより初期ロードが爆速化', 'API統合により速度向上']],
+    ['date' => '2026-01-14', 'details' => ['Node.jsをv20.18.1→v24.13.0に更新', '初期ロード時ハンバーガーメニューが即時開けないように1s遅延', '初期状態でGiptもTrueになるように変更', '速度向上のためスマホでは使われないFontAwesomeを読み込まないように変更', '画像ファイルの最適化']],
+    ['date' => '2026-01-13', 'details' => ['html,css,jsはキャッシュせず画像ファイルのみキャッシュするようにservice-worker.jsを変更']],
+    ['date' => '2026-01-08', 'details' => ['Gipt稼働', '左からまいちゃんが出現する追加']],
+    ['date' => '2026-01-07', 'details' => ['PCでのプッシュ通知外部リンク先を新しいタブで開くように変更', 'メニューよりfooterが前面に出ていたのを修正']],
+    ['date' => '2026-01-06', 'details' => ['各ページheaderとfooterの統一', 'Gipt機能停止', 'メニューバーのスクロール', 'Update logsの追加']],
+    ['date' => '2025-12-21', 'details' => ['Gipt追加']],
+    ['date' => '2025-11-29', 'details' => ['YTコミュニティ以外、全てのプラットフォームで動作確認済み']],
+    ['date' => '2025-11-26', 'details' => ['リリース', '推し日数追加']],
+    ['date' => '2025-11-25', 'details' => ['横スワイプメニュー開閉', '通知履歴プラットフォーム毎表示切り替え']],
+    ['date' => '2025-11-17', 'details' => ['テスト運用開始', 'コード行数約5600']],
+    ['date' => '2025-11-09', 'details' => ['開発開始'], 'image' => '/start.png']
+];
+?>
 <!doctype html>
 <html lang="ja">
 
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Update logs</title>
-    <link rel="icon" href="../icon.webp">
-    <link rel="stylesheet" href="/style.v3.00.css" />
+    <?php
+    $pageTitle = "アップデート履歴";
+    $pageDesc = "まいちゃん通知の更新ログ・アップデート履歴です。";
+    $extraHead = '
     <style type="text/css">
-        dt {
+        .log-date {
             font-size: 24px;
-        }
-
-        @media(max-width: 800px) {
-            dt {
-                font-size: 16px
-            }
-
-            .card {
-                display: block;
-            }
-
-            img {
-                max-width: 80vw !important;
-            }
-        }
-
-        .bg {
-            background-color: #B11E7C;
-            min-width: 3px;
-        }
-
-        img {
-            max-width: 40vw;
-        }
-
-        #day {
+            font-weight: bold;
+            padding: 15px;
+            display: flex;
+            align-items: center;
             white-space: nowrap;
+            min-width: 140px;
+        }
+
+        .log-bg {
+            background-color: #B11E7C;
+            min-width: 4px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+
+        .log-content {
+            padding: 15px 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .log-content ul {
+            margin: 0;
+            padding-left: 20px;
+            line-height: 1.7;
+        }
+
+        .log-content li {
+            margin-bottom: 8px;
+        }
+
+        .log-content li:last-child {
+            margin-bottom: 0;
+        }
+
+        .log-image {
+            max-width: 40vw;
+            border-radius: 6px;
+            margin-top: 15px;
+            display: block;
+        }
+
+        /* 隠し要素のクラス */
+        .hidden-log {
+            display: none !important;
         }
     </style>
+    ';
+    include __DIR__ . '/head.php';
+    ?>
 </head>
 
 <body id="app-body">
@@ -48,262 +104,27 @@
 
     <main>
         <h2 class="history fade">Update logs</h2>
-        <div class="card">
-            <dl>
-                <dt>2026-03-29</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>セキュリティ強化,コード行数19207行</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-03-28</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>DB周りの最適化,コード行数19179行</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-03-12</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>Androidアプリをリリース,コード行数17772行</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-03-10</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>スケジュールUI変更,新規スケジュール追加時に必ず未定表示になる問題を修正,管理者画面で全てのスケジュールが未定になる問題を修正,YT自動スケジュール追加の時に既存の10分以内のスケジュールを削除するよう変更,YT自動スケジュール追加を2週間のみに制限,スケジュールにまいちゃんのメモを追加,バックエンドでのセキュリティ強化
-                </dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-03-07</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>Androidアプリ実装準備のためのCSS最適化</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-03-06</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>Safariでの表示、スクロール問題を修正,UI改善</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-03-03</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>複数デバイスでの利便性向上のため、Googleアカウントによるログイン機能を追加,Googleアカウント別でスケジュール追加が可能になる,コード行数15684</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-03-02</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>管理者通知パネルのUIを大幅に改善,通知ダッシュボードのUI改善,クリックで喋る3Dまいちゃん追加,スケジュールにまいちゃんの一言追加,チャンネル登録者数推移の情報を追加,デビューと推し日数に年月表記追加,コード行数約1.4万
-                </dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-02-25</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>スケジュール通知がadminとして通知や履歴を残す問題を修正,youtubeのAPIを大量に使用する不具合を修正</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-02-24</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>bilibli通知(現状配信のみ)追加,スケジュール通知追加</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-02-07</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>週間予定表の編集ページ追加,予定表の自動追加(現時点でYTのみ),rss対応,コード行数12312</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-02-06</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>週間予定表を追加</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-02-05</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>YouTubeのコミュニティ投稿の通知取得方法を変更、通知可能に</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-02-03</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>Twitchの複数通知バグの修正のためステータスのメモリ保存からストレージへの保存に変更</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt>2026-02-01</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>通知するプラットフォームにTwitchを追加,管理者用ログインページからのリダイレクトを修正,管理者通知送信フォームに予約通知追加</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2026-01-16</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>phpを導入し、一部htmlをphpに変更,コード行数10393</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2026-01-15</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>通知履歴最初の5件をhistory.htmlとして生成しておくことにより初期ロードが爆速化,API統合により速度向上</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2026-01-14</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>Node.jsをv20.18.1→v24.13.0に更新,初期ロード時ハンバーガーメニューが即時開けないように1s遅延,初期状態でGiptもTrueになるように変更,速度向上のためスマホでは使われないFontAwesomeを読み込まないように変更,画像ファイルの最適化
-                </dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2026-01-13</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>html,css,jsはキャッシュせず画像ファイルのみキャッシュするようにservice-worker.jsを変更</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2026-01-08</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>Gipt稼働,左からまいちゃんが出現する追加</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2026-01-07</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>PCでのプッシュ通知外部リンク先を新しいタブで開くように変更,メニューよりfooterが前面に出ていたのを修正</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2026-01-06</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>各ページheaderとfooterの統一,Gipt機能停止,メニューバーのスクロール,Update logsの追加</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2025-12-21</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>Gipt追加</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2025-11-29</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>YTコミュニティ以外、全てのプラットフォームで動作確認済み</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2025-11-26</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>リリース,推し日数追加</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2025-11-25</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>横スワイプメニュー開閉,通知履歴プラットフォーム毎表示切り替え</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2025-11-17</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>テスト運用開始,コード行数約5600</dt>
-            </dl>
-        </div>
-        <div class="card">
-            <dl>
-                <dt id="day">2025-11-09</dt>
-            </dl>
-            <div class="bg"></div>
-            <dl>
-                <dt>開発開始</dt>
-            </dl>
-            <img src="/start.png">
-        </div>
+
+        <?php foreach ($updateLogs as $index => $log): ?>
+            <div class="card log-card <?= $index >= 10 ? 'hidden-log' : '' ?>">
+                <div class="log-date"><?= htmlspecialchars($log['date']) ?></div>
+                <div class="log-bg"></div>
+                <div class="log-content">
+                    <ul>
+                        <?php foreach ($log['details'] as $detail): ?>
+                            <li><?= htmlspecialchars($detail) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <?php if (isset($log['image'])): ?>
+                        <img src="<?= htmlspecialchars($log['image']) ?>" class="log-image" alt="Update view">
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+
+        <?php if (count($updateLogs) > 10): ?>
+            <button id="load-more-btn" class="load-more-btn">もっと見る</button>
+        <?php endif; ?>
 
         <a href="../" style="text-decoration:none; color:inherit; display:block;">
             <div style="
@@ -329,302 +150,29 @@
 
     <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/ios-helper.js" defer></script>
-    <script type="module" src="/js/main.js" defer></script>
+    <script type="module" src="/js/main.js?v=<?= @filemtime(__DIR__ . '/js/main.js') ?: time(); ?>" defer></script>
+    <script src="/js/ui-misc.js?v=<?= @filemtime(__DIR__ . '/js/ui-misc.js') ?: time(); ?>" defer></script>
     <script>
-        const btn = document.getElementById('btn-log-settings');
-        const menu = document.getElementById('log-settings-container');
-
-        btn.addEventListener('click', () => {
-            const open = menu.classList.toggle('is-open');
-            btn.setAttribute('aria-expanded', open);
-            menu.setAttribute('aria-hidden', !open);
-        });
-
-        // メニュー外クリックで閉じる
-        document.addEventListener('click', (e) => {
-            if (!btn.contains(e.target) && !menu.contains(e.target)) {
-                menu.classList.remove('is-open');
-                btn.setAttribute('aria-expanded', false);
-                menu.setAttribute('aria-hidden', true);
-            }
-        });
-
-    </script>
-
-    <script>
-        function initOshiDays() {
-            const STORAGE_KEY = "maistart_date";
-            const DEFAULT_DATE = "2020-01-07";
-            const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-            const dateInput = document.getElementById("start");              // header内
-            const meetValueEl = document.getElementById("days-to-meet");     // main内
-            const meetStatItem = meetValueEl?.closest(".stat-item");
-
-            if (!meetValueEl || !meetStatItem) return; // 表示側がないなら何もしない
-            if (!dateInput) return;                    // headerが未挿入なら何もしない（待つ側で保証する）
-
-            function parseYMD(ymd) {
-                if (!ymd) return null;
-                const parts = ymd.split("-").map(Number);
-                if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
-                return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
-            }
-            function stripTime(d) {
-                return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-            }
-            function daysSinceLocal(date) {
-                const now = stripTime(new Date()).getTime();
-                const then = stripTime(date).getTime();
-                return Math.max(0, Math.floor((now - then) / MS_PER_DAY));
-            }
-
-            function loadAndApply() {
-                const stored = localStorage.getItem(STORAGE_KEY);
-                let effective = stored || dateInput.value || null;
-
-                // DEFAULT_DATE を「未設定扱い」
-                if (!effective || effective === DEFAULT_DATE) {
-                    meetStatItem.style.display = "none";
-                    meetValueEl.textContent = "0 日";
-                    if (!stored) dateInput.value = "";
-                    return;
-                }
-
-                const parsed = parseYMD(effective);
-                if (!parsed) {
-                    meetStatItem.style.display = "none";
-                    return;
-                }
-
-                const since = daysSinceLocal(parsed);
-                meetValueEl.textContent = `${since} 日`;
-                meetStatItem.style.display = "";
-                if (dateInput.value !== effective) dateInput.value = effective;
-            }
-
-            function saveDate(value) {
-                if (!value || value === DEFAULT_DATE) localStorage.removeItem(STORAGE_KEY);
-                else localStorage.setItem(STORAGE_KEY, value);
-                loadAndApply();
-            }
-
-            // 多重登録防止
-            if (dateInput.dataset.boundOshiDays === "1") {
-                loadAndApply();
-                return;
-            }
-            dateInput.dataset.boundOshiDays = "1";
-
-            loadAndApply();
-            dateInput.addEventListener("change", (e) => saveDate(e.target.value));
-
-            // 「保存」ボタン（ユーザー名保存と共用）でも保存したいなら
-            const saveBtn = document.getElementById("subscriber-name-submit");
-            if (saveBtn && !saveBtn.dataset.boundOshiDays) {
-                saveBtn.dataset.boundOshiDays = "1";
-                saveBtn.addEventListener("click", () => saveDate(dateInput.value));
-            }
-
-            // 日付跨ぎ対策
-            setInterval(loadAndApply, 60 * 1000);
-        }
-
-
-        (async () => {
-            const load = async (id, url) => {
-                const el = document.getElementById(id);
-                if (!el) return;
-                const res = await fetch(url, { cache: 'no-cache' });
-                el.innerHTML = await res.text();
-            };
-        })();
-    </script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./service-worker.js')
-                .then(reg => console.log('Service Worker 登録成功', reg))
-                .catch(err => console.error('Service Worker 登録失敗', err));
-        }
-
-        // 1. フェードイン用関数（定義するだけ。ロード時は呼ばない）
-        function applyHamburgerSequentialFadeIn() {
-            const menuItems = document.querySelectorAll('#nav-menu > .nav-list > li');
-            const delayIncrement = 100;
-
-            menuItems.forEach((item, index) => {
-                const delay = index * delayIncrement;
-                setTimeout(() => {
-                    item.classList.add('is-faded-in');
-                }, delay);
-            });
-        }
-
         document.addEventListener('DOMContentLoaded', () => {
-            const body = document.getElementById('app-body');
-
-            // 1) 初期はトランジション無効（bodyに class を付けておく）
-            //    ここでは最小遅延で「初回描画を挟んで」トランジションを有効にする。
-            requestAnimationFrame(() => {
-                // 1フレーム待ってからさらに次フレームで class を除去 → トランジションが発火するのは以降の操作だけ
-                requestAnimationFrame(() => {
-                    body.classList.remove('menu-transitions-disabled');
-                });
-            });
-
-            // --- 以下は既存の初期化処理（メニュー初期化等） ---
-            const toggle = document.getElementById('hamburger-toggle');
-            const overlay = document.getElementById('menu-overlay');
-            const notifyToggle = document.getElementById('toggle-notify');
-
-            // メニュー項目集合
-            const menuItems = document.querySelectorAll('#nav-menu > .nav-list > li');
-            // 初期状態として is-faded-in を外しておく（念のため）
-            menuItems.forEach(item => item.classList.remove('is-faded-in'));
-
-            function applyHamburgerSequentialFadeIn() {
-                const delayIncrement = 100;
-                menuItems.forEach((item, index) => {
-                    const delay = index * delayIncrement;
-                    setTimeout(() => {
-                        item.classList.add('is-faded-in');
-                    }, delay);
-                });
-            }
-
-            function toggleMenu(isOpen) {
-                if (isOpen) {
-                    // 開くときはまずクラスを外して確実に 0 → 1 の遷移が発生するように
-                    menuItems.forEach(item => item.classList.remove('is-faded-in'));
-
-                    body.classList.add('menu-open');
-                    toggle.setAttribute('aria-expanded', 'true');
-                    overlay.style.display = 'block';
-
-                    // スライド等の外枠アニメーションがあるなら遅延（既定値の 300ms 等）
-                    setTimeout(() => applyHamburgerSequentialFadeIn(), 300);
-                } else {
-                    body.classList.remove('menu-open');
-                    toggle.setAttribute('aria-expanded', 'false');
-                    overlay.style.display = 'none';
-                    menuItems.forEach(item => item.classList.remove('is-faded-in'));
-                }
-            }
-
-            // --- 右端スワイプでメニュー開閉 ---
-            // 挿入場所: document.addEventListener('DOMContentLoaded', ...) 内、toggleMenu 定義の直後
-            (function installRightEdgeSwipeMenu() {
-                const EDGE_START = 270;
-                const OPEN_THRESHOLD = 60;
-                const CLOSE_THRESHOLD = 60;
-                const MAX_VERTICAL_DELTA = 30;
-                let pointerActive = false;
-                let startX = 0, startY = 0;
-                let trackingForOpen = false;
-                let trackingForClose = false;
-
-                function isMenuOpen() {
-                    return document.body.classList.contains('menu-open');
-                }
-
-                function onPointerDown(e) {
-                    const x = e.clientX || (e.touches && e.touches[0].clientX);
-                    const y = e.clientY || (e.touches && e.touches[0].clientY);
-
-                    startX = x; startY = y;
-                    pointerActive = true;
-                    trackingForOpen = false;
-                    trackingForClose = false;
-
-                    if (!isMenuOpen() && startX >= (window.innerWidth - EDGE_START)) {
-                        trackingForOpen = true;
-                    }
-
-                    if (isMenuOpen()) {
-                        const menu = document.getElementById('nav-menu');
-                        const overlay = document.getElementById('menu-overlay');
-                        const target = e.target || (e.touches && e.touches[0].target);
-
-                        if (overlay && overlay.style.display !== 'none' && overlay.contains(target)) {
-                            trackingForClose = true;
-                        } else if (menu) {
-                            const r = menu.getBoundingClientRect();
-                            if (startX >= r.left && startX <= r.right && startY >= r.top && startY <= r.bottom) {
-                                trackingForClose = true;
-                            }
+            const loadMoreBtn = document.getElementById('load-more-btn');
+            if (loadMoreBtn) {
+                loadMoreBtn.addEventListener('click', () => {
+                    const hiddenLogs = document.querySelectorAll('.hidden-log');
+                    let count = 0;
+                    hiddenLogs.forEach(log => {
+                        if (count < 10) {
+                            log.classList.remove('hidden-log');
+                            count++;
                         }
+                    });
+
+                    // まだ非表示のログが残っているかチェック
+                    if (document.querySelectorAll('.hidden-log').length === 0) {
+                        loadMoreBtn.style.display = 'none';
                     }
-                }
-
-                function onPointerMove(e) {
-                    if (!pointerActive) return;
-
-                    const x = e.clientX || (e.touches && e.touches[0].clientX);
-                    const y = e.clientY || (e.touches && e.touches[0].clientY);
-                    const dx = x - startX;
-                    const dy = y - startY;
-
-                    if (Math.abs(dy) > MAX_VERTICAL_DELTA) {
-                        trackingForOpen = false;
-                        trackingForClose = false;
-                        return;
-                    }
-
-                    if (trackingForOpen && dx < -OPEN_THRESHOLD) {
-                        toggleMenu(true);
-                        trackingForOpen = false;
-                        pointerActive = false;
-                        if (e.cancelable) e.preventDefault();
-                        return;
-                    }
-
-                    if (trackingForClose && dx > CLOSE_THRESHOLD) {
-                        toggleMenu(false);
-                        trackingForClose = false;
-                        pointerActive = false;
-                        if (e.cancelable) e.preventDefault();
-                        return;
-                    }
-                }
-
-                function onPointerUp() {
-                    pointerActive = false;
-                    trackingForOpen = false;
-                    trackingForClose = false;
-                }
-
-                // タッチデバイス優先で登録
-                if ('ontouchstart' in window) {
-                    // タッチデバイスの場合
-                    document.addEventListener('touchstart', onPointerDown, { passive: true });
-                    document.addEventListener('touchmove', onPointerMove, { passive: false }); // passive: false が重要
-                    document.addEventListener('touchend', onPointerUp, { passive: true });
-                    document.addEventListener('touchcancel', onPointerUp, { passive: true });
-                } else if (window.PointerEvent) {
-                    // Pointer Events 対応デバイス
-                    document.addEventListener('pointerdown', onPointerDown, { passive: true });
-                    document.addEventListener('pointermove', onPointerMove, { passive: false });
-                    document.addEventListener('pointerup', onPointerUp, { passive: true });
-                    document.addEventListener('pointercancel', onPointerUp, { passive: true });
-                }
-            })();
-
-            toggle.addEventListener('click', () => {
-                const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
-                toggleMenu(!isExpanded);
-            });
-            overlay.addEventListener('click', () => toggleMenu(false));
-
-            if (notifyToggle) {
-                function updateToggleImage() {
-                    if (notifyToggle.checked) body.classList.add('notifications-enabled');
-                    else body.classList.remove('notifications-enabled');
-                }
-                notifyToggle.addEventListener('change', updateToggleImage);
-                setTimeout(updateToggleImage, 100);
+                });
             }
         });
-
     </script>
 </body>
 
