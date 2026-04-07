@@ -1,6 +1,6 @@
 // service-worker.js (iOS対応版 v3.60 - 履歴Invalidate/互換メッセージ付き)
 
-const VERSION = 'v3.61'; // キャッシュ管理用バージョン
+const VERSION = 'v3.68'; // キャッシュ管理用バージョン
 const CACHE_NAME = `mai-notification-${VERSION}`;
 const ALWAYS_OPEN_NEW_TAB = false;
 

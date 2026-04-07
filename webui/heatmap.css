@@ -1,0 +1,172 @@
+/* webui/heatmap.css */
+.heatmap-wrapper {
+    margin: 20px auto 30px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.71);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+    width: fit-content;
+    max-width: 100%;
+    border: 0.14em solid var(--color-primary);
+}
+
+.heatmap-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.heatmap-title {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: var(--text-color, #eee);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.heatmap-container {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-columns: repeat(53, 12px);
+    grid-template-rows: repeat(7, 12px);
+    gap: 3px;
+    padding-bottom: 5px;
+}
+
+.heatmap-cell {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.heatmap-cell:hover {
+    transform: scale(1.3);
+    z-index: 10;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+}
+
+/* Color Levels (Pink/Purple Theme) */
+.level-0 {
+    background-color: rgba(0, 0, 0, 0.26);
+}
+
+.level-1 {
+    background-color: #580d3d;
+}
+
+.level-2 {
+    background-color: #7c1657;
+}
+
+.level-3 {
+    background-color: #b11e7c;
+}
+
+.level-4 {
+    background-color: #f82cad;
+}
+
+/* Tooltip */
+.heatmap-tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    pointer-events: none;
+    z-index: 1000;
+    white-space: nowrap;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transform: translate(-50%, -100%);
+    margin-top: -10px;
+}
+
+.heatmap-legend {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: #000;
+}
+
+.legend-cells {
+    display: flex;
+    gap: 3px;
+}
+
+.legend-cell {
+    width: 10px;
+    height: 10px;
+    border-radius: 1px;
+}
+
+/* Labels */
+.heatmap-month-labels {
+    display: grid;
+    grid-template-columns: repeat(53, 12px);
+    gap: 3px;
+    margin-bottom: 4px;
+    font-size: 9px;
+    color: #000;
+}
+
+.heatmap-month-labels span {
+    white-space: nowrap;
+}
+
+.heatmap-row-labels {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding-right: 8px;
+    font-size: 9px;
+    color: #000;
+    height: 122px;
+    padding-top: 17px;
+    /* 7 * 12 + 6 * 3 */
+}
+
+.heatmap-flex {
+    display: flex;
+    overflow: hidden;
+}
+
+.heatmap-scroll-container {
+    flex: 1;
+    overflow-x: auto;
+    padding-bottom: 5px;
+}
+
+.heatmap-cell[data-count]:hover {
+    outline: 2px solid var(--color-primary);
+    z-index: 5;
+}
+
+/* スケルトン表示用 */
+.heatmap-cell.skeleton {
+    background-color: #eee !important;
+    animation: heatmap-shimmer 1.5s infinite linear;
+    background: linear-gradient(to right, #eeeeee 8%, #dddddd 18%, #eeeeee 33%);
+    background-size: 800px 104px;
+    position: relative;
+    pointer-events: none;
+}
+
+@keyframes heatmap-shimmer {
+    0% {
+        background-position: -400px 0;
+    }
+
+    100% {
+        background-position: 400px 0;
+    }
+}

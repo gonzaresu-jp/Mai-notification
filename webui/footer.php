@@ -48,9 +48,9 @@
       </picture>
     </a>
 
-    <!-- Twich -->
+    <!-- Twitch -->
     <a class="icon-link" href="https://www.twitch.tv/koinoya_mai" target="_blank" rel="noopener noreferrer"
-      aria-label="TwitCasting" data-tooltip="TwitCasting">
+      aria-label="Twitch" data-tooltip="Twitch">
       <picture>
         <source srcset="https://assets.twitch.tv/assets/favicon-32-e29e246c157142c94346.png" type="image/png">
         <img src="https://assets.twitch.tv/assets/favicon-32-e29e246c157142c94346.png" alt="">
@@ -103,5 +103,5 @@
     </a>
 
   </div>
-  <p><a href="/logs">Last updated 2026-03-29</a></p>
+  <p><a href="/logs">Last updated 2026-04-05</a></p>
 </footer>

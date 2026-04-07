@@ -3,64 +3,15 @@
 <html lang="ja">
 
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <?php
+    $extraHead = '<link rel="preload" href="./top-card.css?v=2.63" as="style" onload="this.onload=null;this.rel=\'stylesheet\'" />'
+        . '<noscript><link rel="stylesheet" href="./top-card.css?v=2.63" /></noscript>';
+    include __DIR__ . '/head.php';
+    ?>
 
-    <!-- =====================================================
-         SEO: タイトル・概要
-         ===================================================== -->
-    <title>まいちゃん通知 | 恋乃夜まい 配信・活動通知サービス</title>
-    <meta name="description"
-        content="恋乃夜まい（koinoyamai）の配信・活動をリアルタイムで通知する非公式ファンサービス。YouTube・TwitCasting・Twitch・Twitter・Pixiv Fanboxなど複数プラットフォームに対応。" />
-    <meta name="keywords"
-        content="恋乃夜まい,koinoyamai,まいちゃん,まいちゃん通知,配信通知,ライブ通知,YouTube通知,TwitCasting,Twitch,Vtuber,バーチャルYouTuber,ファンサイト" />
 
-    <!-- canonical：重複URLペナルティ防止 -->
-    <link rel="canonical" href="https://mai.honna-yuzuki.com/" />
-
-    <!-- robots（デフォルト許可。必要に応じて noindex に変更） -->
-    <meta name="robots" content="index, follow" />
-
-    <!-- =====================================================
-         OGP（Open Graph）
-         ===================================================== -->
-    <meta property="og:url" content="https://mai.honna-yuzuki.com/" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="まいちゃん通知 | 恋乃夜まい 配信・活動通知サービス" />
-    <meta property="og:description"
-        content="恋乃夜まい（koinoyamai）の配信・活動をリアルタイムで通知する非公式ファンサービス。YouTube・TwitCasting・Twitch・Twitter・Pixiv Fanboxなど複数プラットフォームに対応。" />
-    <meta property="og:site_name" content="まいちゃん通知" />
-    <meta property="og:image" content="https://mai.honna-yuzuki.com/social.jpg" />
-    <meta property="og:image:alt" content="まいちゃん通知 ロゴ" />
-    <meta property="og:locale" content="ja_JP" />
-
-    <!-- =====================================================
-         Twitter Card
-         ===================================================== -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@Yuzuki_Mai_17" />
-    <meta name="twitter:title" content="まいちゃん通知 | 恋乃夜まい 配信・活動通知サービス" />
-    <meta name="twitter:description"
-        content="恋乃夜まい（koinoyamai）の配信・活動をリアルタイムで通知する非公式ファンサービス。YouTube・TwitCasting・Twitch・Twitter・Pixiv Fanboxなど複数プラットフォームに対応。" />
-    <meta name="twitter:image" content="https://mai.honna-yuzuki.com/social.jpg" />
-    <meta name="twitter:image:alt" content="まいちゃん通知 ロゴ" />
-
-    <!-- =====================================================
-         iOS / PWA 対応
-         ===================================================== -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="まいちゃん通知" />
-    <meta name="mobile-web-app-capable" content="yes" />
-
-    <!-- =====================================================
-         アイコン / manifest
-         ===================================================== -->
-    <link rel="icon" href="./icon.webp" />
-    <link rel="apple-touch-icon" href="./icon-192.webp" />
-    <link rel="apple-touch-icon" sizes="192x192" href="./icon-192.webp" />
-    <link rel="apple-touch-icon" sizes="512x512" href="./icon-512.webp" />
     <link rel="manifest" href="./manifest.json" />
+    <link rel="stylesheet" href="./heatmap.css?v=<?= @filemtime(__DIR__ . '/heatmap.css') ?: time(); ?>" />
 
     <!-- =====================================================
          構造化データ（JSON-LD）
@@ -82,17 +33,10 @@
     }
     </script>
 
-    <!-- =====================================================
-         CSS
-         ===================================================== -->
-    <link rel="stylesheet" href="./style.v3.00.css" />
-    <link rel="stylesheet" href="./top-card.v2.58.css" />
 
     <!-- =====================================================
          preconnect（実際に外部フェッチが発生するホストのみ）
-         FontAwesome はセルフホスト済みなので不要
          ===================================================== -->
-    <link rel="preconnect" href="https://elza.poitou-mora.ts.net" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- api.honna-yuzuki.com など API ホストが別ドメインの場合はここに追加 -->
@@ -103,10 +47,7 @@
     <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/ios-helper.js" defer></script>
 
-    <!-- FontAwesome（セルフホスト） -->
-    <link rel="stylesheet" href="/fontawesome-free-7.2.0-web/css/all.min.css" crossorigin="anonymous" />
-
-    <!-- Fonts -->
+    <!-- Fonts: display=swap でブロッディング軽減 -->
     <link href="https://fonts.googleapis.com/css2?family=Kaisei+Tokumin&display=swap" rel="stylesheet" />
 
     <!-- google -->
@@ -120,21 +61,27 @@
         <?php include __DIR__ . '/header.php'; ?>
     </section>
 
+    <!-- SEO用 H1（デザインを損なわないよう視覚的に非表示、または整合性を保つ） -->
+    <h1
+        style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;">
+        恋乃夜まい 活動通知サービス（Koinoya Mai Notification）</h1>
+
     <!-- 左画像パネル -->
     <div class="left-mai">
         <button class="btn btn-flat open" type="button" aria-label="パネルを開く" aria-expanded="false"
             aria-controls="left-mai-main">
-            <i class="fa-solid fa-angle-right" style="color: #040300;" aria-hidden="true"></i>
+            <i class="fa-solid fa-angle-right" aria-hidden="true"></i>
         </button>
         <div class="mask">
-            <img src="./left-mai.webp" alt="まいちゃん" fetchpriority="high" />
+            <img src="./left-mai.webp" alt="まいちゃん" fetchpriority="high" width="473" height="1024" />
         </div>
 
         <main id="left-mai-main">
 
             <!-- ✅ stats-card に role="region" + aria-label -->
             <div class="stats-card bg-blur" role="region" aria-label="統計情報">
-                <img src="./3dmai.webp" alt="" class="count-bg-mai" aria-hidden="true" />
+                <img src="./3dmai.webp" alt="" class="count-bg-mai" aria-hidden="true" width="384" height="512"
+                    loading="lazy" />
 
                 <!-- ✅ カルーセルに role="region" + aria-label、ドットに role="tablist" -->
                 <div class="stats-carousel" role="region" aria-label="情報カルーセル" aria-roledescription="carousel">
@@ -317,14 +264,15 @@
                     </div><!-- /.stats-carousel-view -->
                 </div><!-- /.stats-carousel -->
             </div><!-- /.stats-card -->
-            <!-- ✅ カルーセルドットに role="tablist" -->
-            <div class="carousel-dots" role="tablist" aria-label="スライド切り替え"></div>
+            <!-- ✅ カルーセルドットに role="group" -->
+            <div class="carousel-dots" role="group" aria-label="スライド切り替え"></div>
             <!-- JavaScript読み込み -->
             <script src="/js/weekly-schedule.js?v=<?= @filemtime(__DIR__ . '/js/weekly-schedule.js') ?: time(); ?>"
                 defer></script>
             <script>
                 document.addEventListener('DOMContentLoaded', () => {
                     loadWeeklySchedule('weekly-schedule');
+                    loadNotificationHeatmap('notification-heatmap');
                     enableAutoReload(5);
                 });
             </script>
@@ -332,15 +280,22 @@
             <!-- ✅ section + aria-labelledby（セマンティック改善） -->
             <section class="log-section" aria-labelledby="log-heading">
                 <h2 class="history fade" id="log-heading">通知履歴</h2>
+                <div id="notification-heatmap" class="heatmap-wrapper fade d3" role="region" aria-label="通知貢献グラフ"></div>
 
                 <!-- ✅ role="toolbar" でボタン群の意味を明示 -->
                 <div class="controls" role="toolbar" aria-label="ログ操作">
                     <div class="controls-left">
-                        <button id="btn-refresh" class="fade d2" type="button"><i
+                        <button id="btn-refresh" class="fade d2 toolbar-btn" type="button" aria-label="履歴を更新"><i
                                 class="fa-solid fa-arrow-rotate-right"></i></button>
                     </div>
-                    <button id="btn-log-settings" class="fade d2" type="button" aria-expanded="false"
-                        aria-controls="log-settings-container"><i class="fa-solid fa-filter"></i></button>
+                    <div class="controls-right">
+                        <button id="btn-link-settings" class="fade d2 toolbar-btn" type="button" aria-expanded="false"
+                            aria-controls="link-settings-container" aria-label="リンク先カスタム設定を開く"><i
+                                class="fa-solid fa-link"></i></button>
+                        <button id="btn-log-settings" class="fade d2 toolbar-btn" type="button" aria-expanded="false"
+                            aria-controls="log-settings-container" aria-label="ログ設定を開く"><i
+                                class="fa-solid fa-filter"></i></button>
+                    </div>
 
                     <div id="log-settings-container" class="log-settings-container" aria-hidden="true">
                         <ul class="view-list" role="list">
@@ -459,6 +414,60 @@
                         </ul>
                     </div>
 
+                    <!-- リンク設定コンテナ -->
+                    <div id="link-settings-container" class="log-settings-container" aria-hidden="true"
+                        style="min-width: 260px;">
+                        <h3
+                            style="font-size: 0.9rem; margin-bottom: 10px; border-bottom: 1px solid var(--color-primary); padding-bottom: 4px;">
+                            リンク先カスタム設定</h3>
+                        <p style="font-size: 0.75rem; color: #666; margin-bottom: 12px; line-height: 1.4;">
+                            通知のリンク先を独自の形式に変換できます。<br>
+                            <code>{url}</code> は元のURLに置換されます。<br>
+                            例: <code>vnd.youtube://{url}</code>
+                        </p>
+                        <ul class="view-list" role="list" style="gap: 12px;">
+                            <li>
+                                <label class="link-setting-item">
+                                    <span class="filter-label">YouTube</span>
+                                    <input type="text" id="link-youtube" class="link-template-input"
+                                        placeholder="元のURLを使用" aria-label="YouTube リンクテンプレート">
+                                </label>
+                            </li>
+                            <li>
+                                <label class="link-setting-item">
+                                    <span class="filter-label">TwitCasting</span>
+                                    <input type="text" id="link-twitcasting" class="link-template-input"
+                                        placeholder="元のURLを使用" aria-label="TwitCasting リンクテンプレート">
+                                </label>
+                            </li>
+                            <li>
+                                <label class="link-setting-item">
+                                    <span class="filter-label">Twitch</span>
+                                    <input type="text" id="link-twitch" class="link-template-input"
+                                        placeholder="元のURLを使用" aria-label="Twitch リンクテンプレート">
+                                </label>
+                            </li>
+                            <li>
+                                <label class="link-setting-item">
+                                    <span class="filter-label">Twitter</span>
+                                    <input type="text" id="link-twitter" class="link-template-input"
+                                        placeholder="元のURLを使用" aria-label="Twitter リンクテンプレート">
+                                </label>
+                            </li>
+                            <li>
+                                <label class="link-setting-item">
+                                    <span class="filter-label">その他</span>
+                                    <input type="text" id="link-other" class="link-template-input"
+                                        placeholder="元のURLを使用" aria-label="その他プラットフォーム リンクテンプレート">
+                                </label>
+                            </li>
+                            <li style="margin-top: 8px; text-align: right;">
+                                <button id="btn-save-links" class="load-more-btn"
+                                    style="margin: 0; padding: 6px 16px; font-size: 0.85rem; width: 100%;">設定を保存</button>
+                            </li>
+                        </ul>
+                    </div>
+
                     <!-- ✅ display:none の select はそのまま保持（JSから参照されるため） -->
                     <select id="limit" style="display:none;" aria-hidden="true" tabindex="-1">
                         <option value="5">初期表示</option>
@@ -467,10 +476,10 @@
                 </div>
 
                 <div id="logs" class="log-container" aria-live="polite" aria-atomic="false">
-                    <?php include __DIR__ . '/history.html'; ?>
+                    <p class="status-message info-message">履歴を読み込んでいます...</p>
                 </div>
 
-                <button id="more-logs-button" style="display:none;" type="button"
+                <button id="more-logs-button" class="load-more-btn" type="button"
                     aria-label="さらに通知履歴を読み込む">もっと見る</button>
                 <!-- ✅ role="status" + aria-live で読み込み状態をスクリーンリーダーに通知 -->
                 <div id="status" class="muted" role="status" aria-live="polite"></div>
@@ -493,6 +502,7 @@
     <script type="module" src="/js/main.js?v=<?= @filemtime(__DIR__ . '/js/main.js') ?: time(); ?>" defer></script>
     <script src="/js/auth-settings-bridge.js?v=<?= @filemtime(__DIR__ . '/js/auth-settings-bridge.js') ?: time(); ?>"
         defer></script>
+    <script src="/js/heatmap.js?v=<?= @filemtime(__DIR__ . '/js/heatmap.js') ?: time(); ?>" defer></script>
 
 </body>
 
