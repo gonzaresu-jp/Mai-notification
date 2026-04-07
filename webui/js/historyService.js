@@ -8,7 +8,7 @@ const jsonCache = {
   data: null,
   timestamp: 0,
   ttl: 5000, // 5秒
-  limit: 20  // JSONの最大件数
+  limit: 50  // JSONの最大件数 (server.jsのHISTORY_JSON_LIMITと合わせる)
 };
 
 // =========================
@@ -51,6 +51,51 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+/**
+ * URLをユーザー指定のテンプレートに基づいて変換する
+ * @param {string} url 元のURL
+ * @param {string} platform プラットフォーム名
+ * @returns {string} 変換後のURL
+ */
+function transformUrl(url, platform) {
+  if (!url) return url;
+  
+  let settings;
+  try {
+    const raw = localStorage.getItem('platformSettings');
+    settings = raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return url;
+  }
+  
+  if (!settings || !settings.customLinks) return url;
+
+  // normalizePlatformName は config.js からインポート済み
+  const p = normalizePlatformName(platform || '').toLowerCase();
+  
+  const mapping = {
+    'twitcasting': 'twitcasting',
+    'youtube': 'youtube',
+    'twitch': 'twitch',
+    'twitter': 'twitter',
+    'fanbox': 'other',
+    'pixiv': 'other',
+    'gipt': 'other',
+    'bilibili': 'other',
+    'milestone': 'other',
+    'schedule': 'other'
+  };
+
+  const linkKey = mapping[p] || 'other';
+  const template = settings.customLinks[linkKey];
+
+  if (!template || !template.trim() || !template.includes('{url}')) {
+    return url;
+  }
+
+  return template.replace(/\{url\}/g, url);
+}
+
 // =========================
 // UI生成
 // =========================
@@ -74,8 +119,11 @@ export function createLogItem(log) {
   const safeTitle = escapeHtml(log.title || '通知');
   const safeBody = escapeHtml(log.body || 'メッセージなし');
   
-  const titleHtml = log.url
-    ? `<a href="${escapeHtml(log.url)}" target="_blank" rel="noopener noreferrer">${safeTitle}</a>`
+  // URLのカスタム変換を適用
+  const displayUrl = transformUrl(log.url, log.platform);
+
+  const titleHtml = displayUrl
+    ? `<a href="${escapeHtml(displayUrl)}" target="_blank" rel="noopener noreferrer">${safeTitle}</a>`
     : safeTitle;
 
   const statusClass = log.status === 'fail' ? ' status-fail' : '';
@@ -138,7 +186,6 @@ function shouldIncludeLog(log, settings) {
   if (!log) return false;
   if (!settings) return true;
 
-  // すべて false → フィルタ未適用
   const anyEnabled = Object.values(settings).some(Boolean);
   if (!anyEnabled) return true;
 
@@ -181,37 +228,24 @@ async function fetchJsonWithTimeout(url, { timeoutMs = 8000, noStore = false } =
 async function fetchHistoryFromJson(settings, pageLimit) {
   const now = Date.now();
   
-  // キャッシュチェック
   if (jsonCache.data && (now - jsonCache.timestamp < jsonCache.ttl)) {
-    console.log('[fetchHistoryFromJson] JSONキャッシュヒット');
     return jsonCache.data;
   }
 
-  console.log('[fetchHistoryFromJson] JSONファイル取得開始');
-  
   try {
     const res = await fetchJsonWithTimeout('/history.json', {
       timeoutMs: 5000,
       noStore: true
     });
 
-    if (!res.ok) {
-      throw new Error(`JSON fetch failed: ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`JSON fetch failed: ${res.status}`);
 
     const data = await res.json();
-    
-    if (!Array.isArray(data.logs)) {
-      throw new Error('Invalid JSON format');
-    }
+    if (!Array.isArray(data.logs)) throw new Error('Invalid JSON format');
 
-    // キャッシュに保存
     jsonCache.data = data;
     jsonCache.timestamp = now;
-
-    console.log(`[fetchHistoryFromJson] JSON取得成功 (${data.logs.length}件)`);
     return data;
-
   } catch (e) {
     console.warn('[fetchHistoryFromJson] JSON取得失敗:', e.message);
     return null;
@@ -219,162 +253,119 @@ async function fetchHistoryFromJson(settings, pageLimit) {
 }
 
 // =========================
-// 履歴取得のメイン関数（修正版）
+// 履歴取得のメイン関数
 // =========================
 export async function fetchHistory($logsEl, $statusEl, { append = false, useCache = true } = {}) {
-  if (PAGING.loading) {
-    console.log('[fetchHistory] 既にロード中');
-    return;
-  }
+  if (PAGING.loading) return;
 
   const startTime = performance.now();
-
-  // =========================
-  // 初回：HTML / history.json 先行表示
-  // =========================
-  const existingCards = $logsEl.querySelectorAll('.card:not(.skeleton-card)').length;
-  if (!append && useCache && $logsEl?.dataset.source === 'html') {
-    console.log('[fetchHistory] HTML/JSON先行表示を採用');
-
-    PAGING.initialized = true;
-    PAGING.loading = false;
-
-    const visibleCards = $logsEl.querySelectorAll('.card:not(.filtered-out)').length;
-
-    PAGING.displayedCount = visibleCards;
-    PAGING.offset = visibleCards;
-    PAGING.hasMore = visibleCards >= (PAGING.limit || 5);
-
-    const $btnMore = document.getElementById('more-logs-button');
-    if ($btnMore) $btnMore.style.display = PAGING.hasMore ? 'block' : 'none';
-
-    if ($statusEl) {
-      $statusEl.textContent = `表示中: ${PAGING.displayedCount}`;
-      $statusEl.className = 'status-message success-message';
-    }
-
-    return;
-  }
-
-  // =========================
-  // 通常ロード開始
-  // =========================
   PAGING.loading = true;
   PAGING.initialized = true;
 
   const pageLimit = PAGING.limit || 5;
   const clientId = getClientId();
 
+  if (!append) {
+    PAGING.offset = 0;
+    PAGING.displayedCount = 0;
+    if ($logsEl) {
+      $logsEl.innerHTML = renderHistorySkeleton();
+    }
+  }
+
   const settings =
     (typeof window.getCurrentFilterSettings === 'function')
       ? window.getCurrentFilterSettings()
       : getCurrentFilterSettingsFallback();
 
-  const collectedLogs = [];
+  let collectedLogs = [];
+  let rawProcessedCount = 0;
   let totalCount = 0;
   let hasMore = false;
 
   try {
-    // =========================
-    // JSON キャッシュ範囲
-    // =========================
-    if (!append || PAGING.offset < jsonCache.limit) {
+    // 1. JSONキャッシュ/ファイルから取得
+    if (PAGING.offset < jsonCache.limit) {
       const jsonData = await fetchHistoryFromJson(settings, pageLimit);
-
       if (jsonData && Array.isArray(jsonData.logs)) {
-        const startIdx = append ? PAGING.offset : 0;
-
-        for (let i = startIdx; i < jsonData.logs.length; i++) {
+        const startIdx = PAGING.offset;
+        let i = startIdx;
+        while (i < jsonData.logs.length && collectedLogs.length < pageLimit) {
           const log = jsonData.logs[i];
           if (shouldIncludeLog(log, settings)) {
             collectedLogs.push(log);
-            if (collectedLogs.length >= pageLimit) break;
           }
+          i++;
         }
-
+        rawProcessedCount = i - startIdx;
         totalCount = jsonData.total ?? jsonData.logs.length;
-
-        const nextOffset = startIdx + collectedLogs.length;
-        hasMore = nextOffset < totalCount;
-
-        console.log(`[fetchHistory] JSON使用: ${collectedLogs.length}件取得`);
+        hasMore = i < totalCount || totalCount > jsonData.logs.length;
       }
     }
 
-    // =========================
-    // DB API フォールバック
-    // =========================
-    if (append && PAGING.offset >= jsonCache.limit && collectedLogs.length < pageLimit) {
-      console.log('[fetchHistory] JSON範囲超過 → DB APIへ切り替え');
+    // 2. もし追加が必要ならDB APIから取得
+    // JSONの末尾に達したか、最初からJSONの範囲外の場合
+    if (collectedLogs.length < pageLimit && (PAGING.hasMore || !PAGING.initialized)) {
+      const needed = pageLimit - collectedLogs.length;
+      const dbOffset = PAGING.offset + rawProcessedCount;
 
-      const dbOffset = PAGING.offset - jsonCache.limit;
-      const url =
-        `${API.HISTORY}?clientId=${encodeURIComponent(clientId || '')}` +
-        `&limit=${encodeURIComponent(pageLimit)}` +
-        `&offset=${encodeURIComponent(dbOffset)}`;
+      // フィルタによる空振りを防ぐため、少し多めに取得する（最大50）
+      const apiLimit = Math.min(needed * 5, 50);
 
-      const res = await fetchJsonWithTimeout(url, {
-        timeoutMs: 8000,
-        noStore: true
-      });
-
-      if (!res.ok) {
-        throw new Error(`DB fetch failed: ${res.status}`);
-      }
-
-      const data = await res.json();
-
-      if (Array.isArray(data.logs)) {
-        for (const log of data.logs) {
-          if (shouldIncludeLog(log, settings)) {
-            collectedLogs.push(log);
-            if (collectedLogs.length >= pageLimit) break;
+      const url = `${API.HISTORY}?clientId=${encodeURIComponent(clientId || '')}&limit=${apiLimit}&offset=${dbOffset}`;
+      
+      const res = await fetchJsonWithTimeout(url, { timeoutMs: 8000, noStore: true });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.logs)) {
+          let j = 0;
+          while (j < data.logs.length && collectedLogs.length < pageLimit) {
+            const log = data.logs[j];
+            if (shouldIncludeLog(log, settings)) {
+              collectedLogs.push(log);
+            }
+            j++;
           }
+          // 重要：実際に「使用または検討した」件数分だけオフセットを進める
+          rawProcessedCount += j;
         }
+        totalCount = data.total ?? totalCount;
+        // DB上の全件数と比較して次があるか判定
+        hasMore = (dbOffset + (Array.isArray(data.logs) ? data.logs.length : 0)) < totalCount;
       }
-
-      totalCount = data.total ?? totalCount;
-      hasMore = true;
-
-      console.log(`[fetchHistory] DB使用: ${collectedLogs.length}件取得`);
     }
 
-    // =========================
-    // 描画
-    // =========================
-    if ($logsEl && collectedLogs.length > 0) {
-      const html = collectedLogs.map(createLogItem).join('');
-
+    // 3. 描画処理
+    if ($logsEl) {
       if (!append) {
-        $logsEl.querySelectorAll('.skeleton-card').forEach(s => s.remove());
-        $logsEl.innerHTML = html;
+        $logsEl.innerHTML = '';
         $logsEl.classList.add('loaded');
-      } else {
-        $logsEl.insertAdjacentHTML('beforeend', html);
+        delete $logsEl.dataset.source;
       }
 
-      requestAnimationFrame(() => applySequentialFadeIn());
+      if (collectedLogs.length > 0) {
+        const html = collectedLogs.map(createLogItem).join('');
+        $logsEl.insertAdjacentHTML('beforeend', html);
+        requestAnimationFrame(() => applySequentialFadeIn());
+      } else if (!append) {
+        $logsEl.innerHTML = '<p class="status-message info-message">表示できる履歴はありません</p>';
+      }
     }
 
-    // =========================
-    // 状態更新
-    // =========================
-    PAGING.offset += collectedLogs.length;
-
-    const visibleCards = $logsEl
-      ? $logsEl.querySelectorAll('.card:not(.filtered-out)').length
-      : 0;
-
+    // 4. 状態更新
+    PAGING.offset += rawProcessedCount;
+    const visibleCards = $logsEl ? $logsEl.querySelectorAll('.card:not(.filtered-out)').length : 0;
     PAGING.displayedCount = visibleCards;
     PAGING.hasMore = hasMore;
 
     const $btnMore = document.getElementById('more-logs-button');
-    if ($btnMore) $btnMore.style.display = PAGING.hasMore ? 'block' : 'none';
+    if ($btnMore) {
+      $btnMore.style.display = PAGING.hasMore ? 'block' : 'none';
+    }
 
     if ($statusEl) {
       const loadTimeSec = (performance.now() - startTime) / 1000;
-      $statusEl.textContent =
-        `表示中: ${PAGING.displayedCount} / サーバ総数: ${totalCount} (${loadTimeSec.toFixed(2)}秒)`;
+      $statusEl.textContent = `表示中: ${PAGING.displayedCount} / 総数: ${totalCount} (${loadTimeSec.toFixed(2)}秒)`;
       $statusEl.className = 'status-message success-message';
     }
 
@@ -383,24 +374,32 @@ export async function fetchHistory($logsEl, $statusEl, { append = false, useCach
     }
 
   } catch (e) {
-    console.error('[fetchHistory] failed:', e);
-
+    console.error('[fetchHistory] 失敗:', e);
     if ($statusEl) {
-      let msg = '履歴の取得に失敗しました';
-
-      if (e?.message?.includes('502')) {
-        msg = 'サーバーが一時的に応答していません。';
-      } else if (e?.name === 'AbortError' || e?.message?.toLowerCase().includes('timeout')) {
-        msg = '通信がタイムアウトしました。';
-      }
-
-      $statusEl.textContent = msg;
+      $statusEl.textContent = '履歴の取得に失敗しました';
       $statusEl.className = 'status-message error-message';
     }
-
   } finally {
     PAGING.loading = false;
   }
+}
+
+function renderHistorySkeleton(count = 5) {
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    html += `
+      <div class="skeleton-card">
+        <div class="skeleton-box skeleton-icon"></div>
+        <div class="skeleton-content">
+          <div class="skeleton-box skeleton-line title"></div>
+          <div class="skeleton-box skeleton-line"></div>
+          <div class="skeleton-box skeleton-line" style="width: 80%"></div>
+          <div class="skeleton-box skeleton-line meta"></div>
+        </div>
+      </div>
+    `;
+  }
+  return html;
 }
 
 // =========================
@@ -418,8 +417,6 @@ export function fetchHistoryMore($logsEl, $statusEl) {
 export function clearJsonCache() {
   jsonCache.data = null;
   jsonCache.timestamp = 0;
-  console.log('[clearJsonCache] JSONキャッシュをクリア');
 }
 
-// 後方互換
 export const clearHistoryCache = clearJsonCache;

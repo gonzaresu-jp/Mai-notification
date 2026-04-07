@@ -21,7 +21,14 @@ export function getPlatformSettings() {
     schedule: document.getElementById('toggle-schedule')?.classList.contains('is-on') || false,
     gipt: document.getElementById('toggle-gipt')?.classList.contains('is-on') || false,
     twitch: document.getElementById('toggle-twitch')?.classList.contains('is-on') || false,
-    bilibili: document.getElementById('toggle-bilibili')?.classList.contains('is-on') || false
+    bilibili: document.getElementById('toggle-bilibili')?.classList.contains('is-on') || false,
+    customLinks: {
+      youtube: document.getElementById('link-youtube')?.value || '',
+      twitcasting: document.getElementById('link-twitcasting')?.value || '',
+      twitch: document.getElementById('link-twitch')?.value || '',
+      twitter: document.getElementById('link-twitter')?.value || '',
+      other: document.getElementById('link-other')?.value || ''
+    }
   };
 }
 
@@ -262,6 +269,23 @@ export function applySettingsToUI(settings) {
     btn.classList.toggle('is-on', !!value);
     const label = (btn.textContent || btnId).split(':')[0];
     btn.textContent = `${label}: ${value ? 'ON' : 'OFF'}`;
+  }
+
+  // カスタムリンク入力欄の反映
+  if (settings.customLinks) {
+    const linkMap = {
+      youtube: 'link-youtube',
+      twitcasting: 'link-twitcasting',
+      twitch: 'link-twitch',
+      twitter: 'link-twitter',
+      other: 'link-other'
+    };
+    for (const [key, fieldId] of Object.entries(linkMap)) {
+      const input = document.getElementById(fieldId);
+      if (input) {
+        input.value = settings.customLinks[key] || '';
+      }
+    }
   }
 }
 

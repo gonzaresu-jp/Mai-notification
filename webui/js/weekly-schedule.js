@@ -675,18 +675,18 @@ function installScheduleControls() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // クリックした日が属する月曜日を求める
+    // クリックした日が属する日曜日を求める
     const dow = clickedDate.getDay();
-    const mondayOfClicked = new Date(clickedDate);
-    mondayOfClicked.setDate(clickedDate.getDate() - (dow === 0 ? 6 : dow - 1));
+    const sundayOfClicked = new Date(clickedDate);
+    sundayOfClicked.setDate(clickedDate.getDate() - dow);
 
-    // 今週の月曜日を求める
+    // 今週の日曜日を求める
     const todayDow = today.getDay();
-    const mondayOfToday = new Date(today);
-    mondayOfToday.setDate(today.getDate() - (todayDow === 0 ? 6 : todayDow - 1));
+    const sundayOfToday = new Date(today);
+    sundayOfToday.setDate(today.getDate() - todayDow);
 
     // 何週分ずれているか
-    const weekDiffMs = mondayOfClicked.getTime() - mondayOfToday.getTime();
+    const weekDiffMs = sundayOfClicked.getTime() - sundayOfToday.getTime();
     currentWeekOffset = Math.round(weekDiffMs / (1000 * 60 * 60 * 24 * 7));
 
     // ビューを週間に切り替え
@@ -776,12 +776,12 @@ function updateCurrentLabel() {
     const d = new Date();
     d.setDate(d.getDate() + currentWeekOffset * 7);
     const dow = d.getDay();
-    const mon = new Date(d);
-    mon.setDate(d.getDate() - dow + (dow === 0 ? -6 : 1));
-    const sun = new Date(mon);
-    sun.setDate(mon.getDate() + 6);
+    const sunStart = new Date(d);
+    sunStart.setDate(d.getDate() - dow);
+    const satEnd = new Date(sunStart);
+    satEnd.setDate(sunStart.getDate() + 6);
     const fmt = (x) => `${x.getMonth() + 1}/${x.getDate()}`;
-    if (el) el.textContent = `${fmt(mon)}〜${fmt(sun)}`;
+    if (el) el.textContent = `${fmt(sunStart)}〜${fmt(satEnd)}`;
     if (monthLabel) {
       monthLabel.textContent = '';
       monthLabel.style.display = 'none';
@@ -869,15 +869,15 @@ async function loadMonthlySchedule(containerId = 'weekly-schedule') {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
 
-  // 表示する最初の月曜日を計算（月初を含む週の月曜）
+  // 表示する最初の日曜日を計算（月初を含む週の日曜）
   const startDow = firstDay.getDay(); // 0=日
   const calStart = new Date(firstDay);
-  calStart.setDate(1 - (startDow === 0 ? 6 : startDow - 1));
+  calStart.setDate(1 - startDow);
 
-  // 表示する最後の日曜日（月末を含む週の日曜）
+  // 表示する最後の土曜日（月末を含む週の土曜）
   const endDow = lastDay.getDay();
   const calEnd = new Date(lastDay);
-  calEnd.setDate(lastDay.getDate() + (endDow === 0 ? 0 : 7 - endDow));
+  calEnd.setDate(lastDay.getDate() + (6 - endDow));
 
   // 週ごとに代表日を収集
   const weekDates = [];
