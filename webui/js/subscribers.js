@@ -42,6 +42,7 @@
       isMan:    true,          // true = 万単位の小数値、false = 整数の人数
       milestones: [10, 20, 30], // 縦線を引く値（万単位 or 人単位で揃える）
       debutDate: '2021/03/23',
+      enabled:  true,
     },
     {
       id:       'youtube-sub',
@@ -52,6 +53,7 @@
       isMan:    true,
       milestones: [0.5, 1.0, 2.0],
       debutDate: null,
+      enabled:  true,
     },
     {
       id:       'twitch',
@@ -62,6 +64,7 @@
       isMan:    false,
       milestones: [1000, 5000, 10000],
       debutDate: null,
+      enabled:  false,  // データファイル未作成のためスキップ（404回避）
     },
   ];
 
@@ -85,6 +88,11 @@
   /* ===== txtファイルの取得 ===== */
   async function loadPlatform(platform) {
     if (dataCache[platform.id] !== undefined) return;
+    // enabled=false のプラットフォームはデータなし扱い（404回避）
+    if (!platform.enabled) {
+      dataCache[platform.id] = [];
+      return;
+    }
     try {
       const res = await fetch(platform.path, { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP ' + res.status);

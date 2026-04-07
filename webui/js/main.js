@@ -4,7 +4,7 @@ import { PAGING, getClientId } from './config.js?v=20260403';
 import { initPush, unsubscribePush, sendTestToMe, sendSubscriptionToServer } from './pushService.js?v=20260312a';
 import { savePlatformSettings, getPlatformSettings } from './settingsService.js?v=20260312c';
 import { saveNameToServer, initSubscriberNameUI } from './subscriberService.js?v=20260312a';
-import { fetchHistory, fetchHistoryMore, clearJsonCache } from './historyService.js?v=20260312a';
+import { fetchHistory, fetchHistoryMore, clearJsonCache } from './historyService.js?v=20260407a';
 import { initLogFilterSettings } from './filterService.js?v=20260312a';
 import {
   updateToggleImage,
@@ -127,14 +127,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   $status = document.getElementById('status');
 
   if (!$logs || !$status) {
-    console.error('履歴UI要素が不足しています');
-    return;
-  }
-
-  /* === 初回履歴取得（最優先） === */
-  if (!hasInitialHistoryLoaded) {
-    hasInitialHistoryLoaded = true;
-    fetchHistory($logs, $status, { append: false, useCache: true });
+    console.warn('[Main] 履歴UI要素が不足しているため履歴取得機能はスキップします');
+  } else {
+    /* === 初回履歴取得（最優先） === */
+    if (!hasInitialHistoryLoaded) {
+      hasInitialHistoryLoaded = true;
+      fetchHistory($logs, $status, { append: false, useCache: true });
+    }
   }
 
   /* =========================
@@ -283,6 +282,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         autoTimer = setInterval(() => refreshHistory({ force: true }), 30000);
       } else {
         clearInterval(autoTimer);
+      }
+    });
+  }
+
+  /* --- リンク設定保存 --- */
+  const $btnSaveLinks = document.getElementById('btn-save-links');
+  if ($btnSaveLinks) {
+    $btnSaveLinks.addEventListener('click', async () => {
+      if ($btnSaveLinks.disabled) return;
+      $btnSaveLinks.disabled = true;
+      const originalText = $btnSaveLinks.textContent;
+      $btnSaveLinks.textContent = '保存中...';
+
+      try {
+        const success = await savePlatformSettings();
+        if (success) {
+          $btnSaveLinks.textContent = '保存完了！';
+          setTimeout(() => {
+            $btnSaveLinks.textContent = originalText;
+            $btnSaveLinks.disabled = false;
+            // パネルを閉じる
+            const $btnLinkSettings = document.getElementById('btn-link-settings');
+            const $linkSettingsContainer = document.getElementById('link-settings-container');
+            if ($btnLinkSettings && $linkSettingsContainer) {
+              $linkSettingsContainer.classList.remove('is-open');
+              $btnLinkSettings.setAttribute('aria-expanded', 'false');
+              $linkSettingsContainer.setAttribute('aria-hidden', 'true');
+            }
+            // 履歴の表示（リンク先）を更新のために再描画
+            refreshHistory({ reason: 'links_updated', force: true });
+          }, 1000);
+        } else {
+          $btnSaveLinks.textContent = '保存失敗';
+          setTimeout(() => {
+            $btnSaveLinks.textContent = originalText;
+            $btnSaveLinks.disabled = false;
+          }, 2000);
+        }
+      } catch (e) {
+        console.error('Save links error:', e);
+        $btnSaveLinks.textContent = 'エラー発生';
+        setTimeout(() => {
+          $btnSaveLinks.textContent = originalText;
+          $btnSaveLinks.disabled = false;
+        }, 2000);
       }
     });
   }
