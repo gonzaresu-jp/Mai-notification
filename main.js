@@ -6,6 +6,7 @@ const express = require('express');
 const cron = require('node-cron');
 const axios = require('axios');
 const crypto = require('crypto');
+const sqlite3 = require('sqlite3').verbose();
 
 const youtube = require('./youtube');
 const youtubeCommunity = require('./ytcommunity');
@@ -29,6 +30,7 @@ const MONITOR_TWITTER = ['koinoyamai17', 'koinoya_mai'];
 let started = false;
 let server = null;
 let milestoneScheduler = null;
+let db = null;
 
 // --- VAPID 設定読み込み ---
 let vapidConfig = null;
@@ -41,17 +43,16 @@ try {
       vapidConfig = parsed;
       console.log('VAPID 設定読み込み完了');
     } else {
-      console.warn('vapid.json に必要なキーがありません。マイルストーン通知は無効化されます。');
+      console.warn('vapid.json に必要なキーがありません。マイルストーン通知は無効です。');
     }
   } else {
-    console.warn('vapid.json が存在しないためマイルストーン通知は無効化されています。');
+    console.warn('vapid.json が見つかりません。マイルストーン通知は無効です。');
   }
 } catch (err) {
   console.error('vapid.json の読み込み/パースに失敗しました:', err && err.message ? err.message : err);
 }
 
 // --- API (モジュールからの POST を受ける) ---
-// 既存の /api/notify の先頭付近を次に置き換え
 app.post('/api/notify', (req, res) => {
   if (LOCAL_API_TOKEN) {
     const token = (req.headers['x-local-api-token'] || req.headers['x-notify-token'] || req.body?.token);
@@ -65,10 +66,46 @@ app.post('/api/notify', (req, res) => {
 });
 
 
+// Puppeteer の SingletonLock 一括クリーンアップ
+function cleanupPuppeteerLocks() {
+  const dirs = [
+    '/dev/shm/puppeteer-profile-fanbox',
+    '/dev/shm/puppeteer-profile-gipt',
+    '/dev/shm/puppeteer-profile-twitcasting',
+    '/var/lib/mai-push/puppeteer-profile',
+  ];
+  const locks = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+  for (const dir of dirs) {
+    for (const lock of locks) {
+      const p = path.join(dir, lock);
+      try { fs.unlinkSync(p); console.log(`[Cleanup] Removed ${p}`); } catch (_) { /* なければ無視 */ }
+    }
+  }
+}
+
 // 起動処理
 async function main() {
   if (started) return;
   started = true;
+
+  cleanupPuppeteerLocks();
+
+  // データベース初期化
+  const dbPath = path.join(__dirname, 'data.db');
+  db = new sqlite3.Database(dbPath);
+  db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS scraper_status (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      last_run DATETIME,
+      status TEXT,
+      message TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => {
+      if (err) console.error('scraper_status table init error (main):', err.message);
+      else console.log('scraper_status table ensured (main)');
+    });
+  });
 
   // 通知設定を一元化して注入
   const notifyConfig = {
@@ -122,6 +159,25 @@ async function main() {
       console.error('notify failed:', e?.message || e);
       return false;
     }
+  };
+
+  const sendStatusUpdate = async (id, name, status, message = null) => {
+    if (!db) return;
+    const now = new Date().toISOString();
+    db.run(
+      `INSERT INTO scraper_status (id, name, last_run, status, message, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
+         last_run = excluded.last_run,
+         status = excluded.status,
+         message = excluded.message,
+         updated_at = excluded.updated_at`,
+      [id, name, now, status, message, now],
+      (err) => {
+        if (err) console.error(`[StatusReport] Direct DB write failed for ${id}:`, err.message);
+      }
+    );
   };
 
 // --- Twitch 設定 ---
@@ -271,10 +327,14 @@ if (typeof youtubeCommunity.pollAndNotify === 'function') {
         }
       };
 
+      await sendStatusUpdate('youtube_community', 'YouTube Community', 'running');
       await run(); // 起動直後1回
+      await sendStatusUpdate('youtube_community', 'YouTube Community', 'success');
 
       const schedule = async () => {
+        await sendStatusUpdate('youtube_community', 'YouTube Community', 'running');
         await run();
+        await sendStatusUpdate('youtube_community', 'YouTube Community', 'success');
         const t = setTimeout(schedule, intervalMs);
         if (t && typeof t.unref === 'function') t.unref();
       };
@@ -298,8 +358,10 @@ if (typeof twitcasting.startTwitcastingServer === 'function') {
 
           // ✅ ポーリング開始（プライベート配信も対応）
           if (typeof twitcasting.startPolling === 'function') {
+            await sendStatusUpdate('twitcasting_polling', 'TwitCasting Polling', 'running');
             twitcasting.startPolling('@c:koinoya_mai', 10); // 30秒間隔
             console.log('TwitCasting polling 起動');
+            await sendStatusUpdate('twitcasting_polling', 'TwitCasting Polling', 'success');
           }
         } catch (e) {
           console.error('TwitCasting API init 起動エラー:', e);
@@ -331,15 +393,18 @@ if (typeof twitcasting.startTwitcastingServer === 'function') {
         const results = [];
         for (const u of MONITOR_TWITTER) {
           try {
+            await sendStatusUpdate(`twitter_${u}`, `Twitter (@${u})`, 'running');
             const r = twitter.startWatcher(u, 60 * 1000);
             if (r && typeof r.then === 'function') {
               await r;
             }
             results.push({ user: u, status: 'ok' });
             console.log(`twitter.startWatcher(${u}) 起動`);
+            await sendStatusUpdate(`twitter_${u}`, `Twitter (@${u})`, 'success');
           } catch (err) {
             console.error(`twitter.startWatcher(${u}) error:`, err && err.message ? err.message : err);
             results.push({ user: u, status: 'error', error: err });
+            await sendStatusUpdate(`twitter_${u}`, `Twitter (@${u})`, 'error', err?.message || String(err));
           }
         }
         return results;
@@ -348,15 +413,17 @@ if (typeof twitcasting.startTwitcastingServer === 'function') {
   }
 
   // Twitch
-if (typeof startTwitchPolling === 'function') {
+  if (typeof startTwitchPolling === 'function') {
     startPromises.push(
       (async () => {
         try {
-          await startTwitchPolling(twitchConfig); // configを渡す
-          console.log('Twitch polling 起動 (1s interval)');
+          await sendStatusUpdate('twitch', 'Twitch', 'running');
+          startTwitchPolling(twitchConfig); // ここは内部で setTimeout するだけなので await 不要なはず
+          console.log('Twitch polling 起動 (10s interval)');
+          await sendStatusUpdate('twitch', 'Twitch', 'success');
         } catch (e) {
           console.error('Twitch polling 起動エラー:', e.message);
-          throw e;
+          await sendStatusUpdate('twitch', 'Twitch', 'error', e.message);
         }
       })()
     );
@@ -371,13 +438,16 @@ if (typeof twitcasting.startWatcher === 'function') {
     const results = [];
     for (const s of MONITOR_TWITCASTING) {
       try {
+        await sendStatusUpdate(`twitcasting_watcher_${s}`, `TwitCasting (@${s})`, 'running');
         // twitcasting.startWatcher(screenId, intervalMs)
         twitcasting.startWatcher(s, 5 * 1000); // 30秒間隔でポーリング
         results.push({ screen: s, status: 'ok' });
         console.log(`twitcasting.startWatcher(${s}) 起動`);
+        await sendStatusUpdate(`twitcasting_watcher_${s}`, `TwitCasting (@${s})`, 'success');
       } catch (err) {
         console.error(`twitcasting.startWatcher(${s}) error:`, err && err.message ? err.message : err);
         results.push({ screen: s, status: 'error', error: err });
+        await sendStatusUpdate(`twitcasting_watcher_${s}`, `TwitCasting (@${s})`, 'error', err?.message || String(err));
       }
     }
     return results;
@@ -391,11 +461,11 @@ if (typeof twitcasting.startWatcher === 'function') {
 if (typeof startBilibiliWatcher === 'function' && process.env.BILIBILI_ROOM_ID) {
   startPromises.push((async () => {
     try {
+      await sendStatusUpdate('bilibili_live', 'Bilibili Live', 'running');
       startBilibiliWatcher({
         roomId: process.env.BILIBILI_ROOM_ID,
         onLiveStart: async () => {
           console.log('[Notify] bilibili live start detected');
-
           const payload = {
             type: 'bilibili',
             settingKey: 'bilibili',
@@ -406,14 +476,14 @@ if (typeof startBilibiliWatcher === 'function' && process.env.BILIBILI_ROOM_ID) 
               icon: './icon.webp'
             }
           };
-
           await sendNotifyApi(payload);
         }
       });
       console.log('Bilibili live watcher 起動');
+      await sendStatusUpdate('bilibili_live', 'Bilibili Live', 'success');
     } catch (e) {
       console.error('Bilibili live 起動エラー:', e && e.message ? e.message : e);
-      throw e;
+      await sendStatusUpdate('bilibili_live', 'Bilibili Live', 'error', e?.message || String(e));
     }
   })());
 } else {
@@ -423,17 +493,21 @@ if (typeof startBilibiliWatcher === 'function' && process.env.BILIBILI_ROOM_ID) 
 if (typeof startBilibiliDynamicWatcher === 'function') {
   startPromises.push((async () => {
     try {
+      await sendStatusUpdate('bilibili_dynamic', 'Bilibili Dynamic', 'running');
       const started = startBilibiliDynamicWatcher({
         uid: process.env.BILI_UID,
         notifyConfig
       });
       if (started) {
         console.log('Bilibili Dynamic polling 起動');
+        await sendStatusUpdate('bilibili_dynamic', 'Bilibili Dynamic', 'success');
       } else {
         console.log('Bilibili Dynamic: BILI_COOKIE 未設定のためスキップ');
+        await sendStatusUpdate('bilibili_dynamic', 'Bilibili Dynamic', 'error', 'BILI_COOKIE not set');
       }
     } catch (e) {
       console.error('Bilibili Dynamic 起動エラー:', e && e.message ? e.message : e);
+      await sendStatusUpdate('bilibili_dynamic', 'Bilibili Dynamic', 'error', e?.message || String(e));
       throw e;
     }
   })());
@@ -446,10 +520,13 @@ if (typeof startBilibiliDynamicWatcher === 'function') {
       startPromises.push(
         (async () => {
           try {
+            await sendStatusUpdate('fanbox', 'pixiv FANBOX', 'running');
             fanbox.startPolling(60 * 1000);
             console.log('Fanbox polling 起動');
+            await sendStatusUpdate('fanbox', 'pixiv FANBOX', 'success');
           } catch (e) {
             console.error('Fanbox 起動エラー:', e && e.message ? e.message : e);
+            await sendStatusUpdate('fanbox', 'pixiv FANBOX', 'error', e?.message || String(e));
             throw e;
           }
         })()
@@ -465,22 +542,28 @@ if (typeof startBilibiliDynamicWatcher === 'function') {
   // Gipt
 startPromises.push((async () => {
   try {
+    await sendStatusUpdate('gipt', 'Gipt', 'running');
     // 起動時に一回
     await gipt.pollAndNotify({ waitMs: 1200 });
     console.log('Gipt poll 初回実行 完了');
+    await sendStatusUpdate('gipt', 'Gipt', 'success');
 
     // 以降は定期実行（例: 60秒）
     setInterval(async () => {
       try {
+        await sendStatusUpdate('gipt', 'Gipt', 'running');
         await gipt.pollAndNotify({ waitMs: 1200 });
+        await sendStatusUpdate('gipt', 'Gipt', 'success');
       } catch (e) {
         console.error('Gipt poll error:', e && e.message ? e.message : e);
+        await sendStatusUpdate('gipt', 'Gipt', 'error', e?.message || String(e));
       }
     }, 5 * 1000).unref();
 
     console.log('Gipt polling 起動 (5s)');
   } catch (e) {
     console.error('Gipt 起動エラー:', e && e.message ? e.message : e);
+    await sendStatusUpdate('gipt', 'Gipt', 'error', e?.message || String(e));
     throw e;
   }
 })());
@@ -489,19 +572,23 @@ startPromises.push((async () => {
   // マイルストーンスケジューラー起動
   try {
     if (vapidConfig && vapidConfig.vapidPublicKey && vapidConfig.vapidPublicKey !== 'test-key') {
+      await sendStatusUpdate('milestone', 'Milestone Scheduler', 'running');
       const dbPath = path.join(__dirname, 'data.db');
       milestoneScheduler = new MilestoneScheduler(dbPath, vapidConfig);
       if (typeof milestoneScheduler.start === 'function') {
         milestoneScheduler.start();
         console.log('マイルストーン通知スケジューラー 起動');
+        await sendStatusUpdate('milestone', 'Milestone Scheduler', 'success');
       } else {
         console.warn('MilestoneScheduler.start 未定義');
+        await sendStatusUpdate('milestone', 'Milestone Scheduler', 'error', 'start method missing');
       }
     } else {
       console.warn('VAPID 未設定のためマイルストーン通知は無効');
     }
   } catch (e) {
     console.error('マイルストーン通知スケジューラー起動エラー:', e && e.message ? e.message : e);
+    await sendStatusUpdate('milestone', 'Milestone Scheduler', 'error', e?.message || String(e));
   }
 
   // 全起動タスクの結果を集約
@@ -523,11 +610,14 @@ startPromises.push((async () => {
     // 構文: '分 時 日 月 曜日' -> '0 3 * * *'
     cron.schedule('0 3 * * *', async () => {
       console.log('[Cron] YouTube購読の自動更新を開始します...');
+      await sendStatusUpdate('youtube_webhook', 'YouTube Webhook', 'running');
       try {
         await youtube.subscribeAllChannels();
         console.log('✅ [Cron] YouTube購読の自動更新が完了しました。');
+        await sendStatusUpdate('youtube_webhook', 'YouTube Webhook', 'success');
       } catch (e) {
         console.error('❌ [Cron] YouTube購読の自動更新中にエラー:', e && e.message ? e.message : e);
+        await sendStatusUpdate('youtube_webhook', 'YouTube Webhook', 'error', e?.message || String(e));
       }
     });
     console.log('✅ YouTube購読自動更新スケジューラー起動 (毎日 3:00)');
