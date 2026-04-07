@@ -1,6 +1,51 @@
 // gemma-analyzer.js - Ollama Gemma4 を使用したツイート分析モジュール
 
 const fetch = require('node-fetch');
+const fs = require('fs');
+const path = require('path');
+
+const LOG_DIR = path.join(__dirname, 'logs');
+const LOG_FILE = path.join(LOG_DIR, 'gemma.log');
+
+// logsディレクトリがなければ作成
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+}
+
+function writeLog(level, ...args) {
+  const timestamp = new Date().toISOString();
+  // エラーオブジェクトなどもJSON化しつつ、文字列はそのまま出力するよう少し工夫
+  const msg = args.map(arg => {
+    if (arg instanceof Error) {
+      return arg.stack || arg.message;
+    } else if (typeof arg === 'object') {
+      return JSON.stringify(arg);
+    }
+    return arg;
+  }).join(' ');
+  
+  const logLine = `[${timestamp}] [${level}] ${msg}\n`;
+  try {
+    fs.appendFileSync(LOG_FILE, logLine);
+  } catch (e) {
+    // ログ記録エラー時はフォールバック
+  }
+}
+
+const gemmaLogger = {
+  log: (...args) => {
+    console.log(...args);
+    writeLog('INFO', ...args);
+  },
+  warn: (...args) => {
+    console.warn(...args);
+    writeLog('WARN', ...args);
+  },
+  error: (...args) => {
+    console.error(...args);
+    writeLog('ERROR', ...args);
+  }
+};
 
 // const OLLAMA_ENDPOINT = process.env.OLLAMA_ENDPOINT || 'http://localhost:11434/api/generate';
 // const MODEL = process.env.OLLAMA_MODEL || 'yinw1590/gemma4-e2b-text'; // Gemma4 E2B model
@@ -66,10 +111,10 @@ async function callOllama(prompt, retries = RETRY_TIMES) {
 
       if (isTimeout || isConnectionError) {
         const isFirstAttempt = attempt === 0;
-        console.warn(`[Ollama] Attempt ${attempt + 1}/${maxRetries + 1} failed: ${err.message}${isFirstAttempt ? ' (初回は遅延する場合があります)' : ''}`);
+        gemmaLogger.warn(`[Ollama] Attempt ${attempt + 1}/${maxRetries + 1} failed: ${err.message}${isFirstAttempt ? ' (初回は遅延する場合があります)' : ''}`);
         if (attempt < maxRetries) {
           const delay = RETRY_DELAY_MS * Math.pow(1.5, attempt); // 指数バックオフ
-          console.warn(`[Ollama] ${Math.round(delay)}ms 待機してリトライ...`);
+          gemmaLogger.warn(`[Ollama] ${Math.round(delay)}ms 待機してリトライ...`);
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
@@ -163,14 +208,14 @@ async function analyzeTweet(tweetText) {
 ${tweetText}`;
 
   try {
-    console.log('[Gemma] Analyzing tweet:', tweetText.substring(0, 80) + '...');
+    gemmaLogger.log('[Gemma] Analyzing tweet:', tweetText.substring(0, 80) + '...');
 
     // 初回呼び出しは より多くのリトライを行う（Ollama初期化時間を考慮）
     let response;
     try {
       response = await callOllama(systemPrompt, INITIAL_RETRY_TIMES);
     } catch (err) {
-      console.warn('[Gemma] 初回分析失敗、リトライ回数を減らして再試行:', err.message);
+      gemmaLogger.warn('[Gemma] 初回分析失敗、リトライ回数を減らして再試行:', err.message);
       response = await callOllama(systemPrompt, RETRY_TIMES);
     }
 
@@ -194,11 +239,11 @@ ${tweetText}`;
       confidence: Math.min(1, Math.max(0, parseFloat(result.confidence) || 0))
     };
 
-    console.log('[Gemma] Analysis result:', validated);
+    gemmaLogger.log('[Gemma] Analysis result:', validated);
     return validated;
   } catch (err) {
-    console.error('[Gemma] Analysis failed:', err.message);
-    console.error('[Gemma] Response was:', err.response || '(no response)');
+    gemmaLogger.error('[Gemma] Analysis failed:', err.message);
+    gemmaLogger.error('[Gemma] Response was:', err.response || '(no response)');
 
     // フォールバック：エラー時は NEUTRAL 結果を返す
     return {
@@ -272,7 +317,7 @@ function extractScheduleFromAnalysis(analysis, tweetDate, urls = []) {
   // YouTube のURLが含まれる場合は、youtube.js が自動取得するためGemma側では作成しない
   const isYouTube = urls.some(u => u.includes('youtube.com') || u.includes('youtu.be'));
   if (isYouTube) {
-    console.log('[Gemma] YouTube URL found in tweet, skipping schedule creation because youtube.js will handle it.');
+    gemmaLogger.log('[Gemma] YouTube URL found in tweet, skipping schedule creation because youtube.js will handle it.');
     return null;
   }
 

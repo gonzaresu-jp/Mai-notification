@@ -44,9 +44,8 @@ setInterval(() => {
 }, 5*60*1000);
 
 const HISTORY_JSON_PATH = path.join(__dirname, 'webui', 'history.json');
-const HISTORY_JSON_LIMIT = 20;
-const HISTORY_HTML_PATH = path.join(__dirname, 'webui', 'history.html');
-const HISTORY_HTML_LIMIT = 5;
+const HISTORY_JSON_LIMIT = 50;
+
 
 const ADMIN_NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
 const NOTIFY_HMAC_SECRET = process.env.NOTIFY_HMAC_SECRET || null;
@@ -61,8 +60,50 @@ const DEFAULT_PLATFORM_SETTINGS = Object.freeze({
   schedule: true,
   gipt: true,
   twitch: true,
-  bilibili: false
+  bilibili: false,
+  customLinks: {}
 });
+
+/**
+ * URLを指定のテンプレートに基づいて変換するユーティリティ
+ * @param {string} url 元のURL
+ * @param {string} platform プラットフォームキー
+ * @param {object} settings ユーザー設定オブジェクト
+ * @returns {string} 変換後のURL
+ */
+function transformUrl(url, platform, settings) {
+  if (!url || !settings || !settings.customLinks) return url;
+  
+  // マッピング: normalizedPlatformName に合わせる
+  const mapping = {
+    'twitcasting': 'twitcasting',
+    'youtube': 'youtube',
+    'youtubeCommunity': 'youtube', // コミュニティもYouTubeとして扱う
+    'twitch': 'twitch',
+    'twitterMain': 'twitter',
+    'twitterSub': 'twitter',
+    'fanbox': 'other',
+    'pixiv': 'other',
+    'gipt': 'other',
+    'bilibili': 'other',
+    'milestone': 'other',
+    'schedule': 'other'
+  };
+
+  const linkKey = mapping[platform] || 'other';
+  const template = settings.customLinks[linkKey];
+
+  if (!template || !template.trim() || !template.includes('{url}')) {
+    return url;
+  }
+
+  try {
+    return template.replace(/\{url\}/g, url);
+  } catch (e) {
+    console.warn('[transformUrl] error:', e.message);
+    return url;
+  }
+}
 
 function parseAndMergePlatformSettings(settingsJson) {
   let parsed = {};
@@ -76,7 +117,13 @@ function parseAndMergePlatformSettings(settingsJson) {
     parsed = settingsJson;
   }
   if (!parsed || typeof parsed !== 'object') parsed = {};
-  return { ...DEFAULT_PLATFORM_SETTINGS, ...parsed };
+  
+  const merged = { ...DEFAULT_PLATFORM_SETTINGS, ...parsed };
+  // customLinks の型ガード
+  if (!merged.customLinks || typeof merged.customLinks !== 'object') {
+    merged.customLinks = {};
+  }
+  return merged;
 }
 
 // 起動時 PRAGMA チューニング（db を作った直後に実行）
@@ -1918,6 +1965,31 @@ app.post('/api/save-platform-setting', (req, res) => {
 });
 
 
+// --- 通知統計取得 (Heatmap用) ---
+app.get('/api/notifications/stats', (req, res) => {
+  const years = parseInt(req.query.years, 10) || 1;
+  const sql = `
+    SELECT strftime('%Y-%m-%d', created_at, 'localtime') as date, COUNT(*) as count 
+    FROM notifications 
+    WHERE created_at >= date('now', 'localtime', '-' || ? || ' year')
+    GROUP BY date
+    ORDER BY date ASC
+  `;
+
+  db.all(sql, [years], (err, rows) => {
+    if (err) {
+      console.error('/api/notifications/stats SELECT err:', err.message);
+      return res.status(500).json({ error: 'DB error', detail: err.message });
+    }
+    const stats = {};
+    (rows || []).forEach(row => {
+      stats[row.date] = row.count;
+    });
+    res.json(stats);
+  });
+});
+
+
 // --- 履歴取得 (改善版) ---
 app.get('/api/history', (req, res) => {
   // clientId は将来のフィルタ用に受け取っておく（現状未使用）
@@ -1931,14 +2003,14 @@ app.get('/api/history', (req, res) => {
   const MAX_LIMIT = 100;
   if (limit > MAX_LIMIT) limit = MAX_LIMIT;
 const tStart = Date.now();
-  // 件数取得をO(1)の MAX(id) に変更
-  db.get('SELECT MAX(id) AS cnt FROM notifications', [], (countErr, countRow) => {
+  // 件数取得を COUNT(*) に戻す（削除等でIDに欠番がある場合に備え）
+  db.get('SELECT COUNT(*) AS cnt FROM notifications', [], (countErr, countRow) => {
     if (countErr) {
-      console.error('/api/history MAX(id) err:', countErr.message);
+      console.error('/api/history COUNT(*) err:', countErr.message);
       return res.status(500).json({ error: 'DB error', detail: countErr.message });
     }
 
-    const total = (countRow && typeof countRow.cnt === 'number') ? countRow.cnt : (countRow && countRow.cnt ? parseInt(countRow.cnt, 10) : 0);
+    const total = (countRow && countRow.cnt) ? parseInt(countRow.cnt, 10) : 0;
 
     // 0 件なら空リストを早期返却
     if (!total) {
@@ -2359,32 +2431,36 @@ async function updateHistoryJson() {
         );
       });
 
-    const [jsonRows, htmlRows] = await Promise.all([
+    const countQuery = () => 
+      new Promise((resolve, reject) => {
+        db.get('SELECT COUNT(*) as count FROM notifications', [], (err, row) => {
+          if (err) reject(err);
+          else resolve(row.count || 0);
+        });
+      });
+
+    const [rows, dbTotal] = await Promise.all([
       query(HISTORY_JSON_LIMIT),
-      query(HISTORY_HTML_LIMIT)
+      countQuery()
     ]);
 
-    const normalize = (rows) =>
-      rows.map(r => ({
-        id: r.id,
-        title: r.title,
-        body: r.body,
-        url: r.url,
-        icon: r.icon,
-        platform: r.platform || '不明',
-        status: r.status || 'success',
-        timestamp: r.timestamp ? Number(r.timestamp) : 0
-      }));
-
-    const jsonLogs = normalize(jsonRows);
-    const htmlLogs = normalize(htmlRows);
+    const jsonLogs = rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      body: r.body,
+      url: r.url,
+      icon: r.icon,
+      platform: r.platform || '不明',
+      status: r.status || 'success',
+      timestamp: r.timestamp ? Number(r.timestamp) : 0
+    }));
 
     // -------------------------
     // JSON生成
     // -------------------------
     const jsonData = {
       logs: jsonLogs,
-      total: jsonLogs.length,
+      total: dbTotal,
       limit: HISTORY_JSON_LIMIT,
       lastUpdated: Math.floor(Date.now() / 1000)
     };
@@ -2395,23 +2471,16 @@ async function updateHistoryJson() {
     await fs.promises.mkdir(path.dirname(HISTORY_JSON_PATH), { recursive: true });
 
     // -------------------------
-    // 非同期書き込み（★ここが最重要修正）
+    // 非同期書き込み
     // -------------------------
-    await Promise.all([
-      fs.promises.writeFile(
-        HISTORY_JSON_PATH,
-        JSON.stringify(jsonData, null, 2),
-        'utf8'
-      ),
-      fs.promises.writeFile(
-        HISTORY_HTML_PATH,
-        renderHistoryHtml(htmlLogs),
-        'utf8'
-      )
-    ]);
+    await fs.promises.writeFile(
+      HISTORY_JSON_PATH,
+      JSON.stringify(jsonData, null, 2),
+      'utf8'
+    );
 
     console.log(
-      `[updateHistoryJson] ✅ JSON(${HISTORY_JSON_LIMIT}) / HTML(${HISTORY_HTML_LIMIT}) 更新完了`
+      `[updateHistoryJson] ✅ JSON(${HISTORY_JSON_LIMIT}) 更新完了`
     );
 
   } catch (e) {
@@ -2429,44 +2498,7 @@ db.serialize(() => {
   }, 1000);
 });
 
-function renderHistoryHtml(logs) {
-  return logs.map(log => {
-    const date = new Date(log.timestamp * 1000).toLocaleString('ja-JP', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-      timeZone: 'Asia/Tokyo'
-    });
 
-    const safeIcon     = escapeXml(log.icon     || '');
-    const safeUrl      = escapeXml(log.url       || '');
-    const safeTitle    = escapeXml(log.title     || '');
-    const safeBody     = escapeXml(log.body      || '');
-    const safePlatform = escapeXml(log.platform  || '');
-
-    return `
-<div class="card" data-log-id="${log.id}">
-  ${safeIcon ? `<img src="${safeIcon}" alt="icon" class="icon" loading="lazy">` : ''}
-  <div class="card-content">
-    <div class="title">
-      ${safeUrl
-        ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeTitle}</a>`
-        : safeTitle}
-    </div>
-    <p class="body">${safeBody}</p>
-    <div class="meta">
-      <span class="platform">${safePlatform}</span>
-      <span class="time">${date}</span>
-      ${log.status === 'fail' ? '<span class="status-badge">送信失敗</span>' : ''}
-    </div>
-  </div>
-</div>`;
-  }).join('\n');
-}
 
 // --- 通知受信（外部サービスから） --- (改善版、並列送信かつ同時上限あり)
 app.post('/api/notify', notifyLimiter, requireNotifyToken, verifyNotifyHmac, (req, res) => {
@@ -2582,10 +2614,16 @@ db.run(
         return { clientId, sent: false, reason: 'disabled' };
       }
 
+      // URLのカスタム変換を適用
+      const transformedData = { ...data };
+      if (data.url) {
+        transformedData.url = transformUrl(data.url, settingKey || type, settings);
+      }
+
       // 実送信
       try {
         console.log(`[/api/notify] ✅ ${clientId}: 送信キューへ`);
-        const sent = await sendPushNotification(subscription, data, db, false);
+        const sent = await sendPushNotification(subscription, transformedData, db, false);
         return { clientId, sent };
       } catch (e) {
         console.error(`[/api/notify] ${clientId}: unexpected send error`, e && e.message);
@@ -2847,15 +2885,19 @@ const CONCURRENCY =
     if (!row.subscription_json) return { sent: false };
 
     try {
-      if (settingKey) {
-        const settings = parseAndMergePlatformSettings(row.settings_json);
-        if (settings[settingKey] === false) {
-          return { sent: false, reason: 'disabled' };
-        }
+      const settings = parseAndMergePlatformSettings(row.settings_json);
+      if (settingKey && settings[settingKey] === false) {
+        return { sent: false, reason: 'disabled' };
+      }
+
+      // URLのカスタム変換を適用
+      const transformedData = { ...data };
+      if (data.url) {
+        transformedData.url = transformUrl(data.url, settingKey || type, settings);
       }
 
       const subscription = JSON.parse(row.subscription_json);
-      const sent = await sendPushNotification(subscription, data, db, false);
+      const sent = await sendPushNotification(subscription, transformedData, db, false);
       return { sent };
     } catch {
       return { sent: false };
