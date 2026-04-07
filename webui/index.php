@@ -4,8 +4,8 @@
 
 <head>
     <?php
-    $extraHead = '<link rel="preload" href="./top-card.css?v=2.63" as="style" onload="this.onload=null;this.rel=\'stylesheet\'" />'
-        . '<noscript><link rel="stylesheet" href="./top-card.css?v=2.63" /></noscript>';
+    $extraHead = '<link rel="preload" href="./top-card.css?v=2.64" as="style" onload="this.onload=null;this.rel=\'stylesheet\'" />'
+        . '<noscript><link rel="stylesheet" href="./top-card.css?v=2.64" /></noscript>';
     include __DIR__ . '/head.php';
     ?>
 
@@ -274,7 +274,49 @@
                     loadWeeklySchedule('weekly-schedule');
                     loadNotificationHeatmap('notification-heatmap');
                     enableAutoReload(5);
+
+                    // システムステータス情報取得
+                    updateIndexSystemStatus();
                 });
+
+                async function updateIndexSystemStatus() {
+                    const dot = document.getElementById('index-system-status-dot');
+                    const text = document.getElementById('index-system-status-text');
+                    if (!dot || !text) return;
+
+                    try {
+                        const res = await fetch('/api/scraper-status');
+                        if (!res.ok) throw new Error();
+                        const data = await res.json();
+                        const items = data.items || [];
+
+                        if (items.length === 0) {
+                            dot.className = 'status-dot';
+                            text.textContent = 'データなし';
+                            return;
+                        }
+
+                        const hasError = items.some(i => i.status === 'error');
+                        const isRunning = items.some(i => i.status === 'running');
+
+                        dot.className = 'status-dot';
+                        if (hasError) {
+                            dot.classList.add('error');
+                            text.textContent = '一部異常あり';
+                            text.style.color = '#f44336';
+                        } else if (isRunning) {
+                            dot.classList.add('running');
+                            text.textContent = '巡回実行中';
+                            text.style.color = '#2196f3';
+                        } else {
+                            dot.classList.add('ok');
+                            text.textContent = 'システム正常';
+                            text.style.color = '#4caf50';
+                        }
+                    } catch (e) {
+                        text.textContent = '取得失敗';
+                    }
+                }
             </script>
 
             <!-- ✅ section + aria-labelledby（セマンティック改善） -->
