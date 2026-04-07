@@ -4,6 +4,9 @@
         <a href="/" rel="noopener noreferrer" style="text-decoration: none; color: inherit;">
             <h2 class="fade">まいちゃん通知</h2>
         </a>
+        <a href="/status" class="header-status-link fade" id="header-status-indicator" title="システムの稼働状況">
+            <span class="status-dot"></span>
+        </a>
     </div>
 
     <!-- ログインボタン（ヘッダー右側に常時表示） -->
@@ -212,6 +215,7 @@
             <li><a href="/info/" rel="noopener noreferrer">このサービスについて</a></li>
             <li><a href="/download/" rel="noopener noreferrer">Androidアプリをダウンロード</a></li>
             <li><a href="/logs/" rel="noopener noreferrer">Update logs</a></li>
+            <li><a href="/status" rel="noopener noreferrer">システム稼働状況</a></li>
             <li><a href="https://form.jotform.com/253191048959063" target="_blank" rel="noopener noreferrer">不具合報告</a>
             </li>
 
@@ -234,6 +238,69 @@
         align-items: center;
         margin-right: 8px;
         flex-shrink: 0;
+    }
+
+    /* システムステータス */
+    .header-status-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 8px;
+        padding: 4px;
+        border-radius: 50%;
+        transition: background 0.2s;
+        text-decoration: none;
+    }
+
+    .header-status-link:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #999;
+        /* 初期値: 不明 */
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    .status-dot.ok {
+        background: #4caf50;
+        box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+    }
+
+    .status-dot.warning {
+        background: #ff9800;
+        box-shadow: 0 0 8px rgba(255, 152, 0, 0.6);
+    }
+
+    .status-dot.error {
+        background: #f44336;
+        box-shadow: 0 0 8px rgba(244, 67, 54, 0.6);
+    }
+
+    .status-dot.running {
+        background: #2196f3;
+        animation: status-pulse 1.5s infinite;
+    }
+
+    @keyframes status-pulse {
+        0% {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: 0.6;
+            transform: scale(0.9);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
     }
 
     /* Googleログインボタン（ヘッダー） */
@@ -486,7 +553,39 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', initHeaderAuth);
+        async function updateStatusIndicator() {
+            const indicator = document.getElementById('header-status-indicator');
+            if (!indicator) return;
+            const dot = indicator.querySelector('.status-dot');
+            try {
+                const res = await fetch('/api/scraper-status');
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                const items = data.items || [];
+
+                if (items.length === 0) {
+                    dot.className = 'status-dot';
+                    return;
+                }
+
+                const hasError = items.some(i => i.status === 'error');
+                const isRunning = items.some(i => i.status === 'running');
+
+                dot.className = 'status-dot';
+                if (hasError) dot.classList.add('error');
+                else if (isRunning) dot.classList.add('running');
+                else dot.classList.add('ok');
+
+            } catch (e) {
+                dot.className = 'status-dot';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initHeaderAuth();
+            updateStatusIndicator();
+            setInterval(updateStatusIndicator, 60000); // 1分毎に更新
+        });
     })();
 
     function headerLoginWithGoogle() {
