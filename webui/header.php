@@ -12,7 +12,7 @@
     <!-- ログインボタン（ヘッダー右側に常時表示） -->
     <div class="header-auth fade" id="header-auth">
         <!-- 未ログイン時 -->
-        <button class="auth-login-btn" id="header-login-btn" style="display:none;" onclick="headerLoginWithGoogle()"
+        <button class="auth-login-btn google" id="header-login-btn" style="display:none;" onclick="headerLoginWithGoogle()"
             aria-label="Googleでログイン">
             <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"
                 aria-hidden="true">
@@ -29,6 +29,11 @@
                     d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 6.293C4.672 4.166 6.656 3.58 9 3.58z"
                     fill="#EA4335" />
             </svg>
+        </button>
+
+        <button class="auth-login-btn discord" id="header-discord-login-btn" style="display:none;" onclick="headerLoginWithDiscord()"
+            aria-label="Discordでログイン">
+            <i class="fa-brands fa-discord" style="font-size: 1.1rem;"></i>
         </button>
 
         <!-- ログイン済み時 -->
@@ -88,25 +93,22 @@
             <!-- ログインCTA（未ログイン時のみ表示） -->
             <li class="nav-setting-item nav-login-cta" id="nav-login-cta">
                 <div class="nav-login-prompt">
-                    <p class="nav-login-desc">ログインすると通知設定や推し日数が<br>どのデバイスからでも引き継げます</p>
-                    <button class="nav-google-login-btn" onclick="headerLoginWithGoogle()">
-                        <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"
-                            aria-hidden="true">
-                            <path
-                                d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
-                                fill="#4285F4" />
-                            <path
-                                d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"
-                                fill="#34A853" />
-                            <path
-                                d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"
-                                fill="#FBBC05" />
-                            <path
-                                d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 6.293C4.672 4.166 6.656 3.58 9 3.58z"
-                                fill="#EA4335" />
-                        </svg>
-                        Googleでログイン
-                    </button>
+                    <p class="nav-login-desc">ログインするとどのデバイスからでも<br>通知設定や推し日数を引き継げます</p>
+                    <div class="nav-login-btns">
+                        <button class="nav-auth-btn google" onclick="headerLoginWithGoogle()">
+                            <svg width="14" height="14" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4" />
+                                <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853" />
+                                <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05" />
+                                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 6.293C4.672 4.166 6.656 3.58 9 3.58z" fill="#EA4335" />
+                            </svg>
+                            Google
+                        </button>
+                        <button class="nav-auth-btn discord" onclick="headerLoginWithDiscord()">
+                            <i class="fa-brands fa-discord"></i>
+                            Discord
+                        </button>
+                    </div>
                 </div>
             </li>
             <!-- ログアウトボタン（ログイン済み時のみ） -->
@@ -303,23 +305,40 @@
         }
     }
 
-    /* Googleログインボタン（ヘッダー） */
+    /* ヘッダーのログインボタン共通 */
     .auth-login-btn {
         display: flex;
         align-items: center;
-        gap: 7px;
-        padding: 6px 13px;
-        border-radius: 20px;
-        border: 1.5px solid rgba(255, 255, 255, 0.35);
-        background: rgba(255, 255, 255, 0.12);
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border-radius: 50%;
+        border: 1.5px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.1);
         color: #fff;
-        font-size: 0.78rem;
-        font-weight: 600;
         cursor: pointer;
-        white-space: nowrap;
-        transition: background 0.18s, border-color 0.18s, transform 0.1s;
-        backdrop-filter: blur(6px);
-        letter-spacing: 0.01em;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        backdrop-filter: blur(8px);
+    }
+
+    .auth-login-btn.google:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: #fff;
+    }
+
+    .auth-login-btn.discord {
+        margin-left: 6px;
+    }
+
+    .auth-login-btn.discord:hover {
+        background: #5865F2;
+        border-color: #5865F2;
+        box-shadow: 0 0 10px rgba(88, 101, 242, 0.5);
+    }
+
+    .auth-login-btn:active {
+        transform: scale(0.92);
     }
 
     .auth-login-btn:hover {
@@ -445,27 +464,43 @@
         margin: 0 0 10px;
     }
 
-    .nav-google-login-btn {
+    /* ナビメニュー内のログインボタン */
+    .nav-login-btns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .nav-auth-btn {
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 8px;
-        width: 100%;
-        padding: 9px 14px;
-        border-radius: 8px;
-        border: 1.5px solid rgba(255, 255, 255, 0.3);
-        background: rgba(255, 255, 255, 0.1);
+        padding: 10px;
+        border-radius: 10px;
+        border: 1.5px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
         color: #fff;
         font-size: 0.85rem;
         font-weight: 600;
         cursor: pointer;
-        transition: background 0.18s, border-color 0.18s;
-        justify-content: center;
-        letter-spacing: 0.01em;
+        transition: all 0.2s;
     }
 
-    .nav-google-login-btn:hover {
-        background: rgba(255, 255, 255, 0.2);
-        border-color: rgba(255, 255, 255, 0.5);
+    .nav-auth-btn.google:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .nav-auth-btn.discord {
+        background: rgba(88, 101, 242, 0.1);
+        border-color: rgba(88, 101, 242, 0.3);
+    }
+
+    .nav-auth-btn.discord:hover {
+        background: #5865F2;
+        border-color: #5865F2;
     }
 </style>
 
@@ -476,6 +511,7 @@
         async function initHeaderAuth() {
             const loading = document.getElementById('header-auth-loading');
             const loginBtn = document.getElementById('header-login-btn');
+            const discordLoginBtn = document.getElementById('header-discord-login-btn');
             const chip = document.getElementById('header-user-chip');
             const avatar = document.getElementById('header-avatar');
             const logoutItem = document.getElementById('nav-logout-item');
@@ -490,6 +526,7 @@
                     window.__authUser = null;
                     chip.style.display = 'none';
                     loginBtn.style.display = 'flex';
+                    discordLoginBtn.style.display = 'flex';
                     logoutItem.style.display = 'none';
                     loginCta.style.display = 'block';
                     loading.style.display = 'none';
@@ -503,6 +540,7 @@
 
                 chip.style.display = 'flex';
                 loginBtn.style.display = 'none';
+                discordLoginBtn.style.display = 'none';
                 logoutItem.style.display = 'block';
                 loginCta.style.display = 'none';
                 loading.style.display = 'none';
@@ -545,6 +583,7 @@
                 // ネットワークエラー等の予期せぬ失敗
                 chip.style.display = 'none';
                 loginBtn.style.display = 'flex';
+                discordLoginBtn.style.display = 'flex';
                 logoutItem.style.display = 'none';
                 loginCta.style.display = 'block';
                 loading.style.display = 'none';
@@ -558,26 +597,50 @@
             if (!indicator) return;
             const dot = indicator.querySelector('.status-dot');
             try {
+                // 1. スクレイパー状態の取得
                 const res = await fetch('/api/scraper-status');
-                if (!res.ok) throw new Error();
+                if (!res.ok) throw new Error('status endpoint failed');
                 const data = await res.json();
                 const items = data.items || [];
+                
+                // 2. サーバーリソース状況の取得（高負荷時のステータス反映用）
+                let sysData = null;
+                try {
+                    const sysRes = await fetch('/api/system-info');
+                    if (sysRes.ok) sysData = await sysRes.json();
+                } catch(e) { }
 
-                if (items.length === 0) {
-                    dot.className = 'status-dot';
-                    return;
+                let hasError = false;
+                let hasWarning = false;
+                let isRunning = false;
+
+                // スクラッパー状態の評価
+                if (items.length > 0) {
+                    const effectiveItems = items.map(i => {
+                        if (i.status !== 'running') return i;
+                        const staleSec = (Date.now() - new Date(i.last_run).getTime()) / 1000;
+                        return staleSec > 180 ? { ...i, status: 'success' } : i;
+                    });
+                    if (effectiveItems.some(i => i.status === 'error')) hasError = true;
+                    if (effectiveItems.some(i => i.status === 'running')) isRunning = true;
                 }
 
-                const hasError = items.some(i => i.status === 'error');
-                const isRunning = items.some(i => i.status === 'running');
+                // サーバーリソースの評価（70%で警告、90%以上でエラー扱い）
+                if (sysData) {
+                    const cpuUsage = sysData.cpu?.usagePercent || 0;
+                    const memUsage = sysData.memory?.usagePercent || 0;
+                    if (cpuUsage >= 90 || memUsage >= 95) hasError = true;
+                    else if (cpuUsage >= 70 || memUsage >= 80) hasWarning = true;
+                }
 
                 dot.className = 'status-dot';
                 if (hasError) dot.classList.add('error');
+                else if (hasWarning) dot.classList.add('warning');
                 else if (isRunning) dot.classList.add('running');
                 else dot.classList.add('ok');
 
             } catch (e) {
-                dot.className = 'status-dot';
+                dot.className = 'status-dot'; // 通信エラー等はグレー（Unknown）
             }
         }
 
@@ -589,11 +652,18 @@
     })();
 
     function headerLoginWithGoogle() {
-        // config.js と同じキー名 'clientId' を使う（'client_id' は誤り）
+        // config.js と同じキー名 'clientId' を使う
         const clientId = localStorage.getItem('clientId') || '';
         const returnTo = location.pathname + location.search;
         location.href =
             `/auth/google?client_id=${encodeURIComponent(clientId)}&returnTo=${encodeURIComponent(returnTo)}`;
+    }
+
+    function headerLoginWithDiscord() {
+        const clientId = localStorage.getItem('clientId') || '';
+        const returnTo = location.pathname + location.search;
+        location.href =
+            `/auth/discord?client_id=${encodeURIComponent(clientId)}&returnTo=${encodeURIComponent(returnTo)}`;
     }
 
     async function headerLogout() {
