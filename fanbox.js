@@ -16,18 +16,7 @@ const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOK
 // 既知の投稿IDセット（IDの大小ではなく集合で管理）
 let knownIds = new Set(loadState().knownIds || []);
 
-// プロセス終了時にブラウザをクリーンアップ
-process.on('SIGINT', async () => {
-  console.log('\n[Shutdown/Fanbox] Closing browser...');
-  await closeSharedBrowser();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('\n[Shutdown/Fanbox] Closing browser...');
-  await closeSharedBrowser();
-  process.exit(0);
-});
+// (プロセス終了時のクリーンアップ処理は main.js で一元管理するように変更しました)
 
 function loadState() {
   try {
@@ -56,8 +45,9 @@ async function checkFanboxPosts() {
   try {
     const browser = await getSharedBrowser({
       userDataDir: process.platform === 'linux'
-        ? '/dev/shm/puppeteer-profile-fanbox'
-        : path.join(__dirname, 'tmp', 'puppeteer-fanbox')
+        ? '/dev/shm/puppeteer-profile-shared'
+        : path.join(__dirname, 'tmp', 'puppeteer-shared'),
+      ephemeral: true
     });
     page = await browser.newPage();
 
@@ -73,7 +63,10 @@ async function checkFanboxPosts() {
     });
 
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36');
-    await page.goto(PUBLIC_URL, { waitUntil: 'networkidle0' });
+    await page.goto(PUBLIC_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    
+    // JSの描画を待機（SPAのため）
+    await new Promise(r => setTimeout(r, 4000));
 
     const html = await page.content();
     const $ = cheerio.load(html);

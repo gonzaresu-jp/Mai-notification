@@ -12,8 +12,39 @@ const adminAuth = require('./admin/admin');
 const cookieParser = require('cookie-parser');
 const userRoutes   = require('./user-routes');
 const auth = require('./auth');
-
 const crypto = require('crypto');
+const os = require('os');
+const discordAlert = require('./discord-alert');
+
+// 致命的なクラッシュの監視を開始
+discordAlert.attachGlobalCrashHandlers();
+
+// ── CPU使用率サンプラー (5秒ごとに差分計測) ──────────────────────────────
+function getCpuTimes() {
+  const cpus = os.cpus();
+  let user = 0, nice = 0, sys = 0, idle = 0, irq = 0;
+  for (const cpu of cpus) {
+    user += cpu.times.user;
+    nice += cpu.times.nice;
+    sys  += cpu.times.sys;
+    idle += cpu.times.idle;
+    irq  += cpu.times.irq;
+  }
+  return { user, nice, sys, idle, irq, total: user + nice + sys + idle + irq };
+}
+
+let _cpuPrev = getCpuTimes();
+let _cpuUsagePercent = 0;
+
+setInterval(() => {
+  const cur  = getCpuTimes();
+  const prevTotal = _cpuPrev.total;
+  const curTotal  = cur.total;
+  const totalDiff = curTotal - prevTotal;
+  const idleDiff  = cur.idle - _cpuPrev.idle;
+  _cpuUsagePercent = totalDiff > 0 ? Math.round((1 - idleDiff / totalDiff) * 100) : 0;
+  _cpuPrev = cur;
+}, 5000);
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
 // 認証エンドポイント用レートリミット（1分に20回まで）
@@ -26,6 +57,7 @@ const authLimiter = rateLimit({
 });
 
 const app = express();
+app.set('trust proxy', 1);
 const dbPath = path.join(__dirname, 'data.db');
 const db = new sqlite3.Database(dbPath);
 let hasPlatformColumn = false;
@@ -209,15 +241,10 @@ app.use('/api/', (req, res, next) => {
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 150, // limit each IP to 150 API requests per minute
-  keyGenerator: (req) => {
-    if (process.env.TRUST_PROXY === 'true') {
-      const forwarded = req.headers['x-forwarded-for'];
-      if (forwarded) return forwarded.split(',')[0].trim();
-    }
-    return req.headers['x-real-ip'] || req.socket?.remoteAddress || req.ip;
-  },
+  // trust proxy が有効なら req.ip でプロキシ越しのIPが取れる
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
   message: { error: 'Too many API requests, please try again later.' }
 });
 
@@ -936,6 +963,21 @@ function syncEventNotifications() {
           for (const event of events || []) {
             const startMs = new Date(event.start_time).getTime();
             if (!Number.isFinite(startMs)) continue;
+
+            // ⚠️ 動画（video）の場合はスケジュール通知を送らない（既存の通知があれば削除してスキップ）
+            if (String(event.event_type || '').toLowerCase() === 'video') {
+              await new Promise((r) => {
+                db.run(
+                  `DELETE FROM scheduled_notifications WHERE sent = 0 AND ref_id = ?`,
+                  [event.id],
+                  function () {
+                    deleted += this.changes || 0;
+                    r();
+                  }
+                );
+              });
+              continue; // 処理をスキップ
+            }
 
             const phases = EVENT_PRE_OFFSETS_MS.map(offset => ({
               kind: `event_pre_${offset}`,   // ← 衝突回避のためユニーク化
@@ -1874,6 +1916,46 @@ app.get('/api/scraper-status', (req, res) => {
   });
 });
 
+// --- システムリソース情報 API ---
+app.get('/api/system-info', (req, res) => {
+  const totalMem = os.totalmem();
+  const freeMem  = os.freemem();
+  const usedMem  = totalMem - freeMem;
+  const mem = process.memoryUsage();
+  const loadavg = os.loadavg();
+  const cpuCount = os.cpus().length;
+
+  res.json({
+    cpu: {
+      usagePercent: _cpuUsagePercent,
+      count:        cpuCount,
+      model:        os.cpus()[0]?.model || 'Unknown',
+      loadavg: {
+        '1m':  Math.round(loadavg[0] * 100) / 100,
+        '5m':  Math.round(loadavg[1] * 100) / 100,
+        '15m': Math.round(loadavg[2] * 100) / 100
+      }
+    },
+    memory: {
+      total:        totalMem,
+      free:         freeMem,
+      used:         usedMem,
+      usagePercent: Math.round(usedMem / totalMem * 100)
+    },
+    process: {
+      rss:        mem.rss,
+      heapUsed:   mem.heapUsed,
+      heapTotal:  mem.heapTotal,
+      uptimeSec:  Math.floor(process.uptime())
+    },
+    os: {
+      platform: os.platform(),
+      uptimeSec: Math.floor(os.uptime()),
+      hostname:  os.hostname()
+    }
+  });
+});
+
 // --- スクレイパー状況更新 API (内部用) ---
 app.post('/api/internal/scraper-status', (req, res) => {
   const { id, name, status, message } = req.body || {};
@@ -1885,19 +1967,20 @@ app.post('/api/internal/scraper-status', (req, res) => {
   }
 
   const lastRun = (status === 'success' || status === 'running') ? new Date().toISOString() : null;
+  const now = new Date().toISOString(); // CURRENT_TIMESTAMP はタイムゾーン情報なしのため明示的にISO文字列を使う
 
   const sql = `
     INSERT INTO scraper_status (id, name, status, message, last_run, updated_at)
-    VALUES (?, ?, ?, ?, COALESCE(?, (SELECT last_run FROM scraper_status WHERE id = ?)), CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, COALESCE(?, (SELECT last_run FROM scraper_status WHERE id = ?)), ?)
     ON CONFLICT(id) DO UPDATE SET
       name = COALESCE(excluded.name, scraper_status.name),
       status = excluded.status,
       message = excluded.message,
       last_run = COALESCE(excluded.last_run, scraper_status.last_run),
-      updated_at = CURRENT_TIMESTAMP
+      updated_at = excluded.updated_at
   `;
 
-  db.run(sql, [id, name, status, message, lastRun, id], function(err) {
+  db.run(sql, [id, name, status, message, lastRun, id, now], function(err) {
     if (err) {
       console.error('/api/internal/scraper-status POST err:', err.message);
       return res.status(500).json({ error: 'DB error', detail: err.message });
@@ -3404,6 +3487,9 @@ app.get('/api/admin/generate-hash', (req, res) => {
 */
 // --- 起動 ---
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`WebUI Server is running on port ${PORT}`);
+  
+  // システムリソースの監視を開始
+  discordAlert.startSystemMonitor();
 });

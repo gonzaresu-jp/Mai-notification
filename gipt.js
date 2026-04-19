@@ -56,17 +56,7 @@ function normalizeWebHost(s) {
 }
 
 
-process.on('SIGINT', async () => {
-  console.log('\n[Shutdown/Gipt] Closing browser...');
-  await closeSharedBrowser();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('\n[Shutdown/Gipt] Closing browser...');
-  await closeSharedBrowser();
-  process.exit(0);
-});
+// (プロセス終了時のクリーンアップ処理は main.js で一元管理するように変更しました)
 
 // ====== init ======
 function init(config) {
@@ -147,8 +137,9 @@ async function fetchGipts(opts = {}) {
   try {
     const browser = await getSharedBrowser({
       userDataDir: process.platform === 'linux'
-        ? '/dev/shm/puppeteer-profile-gipt'
-        : path.join(__dirname, 'tmp', 'puppeteer-gipt')
+        ? '/dev/shm/puppeteer-profile-shared'
+        : path.join(__dirname, 'tmp', 'puppeteer-shared'),
+      ephemeral: true
     });
     page = await browser.newPage();
     await page.setViewport({ width: 1200, height: 900 });
