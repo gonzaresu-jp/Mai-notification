@@ -78,8 +78,120 @@
 
         <main id="left-mai-main">
 
+            <!-- ===== 二カ国時計 ===== -->
+            <div class="dual-clock" id="dual-clock" aria-live="off" aria-label="現在時刻">
+                <div class="clock-item">
+                    <span class="clock-flag">🇯🇵</span>
+                    <div class="clock-body">
+                        <span class="clock-label">JST</span>
+                        <span class="clock-time" id="clock-jst">--:--:--</span>
+                    </div>
+                </div>
+                <div class="clock-divider" aria-hidden="true"></div>
+                <div class="clock-item">
+                    <span class="clock-flag">🇺🇸</span>
+                    <div class="clock-body">
+                        <span class="clock-label" id="clock-us-label">New York</span>
+                        <span class="clock-time" id="clock-us">--:--:--</span>
+                    </div>
+                </div>
+            </div>
+            <style>
+                .dual-clock {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 0;
+                    margin: 10px 12px 14px;
+                    padding: 12px 20px;
+                    background: rgba(255, 255, 255, 0.07);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 14px;
+                    backdrop-filter: blur(8px);
+                }
+
+                .clock-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    flex: 1;
+                    justify-content: center;
+                }
+
+                .clock-flag {
+                    font-size: 1.7rem;
+                    line-height: 1;
+                }
+
+                .clock-body {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: flex-start;
+                    gap: 2px;
+                }
+
+                .clock-label {
+                    font-size: 0.65rem;
+                    font-weight: 700;
+                    letter-spacing: 0.1em;
+                    color: rgba(255, 255, 255, 0.5);
+                    text-transform: uppercase;
+                }
+
+                .clock-time {
+                    font-family: 'Roboto Mono', 'Courier New', monospace;
+                    font-size: 1.3rem;
+                    font-weight: 600;
+                    color: #fff;
+                    letter-spacing: 0.05em;
+                    text-shadow: 0 0 12px rgba(180, 140, 255, 0.5);
+                }
+
+                .clock-divider {
+                    width: 1px;
+                    height: 40px;
+                    background: rgba(255, 255, 255, 0.15);
+                    margin: 0 14px;
+                }
+            </style>
+            <script>
+                (function () {
+                    const fmtJST = new Intl.DateTimeFormat('ja-JP', {
+                        timeZone: 'Asia/Tokyo',
+                        hour: '2-digit', minute: '2-digit', second: '2-digit',
+                        hour12: false
+                    });
+                    const fmtUS = new Intl.DateTimeFormat('en-US', {
+                        timeZone: 'America/New_York',
+                        hour: '2-digit', minute: '2-digit', second: '2-digit',
+                        hour12: false,
+                        timeZoneName: 'short'
+                    });
+                    function tick() {
+                        const now = new Date();
+                        const jstEl = document.getElementById('clock-jst');
+                        const usEl = document.getElementById('clock-us');
+                        const usLbl = document.getElementById('clock-us-label');
+                        if (!jstEl) return;
+
+                        jstEl.textContent = fmtJST.format(now);
+
+                        const parts = fmtUS.formatToParts(now);
+                        const h = parts.find(p => p.type === 'hour')?.value ?? '--';
+                        const m = parts.find(p => p.type === 'minute')?.value ?? '--';
+                        const s = parts.find(p => p.type === 'second')?.value ?? '--';
+                        const tz = parts.find(p => p.type === 'timeZoneName')?.value ?? 'ET';
+                        usEl.textContent = `${h}:${m}:${s}`;
+                        // ラベルは "New York" 固定
+                    }
+                    tick();
+                    setInterval(tick, 1000);
+                })();
+            </script>
+
             <!-- ✅ stats-card に role="region" + aria-label -->
             <div class="stats-card bg-blur" role="region" aria-label="統計情報">
+
                 <img src="./3dmai.webp" alt="" class="count-bg-mai" aria-hidden="true" width="384" height="512"
                     loading="lazy" />
 
@@ -296,8 +408,15 @@
                             return;
                         }
 
-                        const hasError = items.some(i => i.status === 'error');
-                        const isRunning = items.some(i => i.status === 'running');
+                        // running でも last_run が3分以上前なら待機中（正常）とみなす
+                        const effectiveItems = items.map(i => {
+                            if (i.status !== 'running') return i;
+                            const staleSec = (Date.now() - new Date(i.last_run).getTime()) / 1000;
+                            return staleSec > 180 ? { ...i, status: 'success' } : i;
+                        });
+
+                        const hasError = effectiveItems.some(i => i.status === 'error');
+                        const isRunning = effectiveItems.some(i => i.status === 'running');
 
                         dot.className = 'status-dot';
                         if (hasError) {
