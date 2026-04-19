@@ -3,10 +3,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer-extra');
-const Stealth = require('puppeteer-extra-plugin-stealth');
+const { getSharedBrowser, closeSharedBrowser } = require('./browser');
 
-puppeteer.use(Stealth());
+/* ytcommunity 専用の puppeteer-extra/Stealth は不要になったため削除 */
 
 /* =============================
    Config
@@ -16,8 +15,8 @@ const profileDir = '/var/lib/mai-push/puppeteer-profile';
 
 const ICON_URL = './icon.webp';
 
-let browser = null;
 let sharedPage = null;
+
 
 let stateCache = null;
 let stateDirty = false;
@@ -53,39 +52,12 @@ const ytLogger = {
 ============================= */
 
 async function getBrowser() {
-  if (browser && browser.isConnected()) return browser;
-
-  browser = await puppeteer.launch({
-    headless: 'new',
-    userDataDir: profileDir,
-
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--window-size=1280,900',
-
-      // キャッシュ完全停止
-      '--disk-cache-size=0',
-      '--media-cache-size=0',
-      '--disable-application-cache',
-      '--disable-gpu-shader-disk-cache',
-
-      '--disable-background-networking',
-      '--disable-sync',
-      '--disable-extensions',
-      '--disable-logging',
-      '--log-level=3',
-      '--mute-audio',
-      '--aggressive-cache-discard'
-    ]
+  return getSharedBrowser({
+    userDataDir: process.platform === 'linux' 
+        ? '/dev/shm/puppeteer-profile-shared' 
+        : path.join(__dirname, 'tmp', 'puppeteer-shared'),
+    ephemeral: true
   });
-
-  browser.on('disconnected', () => {
-    browser = null;
-    sharedPage = null;
-  });
-
-  return browser;
 }
 
 
@@ -101,6 +73,17 @@ async function getPage() {
   }
 
   sharedPage = await browser.newPage();
+
+  // 不要なリソースをブロックしてメモリと通信量を節約
+  await sharedPage.setRequestInterception(true);
+  sharedPage.on('request', (request) => {
+    const resourceType = request.resourceType();
+    if (['image', 'font', 'media', 'stylesheet'].includes(resourceType)) {
+      request.abort();
+    } else {
+      request.continue();
+    }
+  });
 
   await sharedPage.setCacheEnabled(false);
 
@@ -327,13 +310,15 @@ function init(cfg = {}) {
   }
 }
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   flushState();
+  await closeSharedBrowser({ userDataDir: profileDir }).catch(() => {});
   process.exit(0);
 });
 
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   flushState();
+  await closeSharedBrowser({ userDataDir: profileDir }).catch(() => {});
   process.exit(0);
 });
 

@@ -18,6 +18,11 @@ const fanbox = require('./fanbox');
 const MilestoneScheduler = require('./milestone');
 const gipt = require('./gipt');
 const { startTwitchPolling } = require('./twitch');
+const { closeAllBrowsers } = require('./browser');
+const discordAlert = require('./discord-alert');
+
+// 致命的なクラッシュの監視を開始
+discordAlert.attachGlobalCrashHandlers();
 
 const app = express();
 app.use(express.json());
@@ -176,6 +181,16 @@ async function main() {
       [id, name, now, status, message, now],
       (err) => {
         if (err) console.error(`[StatusReport] Direct DB write failed for ${id}:`, err.message);
+        
+        // エラー状態になった場合、Discordへ通知を飛ばす
+        if (status === 'error') {
+           discordAlert.sendDiscordAlert(
+             `🚨 スクレイパー異常発生: ${name}`,
+             `システムコンポーネント **${name}** でエラーが発生しました。\n\n**詳細:**\n\`\`\`\n${message || '不明なエラー'}\n\`\`\``,
+             'ERROR',
+             `scraper_error_${id}` // スパム防止のため、同じIDのエラーはレート制限
+           );
+        }
       }
     );
   };
@@ -393,16 +408,33 @@ if (typeof twitcasting.startTwitcastingServer === 'function') {
         const results = [];
         for (const u of MONITOR_TWITTER) {
           try {
-            await sendStatusUpdate(`twitter_${u}`, `Twitter (@${u})`, 'running');
-            const r = twitter.startWatcher(u, 60 * 1000);
-            if (r && typeof r.then === 'function') {
-              await r;
-            }
+            const id   = `twitter_${u}`;
+            const name = `Twitter (@${u})`;
+
+            // ポーリングループを main.js 側で管理し、毎回ステータスを更新する
+            const poll = async () => {
+              await sendStatusUpdate(id, name, 'running');
+              try {
+                const r = await twitter.check ? twitter.check(u) : null;
+                if (r && r.error) {
+                  await sendStatusUpdate(id, name, 'error', String(r.error));
+                } else {
+                  await sendStatusUpdate(id, name, 'success');
+                }
+              } catch (e) {
+                await sendStatusUpdate(id, name, 'error', e?.message || String(e));
+              }
+            };
+
+            // 起動直後に1回 + その後は intervalMs ごとに繰り返す
+            await poll();
+            const t = setInterval(poll, 60 * 1000);
+            if (t && typeof t.unref === 'function') t.unref();
+
             results.push({ user: u, status: 'ok' });
-            console.log(`twitter.startWatcher(${u}) 起動`);
-            await sendStatusUpdate(`twitter_${u}`, `Twitter (@${u})`, 'success');
+            console.log(`twitter watcher (${u}) 起動`);
           } catch (err) {
-            console.error(`twitter.startWatcher(${u}) error:`, err && err.message ? err.message : err);
+            console.error(`twitter watcher (${u}) error:`, err?.message || err);
             results.push({ user: u, status: 'error', error: err });
             await sendStatusUpdate(`twitter_${u}`, `Twitter (@${u})`, 'error', err?.message || String(err));
           }
@@ -636,6 +668,13 @@ async function shutdown(signal) {
     }
   } catch (e) {
     console.error('MilestoneScheduler stop エラー:', e && e.message ? e.message : e);
+  }
+
+  try {
+    console.log('Closing all browsers in pool...');
+    await closeAllBrowsers();
+  } catch (e) {
+    console.error('closeAllBrowsers エラー:', e && e.message ? e.message : e);
   }
 
   try {

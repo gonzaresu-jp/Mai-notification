@@ -32,26 +32,7 @@ let cachedCookies = null;
 let lastCookieLoadTime = 0;
 const COOKIE_CACHE_TTL = 10 * 60 * 1000; // 10分間キャッシュ
 
-// プロセス終了時にブラウザをクリーンアップ
-process.on('SIGINT', async () => {
-    console.log('\n[Shutdown] Closing browser...');
-    await closeSharedBrowser();
-    // 一時ファイルの削除
-    try {
-        if (fs.existsSync(TMP_DB)) fs.unlinkSync(TMP_DB);
-    } catch (e) { /* ignore */ }
-    process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-    console.log('\n[Shutdown] Closing browser...');
-    await closeSharedBrowser();
-    // 一時ファイルの削除
-    try {
-        if (fs.existsSync(TMP_DB)) fs.unlinkSync(TMP_DB);
-    } catch (e) { /* ignore */ }
-    process.exit(0);
-});
+// (プロセス終了時のクリーンアップ処理は main.js で一元管理するように変更しました)
 
 // --- seen.json の読み書き ---
 function loadSeen() {
@@ -410,9 +391,22 @@ async function checkOneUser(page, username, seenState) {
   try {
     // ページ遷移を retry でラップ（瞬断吸収）
     await retryAsync(async () => {
-      await page.goto(`https://x.com/${username}`, { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.goto(`https://x.com/${username}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      
+      // ログイン画面に飛ばされていないかチェック
+      const isLogin = await page.evaluate(() => {
+        return document.title.includes('ログイン') || 
+               document.title.includes('Log in') || 
+               location.href.includes('/login') ||
+               !!document.querySelector('a[href="/login"]');
+      });
+
+      if (isLogin) {
+        console.warn(`[${username}] ⚠️ ログイン画面が検出されました。セッションが切れている可能性があります。`);
+      }
+
       // ページ安定待ち
-      await new Promise(r => setTimeout(r, 2500));
+      await new Promise(r => setTimeout(r, 4000));
       
       // スクロールして追加読み込みを誘発
       await page.evaluate(() => {
@@ -477,18 +471,41 @@ async function check(username, isRetry = false) {
   let page;
   try {
     // 🔧 ブラウザを再利用（新しいページだけ開く）
+    // ytcommunity等とのプロファイル競合(The browser is already running)を防ぐため独立したディレクトリを使用
+    
+    // 💡 起動前に古いロックファイルがあったら削除を試みる（ゾンビ防止）
+    const lockPath = path.join(PROFILE_PATH, 'parent.lock');
+    if (fs.existsSync(lockPath)) {
+      try { fs.unlinkSync(lockPath); } catch(e) {}
+    }
+
     const browser = await getSharedBrowser({
       product: 'firefox',
       headless: HEADLESS,
-      userDataDir: PROFILE_PATH
+      userDataDir: PROFILE_PATH,
+      extraPrefs: {
+        'network.http.referer.XOriginPolicy': 0,
+        'privacy.trackingprotection.enabled': false
+      }
     });
     page = await browser.newPage();
 
-    // 🔧 改善: キャッシュされた Cookie を使用（ディスク書き込みなし）
-    const cookies = await getCookiesCached();
-    if (cookies && cookies.length) {
-      try { await page.setCookie(...cookies); } catch (e) { /* ignore cookie set errors */ }
-    }
+    // 🔧 セッション維持のため User Agent を一般的な Firefox に固定
+    // (GUI版に近づける)
+    await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0');
+
+    // 不要なリソースをブロックしてメモリと通信量を節約
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const resourceType = request.resourceType();
+      if (['image', 'font', 'media', 'stylesheet'].includes(resourceType)) {
+        request.abort();
+      } else {
+        request.continue();
+      }
+    });
+
+    // (Cookieは userDataDir: PROFILE_PATH からネイティブに読み込まれ、自動更新されるため手動注入は削除)
 
     if (!seenState[username]) seenState[username] = { ids: [], firstRun: true };
 
@@ -505,11 +522,12 @@ async function check(username, isRetry = false) {
         // ✅ 0件取得かつ初回チェックの場合、5秒後に再チェック
         if (!isRetry) {
           console.log(`[${username}] ⚠️ 0件取得のため5秒後に再チェックします...`);
-          await page.close();
+          if (page && !page.isClosed()) await page.close();
           await new Promise(r => setTimeout(r, 5000));
           return await check(username, true); // 再帰呼び出し（再チェック）
         } else {
-          console.log(`[${username}] ⚠️ 再チェックでも0件でした。次の定期チェックまで待機します。`);
+          console.log(`[${username}] ⚠️ 再チェックでも0件でした。セッション切れ、またはアクセス制限の可能性があります。`);
+          return { username, newTweets: [], error: '0件取得エラー（セッション切れ・制限の可能性あり）' };
         }
       }
     } catch (e) {
@@ -546,22 +564,25 @@ async function check(username, isRetry = false) {
       for (const t of newTweets.slice().reverse()) {
         console.log(`[${username}] 新しいツイート: ${summarizeTweetForLog(t)}`);
         
-        // 🤖 Gemma4 で分析
-        let analysis = null;
-        try {
-          analysis = await analyzeTweet(t.text);
-          console.log(`[${username}] Gemma analysis: category=${analysis.category}, status=${analysis.status}, time=${analysis.start_time}`);
-        } catch (err) {
-          console.warn(`[${username}] Gemma analysis error:`, err.message);
-        }
-        
-        // 📅 分析結果からスケジュール作成
-        if (analysis) {
-          await createScheduleFromTweet(username, t, analysis);
-        }
-        
-        // 🔔 通知送信
-        await sendNotify(username, t, settingKey, sendText);
+        // 🤖 Gemma分析と 🔔 通知送信を並列（同時）に実行する
+        const notifyPromise = sendNotify(username, t, settingKey, sendText)
+          .catch(err => console.error(`[${username}] Notify error:`, err.message || err));
+
+        const gemmaPromise = (async () => {
+          try {
+            const analysis = await analyzeTweet(t.text);
+            console.log(`[${username}] Gemma analysis: category=${analysis.category}, status=${analysis.status}, time=${analysis.start_time}`);
+            // 📅 分析結果からスケジュール作成
+            if (analysis) {
+              await createScheduleFromTweet(username, t, analysis);
+            }
+          } catch (err) {
+            console.warn(`[${username}] Gemma analysis error:`, err.message);
+          }
+        })();
+
+        // 両方の処理を待つ（通知のリクエスト自体は一瞬で飛ぶ）
+        await Promise.all([notifyPromise, gemmaPromise]);
       }
     } else {
       if (Array.isArray(normalTweets) && normalTweets.length > 0) {
@@ -578,7 +599,7 @@ async function check(username, isRetry = false) {
     return { username, newTweets: [], error: e.message };
   } finally {
     // 🔧 ブラウザは閉じず、ページだけ閉じる
-    if (page) {
+    if (page && !page.isClosed()) {
       try {
         await page.close();
       } catch (e) {

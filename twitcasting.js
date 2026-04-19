@@ -21,18 +21,7 @@ const API_BASE_URL = 'https://apiv2.twitcasting.tv';
 const CLIENT_ID = process.env.TWITCASTING_CLIENT_ID;
 const CLIENT_SECRET = process.env.TWITCASTING_CLIENT_SECRET;
 
-// プロセス終了時にブラウザをクリーンアップ
-process.on('SIGINT', async () => {
-    console.log('\n[Shutdown] Closing browser...');
-    await closeSharedBrowser();
-    process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-    console.log('\n[Shutdown] Closing browser...');
-    await closeSharedBrowser();
-    process.exit(0);
-});
+// (プロセス終了時のクリーンアップ処理は main.js で一元管理するように変更しました)
 
 let accessToken = process.env.TWITCASTING_ACCESS_TOKEN || null;
 
@@ -137,11 +126,10 @@ async function checkPrivateLive(screenId){
     let page;
     try{
 const browser = await getSharedBrowser({
-      executablePath: PUPPETEER_EXECUTABLE_PATH || undefined,
-      headless: HEADLESS,
       userDataDir: process.platform === 'linux'
-        ? '/dev/shm/puppeteer-profile-twitcasting'
-        : path.join(__dirname, 'tmp', 'puppeteer-twitcasting')
+        ? '/dev/shm/puppeteer-profile-shared'
+        : path.join(__dirname, 'tmp', 'puppeteer-shared'),
+      ephemeral: true
     });
         page = await browser.newPage();
         
