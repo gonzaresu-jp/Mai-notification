@@ -30,7 +30,8 @@ function initUserTables(db) {
     // ユーザー基本情報
     db.run(`CREATE TABLE IF NOT EXISTS users (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      google_id    TEXT NOT NULL UNIQUE,
+      google_id    TEXT UNIQUE,
+      discord_id   TEXT UNIQUE,
       email        TEXT NOT NULL,
       display_name TEXT,
       avatar_url   TEXT,
@@ -40,6 +41,25 @@ function initUserTables(db) {
     )`, err => {
       if (err) console.error('[users] create err:', err.message);
       else     console.log('[users] table ensured');
+    });
+
+    // カラム追加マイグレーション
+    db.all("PRAGMA table_info(users)", [], (err, columns) => {
+      if (err) return;
+      const names = new Set((columns || []).map(c => c.name));
+      if (!names.has('discord_id')) {
+        db.serialize(() => {
+          db.run("ALTER TABLE users ADD COLUMN discord_id TEXT", (alterErr) => {
+            if (alterErr) console.error('[users] discord_id add err:', alterErr.message);
+            else {
+              console.log('[users] discord_id column added');
+              db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_discord_id ON users(discord_id)");
+            }
+          });
+        });
+      }
+      // google_id を NULL 許容にする（既存が NOT NULL の場合）
+      // SQLiteでは ALTER COLUMN が制限されているため、新規作成時の定義で対応
     });
 
     // ユーザーに紐づいた通知サブスクリプション
@@ -255,25 +275,65 @@ async function unlinkUserDevices(db, userId, { clientId, fcmToken } = {}) {
 
 
 // ============================================================
-// Upsert user
+// Upsert user (Google)
 // ============================================================
 async function upsertUser(db, googleUser) {
-  const existing = await dbGet(db, 'SELECT * FROM users WHERE google_id = ?', [googleUser.googleId]);
+  // 1. Google ID で検索
+  let existing = await dbGet(db, 'SELECT * FROM users WHERE google_id = ?', [googleUser.googleId]);
+  
+  // 2. なければメールアドレスで検索（Discord等で既に登録されている場合）
+  if (!existing && googleUser.email) {
+    existing = await dbGet(db, 'SELECT * FROM users WHERE email = ?', [googleUser.email]);
+  }
+
   if (existing) {
     await dbRun(db,
       `UPDATE users
-       SET email = ?, display_name = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE google_id = ?`,
-      [googleUser.email, googleUser.displayName, googleUser.avatarUrl, googleUser.googleId]
+       SET google_id = COALESCE(google_id, ?),
+           email = ?, display_name = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [googleUser.googleId, googleUser.email, googleUser.displayName, googleUser.avatarUrl, existing.id]
     );
-    return { ...existing, email: googleUser.email, display_name: googleUser.displayName, avatar_url: googleUser.avatarUrl };
+    return { ...existing, google_id: existing.google_id || googleUser.googleId, email: googleUser.email, display_name: googleUser.displayName, avatar_url: googleUser.avatarUrl };
   }
+  
   const result = await dbRun(db,
     `INSERT INTO users (google_id, email, display_name, avatar_url)
      VALUES (?, ?, ?, ?)`,
     [googleUser.googleId, googleUser.email, googleUser.displayName, googleUser.avatarUrl]
   );
   return { id: result.lastID, google_id: googleUser.googleId, ...googleUser };
+}
+
+// ============================================================
+// Upsert user (Discord)
+// ============================================================
+async function upsertDiscordUser(db, discordUser) {
+  // 1. Discord ID で検索
+  let existing = await dbGet(db, 'SELECT * FROM users WHERE discord_id = ?', [discordUser.discordId]);
+  
+  // 2. なければメールアドレスで検索（Google等で既に登録されている場合）
+  if (!existing && discordUser.email) {
+    existing = await dbGet(db, 'SELECT * FROM users WHERE email = ?', [discordUser.email]);
+  }
+
+  if (existing) {
+    await dbRun(db,
+      `UPDATE users
+       SET discord_id = COALESCE(discord_id, ?),
+           email = ?, display_name = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [discordUser.discordId, discordUser.email, discordUser.displayName, discordUser.avatarUrl, existing.id]
+    );
+    return { ...existing, discord_id: existing.discord_id || discordUser.discordId, email: discordUser.email, display_name: discordUser.displayName, avatar_url: discordUser.avatarUrl };
+  }
+
+  const result = await dbRun(db,
+    `INSERT INTO users (discord_id, email, display_name, avatar_url)
+     VALUES (?, ?, ?, ?)`,
+    [discordUser.discordId, discordUser.email, discordUser.displayName, discordUser.avatarUrl]
+  );
+  return { id: result.lastID, discord_id: discordUser.discordId, ...discordUser };
 }
 
 // ============================================================
@@ -295,7 +355,7 @@ function register(app, db, authLimiter) {
   // ──────────────────────────────────────────
   app.get('/auth/google', limiter, (req, res) => {
     const returnTo  = req.query.returnTo  || '/';
-    const clientId  = req.query.client_id || ''; // 匿名デバイスのIDを渡す
+    const clientId  = req.query.client_id || '';
     const state = Buffer.from(JSON.stringify({ returnTo, clientId })).toString('base64url');
     res.redirect(auth.getAuthUrl(state));
   });
@@ -316,24 +376,70 @@ function register(app, db, authLimiter) {
       const googleUser = await auth.exchangeCodeForUser(code);
       const user       = await upsertUser(db, googleUser);
 
-      // 匿名 client_id があれば紐づけ
       if (stateData.clientId) {
         await migrateSubscription(db, stateData.clientId, user.id);
-        // Android 端末が同じ client_id を使っている場合も紐づける
-        await dbRun(db,
-          'UPDATE android_devices SET user_id = ?, updated_at = CURRENT_TIMESTAMP, last_seen_at = CURRENT_TIMESTAMP WHERE client_id = ?',
-          [user.id, stateData.clientId]
-        ).catch(() => {});
       }
 
-      const token = auth.signToken({ userId: user.id, email: user.email || user.google_id });
+      const token = auth.signToken({ userId: user.id, email: user.email || user.google_id || user.discord_id });
       res.cookie(auth.COOKIE_NAME, token, auth.COOKIE_OPTIONS);
 
-      console.log(`[auth] login: user_id=${user.id} email=${user.email || user.google_id}`);
+      console.log(`[auth] Google login: user_id=${user.id} email=${user.email}`);
       safeRedirect(res, stateData.returnTo);
     } catch (e) {
       console.error('[auth/google/callback]', e.message || e);
-      res.status(500).send('Authentication failed. Please try again.');
+      res.status(500).send('Authentication failed.');
+    }
+  });
+
+  // ──────────────────────────────────────────
+  // 1b. Discord ログイン開始
+  // ──────────────────────────────────────────
+  app.get('/auth/discord', limiter, (req, res) => {
+    const returnTo  = req.query.returnTo  || '/';
+    const clientId  = req.query.client_id || '';
+    const state = Buffer.from(JSON.stringify({ returnTo, clientId })).toString('base64url');
+    const authUrl = auth.getDiscordAuthUrl(state);
+    console.log('[auth/discord] Full Redirect URL:', authUrl);
+    res.redirect(authUrl);
+  });
+
+  // ──────────────────────────────────────────
+  // 2b. Discord コールバック
+  // ──────────────────────────────────────────
+  app.get('/auth/discord/callback', limiter, async (req, res) => {
+    const { code, state, error, error_description } = req.query;
+
+    if (error) {
+      console.warn('[auth/discord/callback] Discord returned error:', error, error_description);
+      return res.status(400).send(`Authentication failed: ${error_description || error}`);
+    }
+
+    if (!code) {
+      console.warn('[auth/discord/callback] Missing code. Query:', req.query);
+      return res.status(400).send('Missing authorization code');
+    }
+
+    let stateData = { returnTo: '/', clientId: '' };
+    try {
+      stateData = JSON.parse(Buffer.from(state || '', 'base64url').toString());
+    } catch {}
+
+    try {
+      const discordUser = await auth.exchangeDiscordCodeForUser(code);
+      const user        = await upsertDiscordUser(db, discordUser);
+
+      if (stateData.clientId) {
+        await migrateSubscription(db, stateData.clientId, user.id);
+      }
+
+      const token = auth.signToken({ userId: user.id, email: user.email || user.discord_id || user.google_id });
+      res.cookie(auth.COOKIE_NAME, token, auth.COOKIE_OPTIONS);
+
+      console.log(`[auth] Discord login: user_id=${user.id} email=${user.email}`);
+      safeRedirect(res, stateData.returnTo);
+    } catch (e) {
+      console.error('[auth/discord/callback] Exchange error:', e.message || (e.response ? JSON.stringify(e.response.data) : e));
+      res.status(500).send('Authentication failed during token exchange.');
     }
   });
 
