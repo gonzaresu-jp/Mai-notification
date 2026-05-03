@@ -1,5 +1,7 @@
 *.log
 *.env
+*.bak
+*.db
 gipt_debug/
 .ytprofile/
 debug_pages/
@@ -7,3 +9,5 @@ data/
 .git/
 package-lock.json
 ytcommunity_state.json
+node_modules/
+ytcommunity_debug/
