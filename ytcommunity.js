@@ -131,7 +131,24 @@ function loadState() {
     return stateCache;
   }
 
-  stateCache = JSON.parse(fs.readFileSync(stateFilePath));
+  try {
+    const raw = JSON.parse(fs.readFileSync(stateFilePath));
+    if (Array.isArray(raw)) {
+      // 古い配列形式のキャッシュ(別スクリプト等の名残)をオブジェクト形式にマイグレーション
+      const known = {};
+      raw.forEach(p => {
+        if (p && p.postId) {
+          known[p.postId] = new Date().toISOString();
+        }
+      });
+      stateCache = { initialized: false, known };
+    } else {
+      stateCache = raw || { initialized: false, known: {} };
+    }
+  } catch (e) {
+    stateCache = { initialized: false, known: {} };
+  }
+  
   return stateCache;
 }
 

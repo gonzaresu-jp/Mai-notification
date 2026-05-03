@@ -77,8 +77,8 @@
         </div>
 
         <main id="left-mai-main">
-
             <!-- ===== 二カ国時計 ===== -->
+            <!--
             <div class="dual-clock" id="dual-clock" aria-live="off" aria-label="現在時刻">
                 <div class="clock-item">
                     <span class="clock-flag">🇯🇵</span>
@@ -92,7 +92,13 @@
                     <span class="clock-flag">🇺🇸</span>
                     <div class="clock-body">
                         <span class="clock-label" id="clock-us-label">New York</span>
-                        <span class="clock-time" id="clock-us">--:--:--</span>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <span class="clock-time" id="clock-us">--:--:--</span>
+                            <div id="us-weather-container" style="display:none; align-items:center; gap:6px; opacity:0; transition:opacity 0.3s ease;">
+                                <span id="us-weather-text" style="font-size:0.95rem; font-weight:600; color:rgba(255,255,255,0.9);"></span>
+                                <span id="us-weather-temp" style="font-size:1.15rem; font-weight:600; color:#fff; font-family:'Roboto Mono', 'Courier New', monospace; text-shadow:0 0 8px rgba(180, 140, 255, 0.4);"></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -186,8 +192,62 @@
                     }
                     tick();
                     setInterval(tick, 1000);
+
+                    function translateWeatherWords(desc) {
+                        if (!desc) return '';
+                        const d = desc.toLowerCase();
+                        if (d.includes('snow')) return '雪';
+                        if (d.includes('thunder')) return '雷雨';
+                        if (d.includes('rain') || d.includes('shower') || d.includes('drizzle')) return '雨';
+                        if (d.includes('fog')) return '霧';
+                        if (d.includes('partly cloudy')) return '晴れ時々曇り';
+                        if (d.includes('mostly cloudy') || d.includes('cloudy') || d.includes('overcast')) return '曇り';
+                        if (d.includes('clear') || d.includes('fair') || d.includes('sun')) return '晴れ';
+                        return desc;
+                    }
+
+                    async function fetchUSWeather() {
+                        const container = document.getElementById('us-weather-container');
+                        const textEl = document.getElementById('us-weather-text');
+                        const tempEl = document.getElementById('us-weather-temp');
+                        if (!container || !textEl || !tempEl) return;
+
+                        try {
+                            const res = await fetch('https://api.weather.gov/stations/KNYC/observations/latest', {
+                                headers: {
+                                    'Accept': 'application/geo+json',
+                                    'User-Agent': 'KoinoyamaiNotificationApp/1.0'
+                                }
+                            });
+                            if (!res.ok) throw new Error('Network response was not ok');
+                            
+                            const data = await res.json();
+                            const props = data?.properties;
+                            if (props) {
+                                let tempC = props.temperature?.value;
+                                let desc = props.textDescription || '';
+
+                                if (desc && tempC !== null && tempC !== undefined) {
+                                    textEl.textContent = translateWeatherWords(desc);
+                                    textEl.title = desc; // 原文をホバーで確認可能に
+                                    
+                                    tempEl.textContent = `${Math.round(tempC)}°C`;
+                                    
+                                    container.style.display = 'flex';
+                                    setTimeout(() => { container.style.opacity = '1'; }, 10);
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Failed to fetch NWS weather:', e);
+                        }
+                    }
+                    
+                    fetchUSWeather();
+                    // 10分ごとに更新
+                    setInterval(fetchUSWeather, 10 * 60 * 1000);
                 })();
             </script>
+            -->
 
             <!-- ✅ stats-card に role="region" + aria-label -->
             <div class="stats-card bg-blur" role="region" aria-label="統計情報">

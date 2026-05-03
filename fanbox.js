@@ -39,59 +39,38 @@ function saveState() {
 
 // 🔧 既知IDセット方式: IDの大小ではなく「初見かどうか」で新投稿を判定
 async function checkFanboxPosts() {
-  console.log(`Fanbox Puppeteer scraping: ${PUBLIC_URL}`);
+  console.log(`Fanbox API check: ${FANBOX_USER}`);
 
-  let page;
   try {
-    const browser = await getSharedBrowser({
-      userDataDir: process.platform === 'linux'
-        ? '/dev/shm/puppeteer-profile-shared'
-        : path.join(__dirname, 'tmp', 'puppeteer-shared'),
-      ephemeral: true
-    });
-    page = await browser.newPage();
-
-    await page.setCacheEnabled(false);
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const resourceType = req.resourceType();
-      if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
-        req.abort();
-      } else {
-        req.continue();
-      }
+    const res = await axios.get(`https://api.fanbox.cc/post.listCreator?creatorId=${FANBOX_USER}&limit=10`, {
+      headers: {
+        'Origin': 'https://www.fanbox.cc',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 10000
     });
 
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36');
-    await page.goto(PUBLIC_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    
-    // JSの描画を待機（SPAのため）
-    await new Promise(r => setTimeout(r, 4000));
-
-    const html = await page.content();
-    const $ = cheerio.load(html);
-
-    // ページ上の全投稿IDとタイトルを収集
-    const postTitleMap = new Map();
-    $('a[href*="/posts/"]').each((_, el) => {
-      const href = $(el).attr('href') || '';
-      const match = href.match(/\/posts\/(\d+)/);
-      if (!match) return;
-      const id = parseInt(match[1], 10);
-      if (!id) return;
-      const title = $(el).text().trim();
-      if (title && !postTitleMap.has(id)) postTitleMap.set(id, title);
-    });
-    const currentIds = [...new Set(
-      [...postTitleMap.keys()].filter(n => n > 0)
-    )];
-
-    if (currentIds.length === 0) {
-      console.warn('Fanbox: 投稿URLを抽出できませんでした');
+    if (!res.data || !Array.isArray(res.data.body)) {
+      console.warn('Fanbox: APIレスポンスが不正です', res.data);
       return;
     }
 
-    console.log(`Fanbox: ページ上の投稿ID一覧: ${currentIds.join(', ')}`);
+    const items = res.data.body;
+    if (items.length === 0) {
+      console.warn('Fanbox: 投稿が0件です');
+      return;
+    }
+
+    const currentIds = [];
+    const postTitleMap = new Map();
+    
+    items.forEach(item => {
+      const id = parseInt(item.id, 10);
+      currentIds.push(id);
+      postTitleMap.set(id, item.title);
+    });
+
+    console.log(`Fanbox: 取得した最新の投稿ID: ${currentIds.join(', ')}`);
     console.log(`Fanbox: 既知ID数: ${knownIds.size}`);
 
     // 初回起動: 現在見えている全IDを「既知」として記録し通知しない
@@ -102,22 +81,27 @@ async function checkFanboxPosts() {
       return;
     }
 
-    // 既知セットにないIDを「新投稿」とみなす
-    const newIds = currentIds.filter(id => !knownIds.has(id));
+    // 既知セットにないIDを「新投稿」とみなす (逆順にして古いものから通知)
+    const newIds = currentIds.filter(id => !knownIds.has(id)).reverse();
 
     if (newIds.length === 0) {
       console.log('Fanbox: 新しい投稿はありません');
       return;
     }
 
-    console.log(`Fanbox: 新投稿ID発見: ${newIds.join(', ')}`);
+    if (newIds.length >= 5) {
+      console.log(`Fanbox: 大量の新投稿(${newIds.length}件)を検出しました。再同期とみなし通知をスキップします。`);
+      newIds.forEach(id => knownIds.add(id));
+      saveState();
+      return;
+    }
 
-    const pageTitle = $('title').text().replace('|pixivFANBOX', '').trim();
+    console.log(`Fanbox: 新投稿ID発見: ${newIds.join(', ')}`);
 
     // 新投稿それぞれについて通知
     for (const newId of newIds) {
       const newPostUrl = `https://www.fanbox.cc/@${FANBOX_USER}/posts/${newId}`;
-      const postTitle = postTitleMap.get(newId) || pageTitle || '';
+      const postTitle = postTitleMap.get(newId) || '';
 
       console.log('Fanbox: 新しい投稿発見:', postTitle, newPostUrl);
       const payload = {
@@ -152,14 +136,6 @@ async function checkFanboxPosts() {
 
   } catch (e) {
     console.error('Fanbox check error:', e.message || e);
-  } finally {
-    if (page) {
-      try {
-        await page.close();
-      } catch (e) {
-        console.warn('[Fanbox] Failed to close page:', e.message);
-      }
-    }
   }
 }
 

@@ -108,6 +108,10 @@ function parseDynamic(item) {
   if (dynamic.major?.archive) {
     text = `[動画] ${dynamic.major.archive.title}`;
   }
+  // 最新のOpusフォーマット（画像・テキスト統合）
+  else if (dynamic.major?.type === 'MAJOR_TYPE_OPUS') {
+    text = dynamic.major.opus?.summary?.text || dynamic.desc?.text || '[投稿]';
+  }
   // 画像投稿
   else if (dynamic.major?.draw) {
     text = `[画像] ${dynamic.desc?.text || ''}`;
@@ -119,6 +123,19 @@ function parseDynamic(item) {
   // 転送
   else if (dynamic.major?.type === 'MAJOR_TYPE_FORWARD') {
     text = `[転送] ${dynamic.desc?.text || ''}`;
+  }
+  // ライブ配信開始
+  else if (dynamic.major?.type === 'MAJOR_TYPE_LIVE_RCMD') {
+    const liveTitle = dynamic.major.live_rcmd?.content?.live_play_info?.title || '';
+    text = `[ライブ開始] ${liveTitle}`;
+  }
+  // 記事
+  else if (dynamic.major?.type === 'MAJOR_TYPE_ARTICLE') {
+    text = `[記事] ${dynamic.major.article?.title || ''}`;
+  }
+  // その他の形式のフォールバック
+  else {
+    text = dynamic.desc?.text || '[新しい投稿がありました]';
   }
 
   return {
