@@ -1,0 +1,9 @@
+*.log
+*.env
+gipt_debug/
+.ytprofile/
+debug_pages/
+data/
+.git/
+package-lock.json
+ytcommunity_state.json
