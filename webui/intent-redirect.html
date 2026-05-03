@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Open App</title>
+</head>
+<body>Redirecting…</body>
+<script>
+(function(){
+  const p = new URLSearchParams(location.search);
+  const target = decodeURIComponent((p.get('target') || '').trim());
+  if(!target){ location.replace('/'); return; }
+
+  const url = (() => {
+    try { return new URL(target); } catch(e) { return null; }
+  })();
+  if(!url){ location.replace(target); return; }
+
+  const ua = navigator.userAgent || '';
+  const isAndroid = /android/i.test(ua);
+  // const isIOS = /iphone|ipad|ipod/i.test(ua); // iOS は基本 web / Universal Link に任せる
+
+  // YouTube handling
+  if (/youtube\.com|youtu\.be/.test(url.hostname)) {
+    // extract video id (simple)
+    let vid = null;
+    if (url.hostname.includes('youtu.be')) vid = url.pathname.slice(1);
+    else vid = (new URLSearchParams(url.search)).get('v');
+    // build candidates: intent (Chrome), vnd, web
+    if (isAndroid && vid) {
+      const intentUrl = `intent://watch?v=${vid}#Intent;package=com.google.android.youtube;scheme=https;end`;
+      // try intent first
+      location.replace(intentUrl);
+      // fallback timer
+      setTimeout(()=> location.replace(target), 1500);
+      return;
+    }
+    // default
+    location.replace(target);
+    return;
+  }
+
+  // X / Twitter handling
+  if (/^(?:www\.)?(x\.com|twitter\.com)$/.test(url.hostname)) {
+    // try to construct app uri. For Android, use intent://; for iOS use twitter:// or twitter://status?id=
+    // If it's a status link, extract id if possible
+    let statusId = null;
+    const statusMatch = url.pathname.match(/\/(?:i\/web\/status|status)\/(\d+)/);
+    if (statusMatch) statusId = statusMatch[1];
+
+    if (isAndroid) {
+      // intent using web path (package com.twitter.android is common)
+      const intentUrl = `intent://${url.hostname}${url.pathname}${url.search}#Intent;package=com.twitter.android;scheme=https;end`;
+      location.replace(intentUrl);
+      setTimeout(()=> location.replace(target), 1500);
+      return;
+    }
+
+    // iOS / desktop: try twitter:// scheme if status id present
+    if (statusId) {
+      // twitter://status?id=... の形を試す
+      location.replace(`twitter://status?id=${statusId}`);
+      // fallback to web after short delay
+      setTimeout(()=> location.replace(target), 1200);
+      return;
+    }
+
+    // otherwise open web
+    location.replace(target);
+    return;
+  }
+
+  // default: open web target
+  location.replace(target);
+})();
+</script>

@@ -184,7 +184,7 @@ async function sendNotify(username, tweet, settingKey, sendText) {
     type: "twitter",
     settingKey: settingKey,
     data: {
-      title: `新着ツイート (@${username})`,
+      title: tweet.isRepost ? `リポスト (@${username})` : `新着ツイート (@${username})`,
       body: notificationBody,
       url: `https://x.com/${username}/status/${tweet.id}`,
       icon: ICON_URL
@@ -439,8 +439,12 @@ async function checkOneUser(page, username, seenState) {
         const mediaImg = Array.from(article.querySelectorAll('img'))
                               .map(img => img.src)
                               .find(src => src && src.includes('pbs.twimg.com/media/'));
-                              
-        out.push({ id, text, datetime, thumbnail_url: mediaImg || null });
+        
+        // リポスト判定
+        const socialContext = article.querySelector('[data-testid="socialContext"]');
+        const isRepost = socialContext ? (socialContext.innerText.includes('リポスト') || socialContext.innerText.includes('Reposted') || socialContext.innerText.toLowerCase().includes('reposted')) : false;
+
+        out.push({ id, text, datetime, thumbnail_url: mediaImg || null, isRepost });
       }
       return out.filter(t => !t.text.includes('固定'));
     });
@@ -569,15 +573,19 @@ async function check(username, isRetry = false) {
           .catch(err => console.error(`[${username}] Notify error:`, err.message || err));
 
         const gemmaPromise = (async () => {
-          try {
-            const analysis = await analyzeTweet(t.text);
-            console.log(`[${username}] Gemma analysis: category=${analysis.category}, status=${analysis.status}, time=${analysis.start_time}`);
-            // 📅 分析結果からスケジュール作成
-            if (analysis) {
-              await createScheduleFromTweet(username, t, analysis);
+          if (!t.isRepost) {
+            try {
+              const analysis = await analyzeTweet(t.text);
+              console.log(`[${username}] Gemma analysis: category=${analysis.category}, status=${analysis.status}, time=${analysis.start_time}`);
+              // 📅 分析結果からスケジュール作成
+              if (analysis) {
+                await createScheduleFromTweet(username, t, analysis);
+              }
+            } catch (err) {
+              console.warn(`[${username}] Gemma analysis error:`, err.message);
             }
-          } catch (err) {
-            console.warn(`[${username}] Gemma analysis error:`, err.message);
+          } else {
+            console.log(`[${username}] Gemma analysis skipped for repost.`);
           }
         })();
 

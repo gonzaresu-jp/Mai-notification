@@ -95,7 +95,7 @@ $image = isset($pageImage) ? $pageImage : $defaultImage;
      CSS / 基本アセット
      ===================================================== -->
 <!-- メインCSS: ブロックするが必須 -->
-<link rel="stylesheet" href="/style.css?v=3.11" />
+<link rel="stylesheet" href="/style.css?v=3.12" />
 <!-- FontAwesome: preloadで非ブロック読み込み -->
 <link rel="preload" href="/fontawesome-free-7.2.0-web/css/all.min.css" as="style"
   onload="this.onload=null;this.rel='stylesheet'" crossorigin="anonymous" />

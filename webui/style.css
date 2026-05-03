@@ -1052,7 +1052,6 @@ footer p a {
 }
 
 #footer-slot {
-  background-color: var(--color-primary-alpha);
   z-index: 1;
 }
 

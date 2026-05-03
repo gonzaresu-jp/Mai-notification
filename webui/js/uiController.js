@@ -182,7 +182,7 @@ function initHamburgerMenu() {
     console.log('[initHamburgerMenu] 既にバインド済み');
     return true;
   }
-  
+
   console.log('[initHamburgerMenu] ハンバーガーメニューを初期化中...');
   toggle.dataset.bound = "1";
 
@@ -257,6 +257,9 @@ function initHamburgerMenu() {
     }
 
     function onPointerDown(e) {
+
+      if (e.target.closest('.stats-carousel')) return;
+
       const x = e.clientX || (e.touches && e.touches[0].clientX);
       const y = e.clientY || (e.touches && e.touches[0].clientY);
 
@@ -287,6 +290,9 @@ function initHamburgerMenu() {
     }
 
     function onPointerMove(e) {
+
+      if (e.target.closest('.stats-carousel, .carousel-dots')) return;
+
       if (!pointerActive) return;
 
       const x = e.clientX || (e.touches && e.touches[0].clientX);

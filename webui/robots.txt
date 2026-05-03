@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+# APIエンドポイント・内部データはクロール不要
+Disallow: /api/
+Disallow: /data/
+Disallow: /js/
+Disallow: /history.json
+
+Sitemap: https://mai.honna-yuzuki.com/sitemap.xml
