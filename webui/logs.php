@@ -1,5 +1,6 @@
 <?php
 $updateLogs = [
+    ['date' => '2026-05-04', 'details' => ['Googleのセッションの有効期限を7日から1年に延長']],
     ['date' => '2026-05-03', 'details' => ['Fanbox,bilibili,YoutubeCommunityの通知取得方法を改善']],
     ['date' => '2026-04-19', 'details' => [''], 'lines' => '20,432'],
     ['date' => '2026-04-11', 'details' => ['バックエンドでのメモリ消費量削減', '使用するAIにメモリ圧縮技術を適用']],

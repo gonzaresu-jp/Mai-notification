@@ -4,13 +4,13 @@ const crypto = require('crypto');
 const axios = require('axios');
 
 // ---- 設定 ----
-const GOOGLE_CLIENT_ID     = (process.env.GOOGLE_CLIENT_ID || '').replace(/"/g, '');
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').replace(/"/g, '');
 const GOOGLE_CLIENT_SECRET = (process.env.GOOGLE_CLIENT_SECRET || '').replace(/"/g, '');
-const GOOGLE_REDIRECT_URI  = (process.env.GOOGLE_REDIRECT_URI || 'http://localhost:8080/auth/google/callback').replace(/"/g, '');
+const GOOGLE_REDIRECT_URI = (process.env.GOOGLE_REDIRECT_URI || 'http://localhost:8080/auth/google/callback').replace(/"/g, '');
 
-const DISCORD_CLIENT_ID     = (process.env.DISCORD_CLIENT_ID || '').replace(/"/g, '').trim();
+const DISCORD_CLIENT_ID = (process.env.DISCORD_CLIENT_ID || '').replace(/"/g, '').trim();
 const DISCORD_CLIENT_SECRET = (process.env.DISCORD_CLIENT_SECRET || '').replace(/"/g, '').trim();
-const DISCORD_REDIRECT_URI  = (process.env.DISCORD_REDIRECT_URI || '').replace(/"/g, '').trim();
+const DISCORD_REDIRECT_URI = (process.env.DISCORD_REDIRECT_URI || '').replace(/"/g, '').trim();
 
 console.log(`[auth] Discord Config: ID=${DISCORD_CLIENT_ID.slice(0, 4)}...${DISCORD_CLIENT_ID.slice(-4)} (len=${DISCORD_CLIENT_ID.length}), URI=${DISCORD_REDIRECT_URI}`);
 
@@ -28,7 +28,7 @@ const COOKIE_OPTIONS = {
   secure: process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production',
   sameSite: 'lax',
   path: '/',
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7日
+  maxAge: 365 * 24 * 60 * 60 * 1000, // 365日
 };
 
 // ---- Google OAuth クライアント ----
@@ -62,7 +62,7 @@ function requireAuth(req, res, next) {
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'Invalid or expired token', code: 'INVALID_TOKEN' });
 
-  req.userId    = payload.userId;
+  req.userId = payload.userId;
   req.userEmail = payload.email;
   next();
 }
@@ -78,7 +78,7 @@ function optionalAuth(req, res, next) {
   if (token) {
     const payload = verifyToken(token);
     if (payload) {
-      req.userId    = payload.userId;
+      req.userId = payload.userId;
       req.userEmail = payload.email;
     }
   }
@@ -113,10 +113,10 @@ async function exchangeCodeForUser(code) {
 
   const payload = ticket.getPayload();
   return {
-    googleId:    payload.sub,
-    email:       payload.email,
+    googleId: payload.sub,
+    email: payload.email,
     displayName: payload.name,
-    avatarUrl:   payload.picture,
+    avatarUrl: payload.picture,
   };
 }
 
@@ -134,7 +134,7 @@ function getDiscordAuthUrl(state) {
     `scope=${encodeURIComponent('identify email')}`
   ];
   if (state) query.push(`state=${encodeURIComponent(state)}`);
-  
+
   const finalUrl = `${baseUrl}?${query.join('&')}`;
   console.log('--------------------------------------------------');
   console.log('[DEBUG] DISCORD AUTH URL GENERATED:');
@@ -167,7 +167,7 @@ async function exchangeDiscordCodeForUser(code) {
   });
 
   const d = userResponse.data;
-  const avatarUrl = d.avatar 
+  const avatarUrl = d.avatar
     ? `https://cdn.discordapp.com/avatars/${d.id}/${d.avatar}.png`
     : `https://cdn.discordapp.com/embed/avatars/${parseInt(d.discriminator || '0') % 5}.png`;
 
