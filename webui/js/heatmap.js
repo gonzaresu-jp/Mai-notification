@@ -17,6 +17,7 @@ async function loadNotificationHeatmap(containerId) {
 }
 
 function renderHeatmap(container, stats) {
+    container.classList.remove('is-loading');
     const now = new Date();
     // 364 days ago (approx 1 year)
     const startDate = new Date();
@@ -121,6 +122,9 @@ function renderHeatmap(container, stats) {
     const scroller = container.querySelector('.heatmap-scroll-container');
     if (scroller) {
         scroller.scrollLeft = scroller.scrollWidth;
+        // メニュー開閉やジェスチャーとの干渉を防止
+        scroller.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+        scroller.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
     }
 
     setupTooltip(container);
@@ -163,24 +167,27 @@ function setupTooltip(container) {
 }
 
 function renderHeatmapSkeleton(container) {
+    container.classList.add('is-loading');
     const weeks = 53; // Approx 1 year
     let html = '<div class="heatmap-flex">';
     
-    // Day labels
+    // Day labels skeleton
     html += '<div class="heatmap-row-labels">';
-    const dayLabelsShort = ['日', '', '火', '', '木', '', '土'];
-    dayLabelsShort.forEach(label => {
-        html += `<span>${label}</span>`;
-    });
+    for (let i = 0; i < 7; i++) {
+        html += i % 2 === 0 ? '<span class="skeleton" style="width: 12px;"></span>' : '<span></span>';
+    }
     html += '</div>';
-
+    
     html += '<div class="heatmap-scroll-container">';
     
-    // Month labels skeleton (none or empty)
+    // Month labels skeleton
     html += `<div class="heatmap-month-labels" style="grid-template-columns: repeat(${weeks}, 12px);">`;
-    for (let w = 0; w < weeks; w++) html += '<span></span>';
+    for (let w = 0; w < weeks; w++) {
+        if (w % 4 === 0) html += '<span class="skeleton" style="grid-column: span 2; width: 24px;"></span>';
+        else if (w % 4 !== 1) html += '<span></span>';
+    }
     html += '</div>';
-
+    
     html += `<div class="heatmap-container" style="grid-template-columns: repeat(${weeks}, 12px);">`;
     for (let i = 0; i < weeks * 7; i++) {
         html += '<div class="heatmap-cell skeleton"></div>';
@@ -190,7 +197,7 @@ function renderHeatmapSkeleton(container) {
     html += '</div>';
     
     container.innerHTML = html;
-
+    
     const scroller = container.querySelector('.heatmap-scroll-container');
     if (scroller) {
         scroller.scrollLeft = scroller.scrollWidth;

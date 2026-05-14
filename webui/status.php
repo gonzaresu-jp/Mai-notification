@@ -478,7 +478,7 @@ include __DIR__ . '/head.php';
         setInterval(loadAll, 30000);
     </script>
     <script src="/ios-helper.js" defer></script>
-    <script type="module" src="/js/main.js?v=<?= @filemtime(__DIR__ . '/js/main.js') ?: time(); ?>" defer></script>
+    <script type="module" src="/dist/main.bundle.min.js?v=<?= @filemtime(__DIR__ . '/dist/main.bundle.min.js') ?: time(); ?>" defer></script>
 </body>
 
 </html>

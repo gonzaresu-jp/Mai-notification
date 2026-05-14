@@ -15,6 +15,7 @@ const auth = require('./auth');
 const crypto = require('crypto');
 const os = require('os');
 const discordAlert = require('./discord-alert');
+const twitterMediaSaver = require('./twitter-media-saver');
 
 // 致命的なクラッシュの監視を開始
 discordAlert.attachGlobalCrashHandlers();
@@ -686,6 +687,7 @@ ensureIndexes();
 cleanupDuplicates();
 backfillPlatformSettingsDefaults();
 userRoutes.initUserTables(db);
+twitterMediaSaver.initMediaDb(db);
 });
 
 // プロセス終了時に DB をクローズ（データ破損回避）
@@ -2605,16 +2607,11 @@ async function updateHistoryJson() {
     };
 
     // -------------------------
-    // ディレクトリ保証
-    // -------------------------
-    await fs.promises.mkdir(path.dirname(HISTORY_JSON_PATH), { recursive: true });
-
-    // -------------------------
-    // 非同期書き込み
+    // 非同期書き込み（debounce済みなので安全）
     // -------------------------
     await fs.promises.writeFile(
       HISTORY_JSON_PATH,
-      JSON.stringify(jsonData, null, 2),
+      JSON.stringify(jsonData),
       'utf8'
     );
 
@@ -2625,6 +2622,18 @@ async function updateHistoryJson() {
   } catch (e) {
     console.error('[updateHistoryJson] error:', e);
   }
+}
+
+// debounce: 通知が連続した場合、5秒に1回だけファイル書き込み
+let historyJsonDebounceTimer = null;
+const HISTORY_JSON_DEBOUNCE_MS = 5000;
+
+function scheduleHistoryJsonUpdate() {
+  if (historyJsonDebounceTimer) clearTimeout(historyJsonDebounceTimer);
+  historyJsonDebounceTimer = setTimeout(() => {
+    historyJsonDebounceTimer = null;
+    updateHistoryJson().catch(console.error);
+  }, HISTORY_JSON_DEBOUNCE_MS);
 }
 
 // 起動時に初回生成
@@ -2680,8 +2689,8 @@ db.run(
     console.log('[/api/notify] 履歴保存成功 (ID:', this.lastID, ')');
 
     try {
-      // ① JSON + HTML を先に更新（状態確定）
-      updateHistoryJson().catch(console.error);
+      // ① JSON 更新（debounce: 連続通知時は5秒に1回に集約）
+      scheduleHistoryJsonUpdate();
 
       // ② その後に SSE 通知
       sendSseEvent({
@@ -2962,7 +2971,7 @@ async function handleAdminNotify(body, adminUser = 'scheduler') {
       [data.title, data.body, data.url, data.icon, settingKey || type || 'admin', 'success'],
       function(insertErr) {
         if (!insertErr) {
-          updateHistoryJson().catch(console.error);
+          scheduleHistoryJsonUpdate();
           try {
             sendSseEvent({
               type: 'history-updated',
@@ -3485,6 +3494,110 @@ app.get('/api/admin/generate-hash', (req, res) => {
   res.json({ password, hash });
 });
 */
+
+// =====================================================
+// Twitter メディア API
+// =====================================================
+
+// メディア一覧取得 (koinoya_mai限定)
+app.get('/api/twitter-media', (req, res) => {
+  const username = 'koinoya_mai'; // 固定
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const offset = parseInt(req.query.offset) || 0;
+  const type = req.query.type; // 'image' | 'video' | undefined(全て)
+
+  // 統計を先に取得
+  twitterMediaSaver.getMediaStats(username, (statsErr, stats) => {
+    // type フィルタ付きクエリ
+    let query = `SELECT id, tweet_id, username, media_type, original_url, local_path, file_size, tweet_text, tweet_date, created_at
+                 FROM twitter_media WHERE username = ?`;
+    const params = [username];
+
+    if (type === 'image' || type === 'video') {
+      query += ' AND media_type = ?';
+      params.push(type);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    db.all(query, params, (err, rows) => {
+      if (err) {
+        console.error('[TwitterMedia API] list error:', err.message);
+        return res.status(500).json({ error: 'Internal error' });
+      }
+
+      res.json({
+        media: (rows || []).map(r => ({
+          id: r.id,
+          tweet_id: r.tweet_id,
+          media_type: r.media_type,
+          file_size: r.file_size,
+          tweet_text: r.tweet_text,
+          tweet_date: r.tweet_date,
+          created_at: r.created_at,
+          // ファイル配信用URL
+          file_url: `/api/twitter-media/file/${r.id}`,
+          tweet_url: `https://x.com/${r.username}/status/${r.tweet_id}`
+        })),
+        stats: stats || { total: 0, images: 0, videos: 0, total_size: 0 },
+        limit,
+        offset
+      });
+    });
+  });
+});
+
+// メディアファイル配信
+app.get('/api/twitter-media/file/:id', (req, res) => {
+  const mediaId = parseInt(req.params.id);
+  if (!mediaId || isNaN(mediaId)) return res.status(400).send('Invalid ID');
+
+  db.get('SELECT local_path, media_type FROM twitter_media WHERE id = ?', [mediaId], (err, row) => {
+    if (err || !row) return res.status(404).send('Not found');
+
+    const filePath = row.local_path;
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send('File not found on disk');
+    }
+
+    // Content-Type 判定
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeMap = {
+      '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+      '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif',
+      '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime'
+    };
+    const contentType = mimeMap[ext] || 'application/octet-stream';
+
+    // キャッシュヘッダー（画像/動画は長めにキャッシュ）
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('Content-Type', contentType);
+
+    const stat = fs.statSync(filePath);
+
+    // Range リクエスト対応（動画のシーク用）
+    const range = req.headers.range;
+    if (range && row.media_type === 'video') {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+      const chunkSize = end - start + 1;
+
+      res.status(206);
+      res.set({
+        'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize
+      });
+      fs.createReadStream(filePath, { start, end }).pipe(res);
+    } else {
+      res.set('Content-Length', stat.size);
+      fs.createReadStream(filePath).pipe(res);
+    }
+  });
+});
+
 // --- 起動 ---
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {

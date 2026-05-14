@@ -180,8 +180,8 @@ $updateLogs = [
 
     <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/ios-helper.js" defer></script>
-    <script type="module" src="/js/main.js?v=<?= @filemtime(__DIR__ . '/js/main.js') ?: time(); ?>" defer></script>
-    <script src="/js/ui-misc.js?v=<?= @filemtime(__DIR__ . '/js/ui-misc.js') ?: time(); ?>" defer></script>
+    <script type="module" src="/dist/main.bundle.min.js?v=<?= @filemtime(__DIR__ . '/dist/main.bundle.min.js') ?: time(); ?>" defer></script>
+    <script src="/dist/ui-misc.min.js?v=<?= @filemtime(__DIR__ . '/dist/ui-misc.min.js') ?: time(); ?>" defer></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const loadMoreBtn = document.getElementById('load-more-btn');
