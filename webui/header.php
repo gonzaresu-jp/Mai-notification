@@ -209,6 +209,7 @@
             <li><a href="/future/" rel="noopener noreferrer">今後の開発予定</a></li>
             <li><a href="/download/" rel="noopener noreferrer">Androidアプリをダウンロード</a></li>
             <li><a href="/logs/" rel="noopener noreferrer">Update logs</a></li>
+            <li><a href="/twitter-media/" rel="noopener noreferrer">メディアアーカイブ</a></li>
             <li><a href="/status" rel="noopener noreferrer">システム稼働状況</a></li>
             <li><a href="https://form.jotform.com/253191048959063" target="_blank" rel="noopener noreferrer">不具合報告</a>
             </li>

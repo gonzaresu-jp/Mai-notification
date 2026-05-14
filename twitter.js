@@ -9,6 +9,8 @@ const sqlite3 = require('sqlite3').verbose();
 const os = require('os');
 const fs = require('fs');
 const { analyzeTweet, extractScheduleFromAnalysis, extractUrlsFromTweet } = require('./gemma-analyzer');
+const { checkScheduleDrift } = require('./schedule-drift-monitor');
+const twitterMediaSaver = require('./twitter-media-saver');
 
 const PROFILE_PATH = '/var/lib/mai-push/puppeteer-profile';
 const COOKIE_DB = path.join(PROFILE_PATH, 'cookies.sqlite');
@@ -430,21 +432,37 @@ async function checkOneUser(page, username, seenState) {
         if (seen.has(id)) continue;
         seen.add(id);
         const timeEl = article.querySelector('time');
-        const datetime = timeEl ? timeEl.getAttribute('datetime') : null;
+        let datetime = timeEl ? timeEl.getAttribute('datetime') : null;
+
+        // datetime が取れなかった場合、ツイートID (Snowflake) から逆算を試みる
+        if (!datetime && id) {
+          try {
+            // Twitter Snowflake ID (2010年以降): (id >> 22) + 1288834974657
+            const tweetIdBigInt = BigInt(id);
+            const timestampMs = (tweetIdBigInt >> 22n) + 1288834974657n;
+            datetime = new Date(Number(timestampMs)).toISOString();
+          } catch (e) {
+            console.warn(`[Twitter] Snowflake conversion failed for ${id}:`, e.message);
+          }
+        }
         let text = '';
         const tweetText = article.querySelector('div[lang]') || article;
         text = tweetText ? tweetText.innerText : article.innerText;
         
-        // ツイート内の画像URL（メディア画像）を取得（アイコンや絵文字等を除外）
-        const mediaImg = Array.from(article.querySelectorAll('img'))
+        // ツイート内の全画像URL（メディア画像）を取得（アイコンや絵文字等を除外）
+        const mediaImages = Array.from(article.querySelectorAll('img'))
                               .map(img => img.src)
-                              .find(src => src && src.includes('pbs.twimg.com/media/'));
+                              .filter(src => src && src.includes('pbs.twimg.com/media/'));
         
+        // 動画の有無を判定（videoPlayer が存在するか）
+        const hasVideo = !!article.querySelector('[data-testid="videoPlayer"]') ||
+                         !!article.querySelector('video');
+
         // リポスト判定
         const socialContext = article.querySelector('[data-testid="socialContext"]');
         const isRepost = socialContext ? (socialContext.innerText.includes('リポスト') || socialContext.innerText.includes('Reposted') || socialContext.innerText.toLowerCase().includes('reposted')) : false;
 
-        out.push({ id, text, datetime, thumbnail_url: mediaImg || null, isRepost });
+        out.push({ id, text, datetime, thumbnail_url: mediaImages[0] || null, media_urls: mediaImages, hasVideo, isRepost });
       }
       return out.filter(t => !t.text.includes('固定'));
     });
@@ -580,6 +598,11 @@ async function check(username, isRetry = false) {
               // 📅 分析結果からスケジュール作成
               if (analysis) {
                 await createScheduleFromTweet(username, t, analysis);
+                
+                // ⏰ 配信予定の時刻差異（Twitter vs YouTube）をチェック
+                if (analysis.category === 'LIVE' && !t.isRepost) {
+                  await checkScheduleDrift(t).catch(err => console.error(`[${username}] Drift check error:`, err.message));
+                }
               }
             } catch (err) {
               console.warn(`[${username}] Gemma analysis error:`, err.message);
@@ -591,6 +614,13 @@ async function check(username, isRetry = false) {
 
         // 両方の処理を待つ（通知のリクエスト自体は一瞬で飛ぶ）
         await Promise.all([notifyPromise, gemmaPromise]);
+      }
+
+      // 🖼️ メディア保存（リポスト以外の新着ツイート）
+      try {
+        await twitterMediaSaver.saveAllMedia(newTweets, username);
+      } catch (mediaSaveErr) {
+        console.error(`[${username}] メディア保存エラー:`, mediaSaveErr.message);
       }
     } else {
       if (Array.isArray(normalTweets) && normalTweets.length > 0) {

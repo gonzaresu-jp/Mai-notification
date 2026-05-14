@@ -418,7 +418,7 @@
     </script>
     <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/ios-helper.js" defer></script>
-    <script type="module" src="/js/main.js" defer></script>
+    <script type="module" src="/dist/main.bundle.min.js" defer></script>
     <script>
         const btn = document.getElementById('btn-log-settings');
         const menu = document.getElementById('log-settings-container');
@@ -627,7 +627,7 @@
     </script>
     <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/ios-helper.js" defer></script>
-    <script type="module" src="/js/main.js" defer></script>
+    <script type="module" src="/dist/main.bundle.min.js" defer></script>
     <script>
         const btn = document.getElementById('btn-log-settings');
         const menu = document.getElementById('log-settings-container');

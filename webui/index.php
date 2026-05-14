@@ -4,14 +4,15 @@
 
 <head>
     <?php
-    $extraHead = '<link rel="preload" href="./top-card.css?v=2.64" as="style" onload="this.onload=null;this.rel=\'stylesheet\'" />'
-        . '<noscript><link rel="stylesheet" href="./top-card.css?v=2.64" /></noscript>';
+    $topCardCss = './top-card.min.css?v=' . (@filemtime(__DIR__ . '/top-card.min.css') ?: time());
+    $extraHead = '<link rel="preload" href="' . $topCardCss . '" as="style" onload="this.onload=null;this.rel=\'stylesheet\'" />'
+        . '<noscript><link rel="stylesheet" href="' . $topCardCss . '" /></noscript>';
     include __DIR__ . '/head.php';
     ?>
 
 
     <link rel="manifest" href="./manifest.json" />
-    <link rel="stylesheet" href="./heatmap.css?v=<?= @filemtime(__DIR__ . '/heatmap.css') ?: time(); ?>" />
+    <link rel="stylesheet" href="./heatmap.min.css?v=<?= @filemtime(__DIR__ . '/heatmap.min.css') ?: time(); ?>" />
 
     <!-- =====================================================
          構造化データ（JSON-LD）
@@ -439,8 +440,7 @@
             <!-- ✅ カルーセルドットに role="group" -->
             <div class="carousel-dots" role="group" aria-label="スライド切り替え"></div>
             <!-- JavaScript読み込み -->
-            <script src="/js/weekly-schedule.js?v=<?= @filemtime(__DIR__ . '/js/weekly-schedule.js') ?: time(); ?>"
-                defer></script>
+            <script src="./dist/weekly-schedule.min.js?v=<?= @filemtime(__DIR__ . '/dist/weekly-schedule.min.js') ?: time(); ?>" defer></script>
             <script>
                 document.addEventListener('DOMContentLoaded', () => {
                     loadWeeklySchedule('weekly-schedule');
@@ -714,16 +714,15 @@
         <?php include __DIR__ . '/footer.php'; ?>
     </section>
 
-    <script src="/js/carousel.js?v=<?= @filemtime(__DIR__ . '/js/carousel.js') ?: time(); ?>" defer></script>
-    <script src="/js/mai-voice.js?v=<?= @filemtime(__DIR__ . '/js/mai-voice.js') ?: time(); ?>" defer></script>
-    <script src="/js/count-days.js?v=<?= @filemtime(__DIR__ . '/js/count-days.js') ?: time(); ?>" defer></script>
-    <script src="/js/panel.js?v=<?= @filemtime(__DIR__ . '/js/panel.js') ?: time(); ?>" defer></script>
-    <script src="/js/ui-misc.js?v=<?= @filemtime(__DIR__ . '/js/ui-misc.js') ?: time(); ?>" defer></script>
-    <script src="/js/subscribers.js?v=<?= @filemtime(__DIR__ . '/js/subscribers.js') ?: time(); ?>" defer></script>
-    <script type="module" src="/js/main.js?v=<?= @filemtime(__DIR__ . '/js/main.js') ?: time(); ?>" defer></script>
-    <script src="/js/auth-settings-bridge.js?v=<?= @filemtime(__DIR__ . '/js/auth-settings-bridge.js') ?: time(); ?>"
-        defer></script>
-    <script src="/js/heatmap.js?v=<?= @filemtime(__DIR__ . '/js/heatmap.js') ?: time(); ?>" defer></script>
+    <script src="./dist/carousel.min.js?v=<?= @filemtime(__DIR__ . '/dist/carousel.min.js') ?: time(); ?>" defer></script>
+    <script src="./dist/mai-voice.min.js?v=<?= @filemtime(__DIR__ . '/dist/mai-voice.min.js') ?: time(); ?>" defer></script>
+    <script src="./dist/count-days.min.js?v=<?= @filemtime(__DIR__ . '/dist/count-days.min.js') ?: time(); ?>" defer></script>
+    <script src="./dist/panel.min.js?v=<?= @filemtime(__DIR__ . '/dist/panel.min.js') ?: time(); ?>" defer></script>
+    <script src="./dist/ui-misc.min.js?v=<?= @filemtime(__DIR__ . '/dist/ui-misc.min.js') ?: time(); ?>" defer></script>
+    <script src="./dist/subscribers.min.js?v=<?= @filemtime(__DIR__ . '/dist/subscribers.min.js') ?: time(); ?>" defer></script>
+    <script type="module" src="./dist/main.bundle.min.js?v=<?= @filemtime(__DIR__ . '/dist/main.bundle.min.js') ?: time(); ?>" defer></script>
+    <script src="./dist/auth-settings-bridge.min.js?v=<?= @filemtime(__DIR__ . '/dist/auth-settings-bridge.min.js') ?: time(); ?>" defer></script>
+    <script src="./dist/heatmap.min.js?v=<?= @filemtime(__DIR__ . '/dist/heatmap.min.js') ?: time(); ?>" defer></script>
 
 </body>
 

@@ -28,7 +28,7 @@ class MilestoneScheduler {
     this.db.all(
       `SELECT title FROM notifications 
        WHERE platform = 'milestone' 
-       AND DATE(created_at) = ?`,
+       AND DATE(created_at, 'localtime') = ?`,
       [today],
       (err, rows) => {
         if (err) {
@@ -97,63 +97,85 @@ class MilestoneScheduler {
   }
 
   // 通知を送信
-  async sendMilestoneNotification(milestone) {
-    // 重複チェック
-    if (this.sentMilestones.has(milestone.title)) {
-      console.log(`⏭️  スキップ（送信済み）: ${milestone.title}`);
-      return;
-    }
-
-    const payload = {
-      title: milestone.title,
-      body: milestone.body,
-      url: './',
-      icon: './icon.webp'
-    };
-
-    // 履歴に保存
-    this.db.run(
-      'INSERT INTO notifications (title, body, url, icon, platform, status) VALUES (?, ?, ?, ?, ?, ?)',
-      [payload.title, payload.body, payload.url, payload.icon, 'milestone', 'success'],
-      (err) => {
-        if (err) {
-          console.error('マイルストーン履歴保存エラー:', err);
-        }
+  sendMilestoneNotification(milestone) {
+    return new Promise((resolve) => {
+      // メモリ上での早期重複チェック
+      if (this.sentMilestones.has(milestone.title)) {
+        console.log(`⏭️  スキップ（メモリ上送信済み）: ${milestone.title}`);
+        return resolve();
       }
-    );
 
-    // 全購読者に送信
-    this.db.all(
-      'SELECT client_id, subscription_json, settings_json FROM subscriptions',
-      [],
-      async (err, rows) => {
-        if (err) {
-          console.error('購読者取得エラー:', err);
-          return;
-        }
+      const payload = {
+        title: milestone.title,
+        body: milestone.body,
+        url: './',
+        icon: './icon.webp'
+      };
+      
+      const today = this.getTodayString();
+      const self = this;
 
-        let sentCount = 0;
-        for (const row of rows) {
-          try {
-            const subscription = JSON.parse(row.subscription_json);
-            const settings = row.settings_json ? JSON.parse(row.settings_json) : {};
-
-            // milestone 通知の設定（デフォルトはON）
-            if (settings.milestone === false) {
-              continue;
-            }
-
-            const sent = await this.sendPushNotification(subscription, payload);
-            if (sent) sentCount++;
-          } catch (e) {
-            console.error(`送信エラー (client: ${row.client_id}):`, e.message);
+      // 履歴に保存 (アトミックに重複を防ぐ)
+      // 複数のプロセス（main.jsとserver.js）が同時に処理しても、INSERTのWHERE NOT EXISTSによって1つしか成功しない
+      this.db.run(
+        `INSERT INTO notifications (title, body, url, icon, platform, status)
+         SELECT ?, ?, ?, ?, ?, ?
+         WHERE NOT EXISTS (
+           SELECT 1 FROM notifications 
+           WHERE platform = 'milestone' 
+             AND title = ? 
+             AND DATE(created_at, 'localtime') = ?
+         )`,
+        [payload.title, payload.body, payload.url, payload.icon, 'milestone', 'success', payload.title, today],
+        function (err) {
+          if (err) {
+            console.error('マイルストーン履歴保存エラー:', err);
+            return resolve();
           }
-        }
 
-        console.log(`✅ ${milestone.title}: ${sentCount}/${rows.length}人に送信完了`);
-        this.sentMilestones.add(milestone.title);
-      }
-    );
+          // this.changes が 0 の場合、すでに他のプロセスが挿入済み（＝送信済み）なのでスキップ
+          if (this.changes === 0) {
+            console.log(`⏭️  スキップ（DB挿入済み、他プロセスで処理）: ${milestone.title}`);
+            self.sentMilestones.add(milestone.title); // メモリ上も更新しておく
+            return resolve();
+          }
+
+          // 挿入に成功したプロセスのみ、全購読者に送信
+          self.db.all(
+            'SELECT client_id, subscription_json, settings_json FROM subscriptions',
+            [],
+            async (err, rows) => {
+              if (err) {
+                console.error('購読者取得エラー:', err);
+                return resolve();
+              }
+
+              let sentCount = 0;
+              for (const row of rows) {
+                try {
+                  const subscription = JSON.parse(row.subscription_json);
+                  const settings = row.settings_json ? JSON.parse(row.settings_json) : {};
+
+                  // milestone 通知の設定（デフォルトはON）
+                  if (settings.milestone === false) {
+                    continue;
+                  }
+
+                  const sent = await self.sendPushNotification(subscription, payload);
+                  if (sent) sentCount++;
+                } catch (e) {
+                  console.error(`送信エラー (client: ${row.client_id}):`, e.message);
+                }
+              }
+
+              console.log(`✅ ${milestone.title}: ${sentCount}/${rows.length}人に送信完了`);
+              self.sentMilestones.add(milestone.title);
+              resolve();
+            }
+          );
+        }
+      );
+    });
   }
 
   // Push通知を送信

@@ -144,6 +144,9 @@
     flex: 1;
     overflow-x: auto;
     padding-bottom: 5px;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
 }
 
 .heatmap-cell[data-count]:hover {
@@ -152,21 +155,45 @@
 }
 
 /* スケルトン表示用 */
+.heatmap-wrapper.is-loading {
+    border-color: #ddd;
+    background: rgba(255, 255, 255, 0.4);
+}
+
 .heatmap-cell.skeleton {
-    background-color: #eee !important;
-    animation: heatmap-shimmer 1.5s infinite linear;
-    background: linear-gradient(to right, #eeeeee 8%, #dddddd 18%, #eeeeee 33%);
-    background-size: 800px 104px;
-    position: relative;
+    background: #e0e0e0;
     pointer-events: none;
 }
 
-@keyframes heatmap-shimmer {
-    0% {
-        background-position: -400px 0;
-    }
+/* コンテナ全体へのシマーエフェクト */
+.heatmap-wrapper.is-loading .heatmap-flex {
+    position: relative;
+    overflow: hidden;
+}
 
-    100% {
-        background-position: 400px 0;
-    }
+.heatmap-wrapper.is-loading .heatmap-flex::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+    animation: heatmap-shimmer 1.5s infinite;
+    z-index: 2;
+}
+
+@keyframes heatmap-shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(50%); }
+}
+
+/* スケルトン用のラベル */
+.heatmap-row-labels span.skeleton,
+.heatmap-month-labels span.skeleton {
+    display: inline-block;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    margin: 2px 0;
 }

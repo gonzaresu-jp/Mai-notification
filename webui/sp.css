@@ -162,54 +162,78 @@
     padding: 0 2px;
   }
 
-  /* ドットコンテナ */
+  /* スマホ月間: コンパクトなテキスト詳細表示 */
   .monthly-grid .month-day-cell .week-events {
     display: flex;
-    flex-wrap: wrap;
-    gap: 3px;
-    padding: 2px 3px 3px;
-    align-items: flex-start;
+    flex-direction: column;
+    gap: 1px;
+    padding: 1px 2px 2px;
+    align-items: stretch;
   }
 
-  /* イベントカード自体をドットに変換 */
   .monthly-grid .month-day-cell .event {
-    width: 7px;
-    height: 7px;
+    width: 100%;
     min-height: unset;
-    border-radius: 50%;
-    border-left: none;
-    background: #ccc;
+    border-radius: 2px;
     padding: 0;
     margin: 0;
     overflow: hidden;
-    flex-shrink: 0;
     cursor: pointer;
+    display: flex;
+    align-items: center;
   }
 
-  /* イベント種別ごとのドット色 */
-  .monthly-grid .month-day-cell .event.live {
-    background: #B11E7C;
+  /* サムネイルは非表示（スペース節約） */
+  .monthly-grid .month-day-cell .event-thumb {
+    display: none !important;
   }
 
-  .monthly-grid .month-day-cell .event.video {
-    background: #1e88e5;
+  .monthly-grid .month-day-cell .event-info {
+    padding: 1px 2px;
+    min-width: 0;
+    width: 100%;
   }
 
-  .monthly-grid .month-day-cell .event.user-schedule {
-    background: #7b1fa2;
+  .monthly-grid .month-day-cell .event-time {
+    font-size: 0.48rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .monthly-grid .month-day-cell .event.memo {
-    background: #9e9e9e;
+  .monthly-grid .month-day-cell .event-title {
+    font-size: 0.45rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .monthly-grid .month-day-cell .event-status-badge {
+    font-size: 0.42rem;
+    padding: 0 2px;
   }
 
   .monthly-grid .month-day-cell .event.none {
     display: none;
   }
 
-  /* ドット内のテキスト・画像は非表示 */
-  .monthly-grid .month-day-cell .event * {
-    display: none !important;
+  /* メモも小さめに */
+  .monthly-grid .month-day-cell .event.memo .event-info div {
+    font-size: 0.45rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .monthly-grid .month-day-cell .schedule-note {
+    font-size: 0.42rem;
+  }
+
+  .monthly-grid .month-day-cell .unconfirmed-badge {
+    font-size: 0.4rem;
   }
 }
 

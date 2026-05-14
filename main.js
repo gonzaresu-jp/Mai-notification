@@ -20,6 +20,7 @@ const gipt = require('./gipt');
 const { startTwitchPolling } = require('./twitch');
 const { closeAllBrowsers } = require('./browser');
 const discordAlert = require('./discord-alert');
+const twitterMediaSaver = require('./twitter-media-saver');
 
 // 致命的なクラッシュの監視を開始
 discordAlert.attachGlobalCrashHandlers();
@@ -99,6 +100,10 @@ async function main() {
   const dbPath = path.join(__dirname, 'data.db');
   db = new sqlite3.Database(dbPath);
   db.serialize(() => {
+    db.run("PRAGMA busy_timeout = 5000");
+    db.run("PRAGMA journal_mode = WAL");
+    db.run("PRAGMA synchronous = NORMAL");
+    db.run("PRAGMA temp_store = MEMORY");
     db.run(`CREATE TABLE IF NOT EXISTS scraper_status (
       id TEXT PRIMARY KEY,
       name TEXT,
@@ -111,6 +116,9 @@ async function main() {
       else console.log('scraper_status table ensured (main)');
     });
   });
+
+  // Twitterメディア保存用DB初期化
+  twitterMediaSaver.initMediaDb(db);
 
   // 通知設定を一元化して注入
   const notifyConfig = {
@@ -202,7 +210,7 @@ async function main() {
     appAccessToken: process.env.TWITCH_APP_ACCESS_TOKEN,
     twitchUrl: process.env.TWITCH_URL || 'https://www.twitch.tv/koinoya_mai',
     notifyConfig,
-    interval: 1000, // ★1秒間隔に設定
+    interval: 2000, // 2秒間隔
   };
 
 
@@ -363,28 +371,7 @@ if (typeof youtubeCommunity.pollAndNotify === 'function') {
   );
 }
 
-// 💡 新しい TwitCasting サーバーの起動
-if (typeof twitcasting.startTwitcastingServer === 'function') {
-    startPromises.push(
-      (async () => {
-        try {
-          await twitcasting.startTwitcastingServer(3002); // ポート3002で独立起動
-          console.log('TwitCasting API init 完了');
-
-          // ✅ ポーリング開始（プライベート配信も対応）
-          if (typeof twitcasting.startPolling === 'function') {
-            await sendStatusUpdate('twitcasting_polling', 'TwitCasting Polling', 'running');
-            twitcasting.startPolling('@c:koinoya_mai', 10); // 30秒間隔
-            console.log('TwitCasting polling 起動');
-            await sendStatusUpdate('twitcasting_polling', 'TwitCasting Polling', 'success');
-          }
-        } catch (e) {
-          console.error('TwitCasting API init 起動エラー:', e);
-          throw e;
-        }
-      })()
-    );
-}
+// TwitCasting は startWatcher で統合監視（5秒間隔）
 
   // TwitCasting 初期化
   if (typeof twitcasting.initTwitcastingApi === 'function') {
