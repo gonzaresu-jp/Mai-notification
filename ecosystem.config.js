@@ -6,6 +6,8 @@ module.exports = {
     max_memory_restart: '2G',
     env: {
       NODE_ENV: 'production',
+      PORT: '3002',
+      NOTIFY_API_URL: 'http://localhost:8080/api/notify',
 
       TWITCH_CLIENT_ID: '5d9laffnevoisb4eczur6918w61yjc',
       TWITCH_CLIENT_SECRET: '1cpgq5b880mx2o4wqx29ejmpgn6kqn',
@@ -20,5 +22,15 @@ module.exports = {
     env: {
       NODE_ENV: 'production'
     }
+  },
+  {
+    name: 'mai-push-api',
+    script: './server.js',
+    cwd: '/var/www/html/mai-push',
+    env: {
+      NODE_ENV: 'production',
+      PORT: '8080'
+    },
+    max_memory_restart: '1G'
   }]
 };

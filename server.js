@@ -226,6 +226,14 @@ setInterval(() => {
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
+
+app.use((req, res, next) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 app.use("/pushweb", express.static(path.join(__dirname, "pushweb")));
 app.use("/admin", express.static(path.join(__dirname, "admin")));
 app.set("trust proxy", true);
@@ -289,6 +297,14 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
   validate: { trustProxy: false },
   message: { error: "Too many API requests, please try again later." },
+});
+
+const notifyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many notify requests, please try again later." },
 });
 
 app.use("/api/", apiLimiter);
@@ -510,7 +526,12 @@ db.serialize(() => {
         console.log("✅ notifications.platform 追加");
       }
 
-      if (!colNames.includes("status")) {
+        // Add tweet_id column if missing
+        if (!colNames.includes("tweet_id")) {
+          db.run("ALTER TABLE notifications ADD COLUMN tweet_id TEXT");
+          console.log("✅ notifications.tweet_id added");
+        }
+        if (!colNames.includes("status")) {
         db.run("ALTER TABLE notifications ADD COLUMN status TEXT");
         db.run(
           "UPDATE notifications SET status='success' WHERE status IS NULL",
@@ -2519,9 +2540,11 @@ app.get("/api/history", (req, res) => {
       }
 
       // 起動時に platform, status カラムは追加保証されているため、PRAGMAチェックを省略してハードコード
-      const selectFields =
-        "id, title, body, url, icon, strftime('%s', created_at) AS timestamp, platform, status";
-      const sql = `SELECT ${selectFields} FROM notifications ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+      const sql = `SELECT n.id, n.title, n.body, n.url, n.icon, n.platform, n.status,
+                   strftime('%s', n.created_at) AS timestamp,
+                   (SELECT tm.id FROM twitter_media tm WHERE tm.tweet_id = n.tweet_id ORDER BY tm.id LIMIT 1) AS media_id,
+                   (SELECT tm.media_type FROM twitter_media tm WHERE tm.tweet_id = n.tweet_id ORDER BY tm.id LIMIT 1) AS media_type
+                   FROM notifications n ORDER BY n.created_at DESC LIMIT ? OFFSET ?`;
 
       db.all(sql, [limit, offset], (err, rows) => {
         console.log(
@@ -2550,6 +2573,8 @@ app.get("/api/history", (req, res) => {
           status: r.status || "success",
           // timestamp が null/undefined の場合は 0 を返す
           timestamp: r.timestamp ? parseInt(r.timestamp, 10) : 0,
+          media_url: (r.media_id && r.platform !== 'twitterSub') ? `/api/twitter-media/file/${r.media_id}` : null,
+          media_type: (r.platform !== 'twitterSub') ? r.media_type : null,
         }));
 
         return res.json({ logs, total, hasMore });
@@ -2558,421 +2583,18 @@ app.get("/api/history", (req, res) => {
   );
 });
 
-// SSE エンドポイント: クライアントは EventSource('/api/history/stream')
-app.get("/api/history/stream", (req, res) => {
-  // 任意認証や clientId パラメータを受け取りたい場合はここで処理可能
-  // const clientId = req.query.clientId;
-
-  // SSE ヘッダ
-  res.set({
-    "Content-Type": "text/event-stream; charset=utf-8",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    // CORS が必要なら適宜追加
-    // 'Access-Control-Allow-Origin': '*'
-  });
-  res.flushHeaders && res.flushHeaders();
-
-  // 初回イベント（握手）
-  res.write(`:ok\n\n`); // コメント行で接続保持を促す
-  sseClients.add(res);
-  console.log("[SSE] client connected (total=%d)", sseClients.size);
-
-  // 切断時のクリーンアップ
-  req.on("close", () => {
-    sseClients.delete(res);
-    try {
-      res.end();
-    } catch (e) {}
-    console.log("[SSE] client disconnected (total=%d)", sseClients.size);
-  });
-
-  // --- オプション: ping（コネクション維持） ---
-  // keepAliveInterval はグローバルで1つだけにするか、ここで個別にセットする
-  // ここでは個別に setInterval を使わない（単純化）。必要なら実装可能。
-});
-
-// --- テスト通知 (改善版) ---
-app.post("/api/send-test", (req, res) => {
-  const clientId = (req.body && req.body.clientId) || null;
-  if (!clientId) return res.status(400).json({ error: "clientId required" });
-
-  db.get(
-    "SELECT subscription_json FROM subscriptions WHERE client_id = ?",
-    [clientId],
-    async (err, row) => {
-      if (err) {
-        console.error("/api/send-test SELECT err:", err.message);
-        return res.status(500).json({ error: "DB error", detail: err.message });
-      }
-      if (!row || !row.subscription_json) {
-        return res.status(404).json({ error: "Subscription not found" });
-      }
-
-      let subscription;
-      try {
-        subscription = JSON.parse(row.subscription_json);
-      } catch (e) {
-        console.error(
-          "/api/send-test parse subscription_json err:",
-          e.message,
-          "clientId:",
-          clientId,
-        );
-        return res
-          .status(500)
-          .json({ error: "Invalid subscription data", detail: "parse error" });
-      }
-
-      // payload の検証（必要に応じてフィールドを調整）
-      const payload = {
-        title: "テスト通知",
-        body: "この通知をタップしてURLに飛べるか確認！",
-        url: "./test/",
-        icon: `${req.protocol}://${req.get("host")}/icon.webp`,
-      };
-
-      // 短めの保護（サイズ制限）
-      const payloadStr = JSON.stringify(payload);
-      if (payloadStr.length > 8 * 1024) {
-        console.error("/api/send-test: payload too large", {
-          clientId,
-          size: payloadStr.length,
-        });
-        return res.status(400).json({ error: "payload too large" });
-      }
-
-      try {
-        const sent = await sendPushNotification(
-          subscription,
-          payload,
-          db,
-          true,
-        );
-        // テスト通知は履歴に保存しない方針のまま
-        return res.json({ success: sent });
-      } catch (e) {
-        console.error("/api/send-test error (unexpected):", e && e.message);
-        return res
-          .status(500)
-          .json({ error: "Send error", detail: e && e.message });
-      }
-    },
-  );
-});
-// --- Android テスト通知 ---
-app.post("/api/android/send-test", async (req, res) => {
-  const fcmToken =
-    req.body && req.body.fcmToken ? String(req.body.fcmToken).trim() : null;
-  if (!fcmToken) return res.status(400).json({ error: "fcmToken required" });
-
-  const messaging = initFcm();
-  if (!messaging) {
-    return res.status(503).json({ error: "FCM not configured" });
-  }
-
-  const payload = {
-    title: "テスト通知",
-    body: "この通知をタップしてURLに飛べるか確認！",
-    url: "https://mai.honna-yuzuki.com/test/",
-    icon: `${req.protocol}://${req.get("host")}/icon.webp`,
-  };
-
-  try {
-    const result = await sendFcmNotification(
-      messaging,
-      fcmToken,
-      payload,
-      "test",
-      null,
-      false,
-    );
-    if (!result.sent && result.error && isInvalidFcmError(result.error)) {
-      db.run(
-        "DELETE FROM android_devices WHERE fcm_token = ?",
-        [fcmToken],
-        function (delErr) {
-          if (delErr)
-            console.error("android_devices delete err:", delErr.message);
-        },
-      );
-    }
-    return res.json({ success: !!result.sent });
-  } catch (e) {
-    console.error(
-      "/api/android/send-test error:",
-      e && e.message ? e.message : e,
-    );
-    return res.status(500).json({ error: "Send error" });
-  }
-});
-
-const SCHEDULE_INTERVAL_MS = 5000; // 5秒毎にチェック
-
-// ============================================
-// Scheduler Worker（堅牢版）
-// ============================================
-setInterval(async () => {
-  const now = Date.now();
-
-  try {
-    // due 一括取得（Promise化）
-    const rows = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT id, payload_json
-         FROM scheduled_notifications
-         WHERE sent = 0 AND run_at <= ?`,
-        [now],
-        (err, r) => {
-          if (err) reject(err);
-          else resolve(r || []);
-        },
-      );
-    });
-
-    if (!rows.length) return;
-
-    for (const row of rows) {
-      try {
-        // ----------------------------
-        // 送信前ロック（多重防止の最重要ポイント）
-        // ----------------------------
-        const locked = await new Promise((resolve) => {
-          db.run(
-            `UPDATE scheduled_notifications
-             SET sent = 2   -- 2 = processing
-             WHERE id = ? AND sent = 0`,
-            [row.id],
-            function () {
-              resolve(this.changes > 0);
-            },
-          );
-        });
-
-        if (!locked) continue; // 他workerが処理中
-
-        const payload = JSON.parse(row.payload_json);
-
-        // ----------------------------
-        // 実送信
-        // ----------------------------
-        await handleAdminNotify(payload);
-
-        // ----------------------------
-        // 成功確定
-        // ----------------------------
-        db.run(
-          `UPDATE scheduled_notifications
-           SET sent = 1, sent_at = ?
-           WHERE id = ?`,
-          [Date.now(), row.id],
-        );
-
-        console.log("[Scheduler] sent id=", row.id);
-      } catch (e) {
-        console.error("[Scheduler] failed id=", row.id, e);
-
-        // ----------------------------
-        // 失敗時は未送信に戻す（再試行可能）
-        // ----------------------------
-        db.run(
-          `UPDATE scheduled_notifications
-           SET sent = 0
-           WHERE id = ?`,
-          [row.id],
-        );
-      }
-    }
-  } catch (err) {
-    console.error("[Scheduler] fatal:", err);
-  }
-}, SCHEDULE_INTERVAL_MS);
-
-// --- ユーザーデータ統合取得（設定+名前を一度に） ---
-app.get("/api/get-user-data", (req, res) => {
-  let clientId = req.query.clientId;
-  if (!clientId) return res.status(400).json({ error: "clientId required" });
-
-  clientId = String(clientId).trim();
-  if (clientId.length === 0 || clientId.length > 256) {
-    return res.status(400).json({ error: "invalid clientId" });
-  }
-
-  // デフォルト設定
-  const defaultSettings = DEFAULT_PLATFORM_SETTINGS;
-
-  db.get(
-    "SELECT settings_json, name FROM subscriptions WHERE client_id = ?",
-    [clientId],
-    (err, row) => {
-      if (err) {
-        console.error("/api/get-user-data SELECT err:", err.message);
-        return res.status(500).json({ error: "DB error", detail: err.message });
-      }
-
-      // デフォルトレスポンス
-      const response = {
-        settings: defaultSettings,
-        name: null,
-        exists: !!row,
-      };
-
-      if (!row) {
-        return res.json(response);
-      }
-
-      // 名前を設定
-      response.name = row.name || null;
-
-      // 設定をパース
-      if (row.settings_json) {
-        const raw = row.settings_json;
-        if (typeof raw === "string" && raw.length <= 10 * 1024) {
-          try {
-            const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === "object") {
-              response.settings = { ...defaultSettings, ...parsed };
-            }
-          } catch (e) {
-            console.error("/api/get-user-data parse err:", e.message);
-          }
-        }
-      }
-
-      return res.json(response);
-    },
-  );
-});
-
-// 重複通知防止用キャッシュ（メモリ上）
-// DUPLICATE_WINDOW_MS を環境変数で上書き可能にする
-const DUPLICATE_WINDOW_MS =
-  parseInt(process.env.DUPLICATE_WINDOW_MS, 10) || 60 * 1000;
-const recentNotifications = new Map(); // key: hash, value: timestamp
-
-// 通知のハッシュを生成（title/url/body を利用。必要ならさらに正規化）
-function getNotificationHash(data = {}, settingKey) {
-  const title = (data.title || "").toString().slice(0, 200);
-  const url = (data.url || "").toString().slice(0, 200);
-  const body = typeof data.body === "string" ? data.body.slice(0, 200) : "";
-  return `${settingKey || "unknown"}:${url}:${title}:${body}`;
-}
-
-// レートリミット: 同一IP/トークンあたり 1分に10回（調整可）
-// keyGenerator のフォールバックを強化
-const notifyLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10,
-  keyGenerator: (req) => ipKeyGenerator(req),
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// 認証ミドルウェア: ヘッダ X-Notify-Token または Authorization: Bearer <token>
-function requireNotifyToken(req, res, next) {
-  if (!ADMIN_NOTIFY_TOKEN) {
-    console.error("Server misconfiguration: ADMIN_NOTIFY_TOKEN not set");
-    return res
-      .status(500)
-      .json({ error: "Server misconfiguration: ADMIN_NOTIFY_TOKEN not set" });
-  }
-
-  const authHeader = req.get("Authorization") || "";
-  const bearerMatch = authHeader.match(/^\s*Bearer\s+(.+)$/i);
-  const token =
-    req.get("X-Notify-Token") || (bearerMatch ? bearerMatch[1] : null);
-
-  // ログはマスクして出力（先頭/末尾のみ）
-  const mask = (s) => {
-    if (!s) return null;
-    if (s.length <= 8) return "****";
-    return `${s.slice(0, 4)}...${s.slice(-4)}`;
-  };
-  console.log("[AUTH] Received token headers:", {
-    "X-Notify-Token": mask(req.get("X-Notify-Token")),
-    Authorization: mask(authHeader),
-  });
-  console.log("[AUTH] Extracted token mask:", mask(token));
-
-  if (!token || token !== ADMIN_NOTIFY_TOKEN) {
-    console.warn("[AUTH] Token mismatch or missing");
-    return res
-      .status(401)
-      .json({ error: "Unauthorized: invalid notify token" });
-  }
-  next();
-}
-
-// 任意: HMAC 検証ミドルウェア（NOTIFY_HMAC_SECRET が設定されていれば検証）
-function verifyNotifyHmac(req, res, next) {
-  if (!NOTIFY_HMAC_SECRET) {
-    // 環境変数が無ければ検証をスキップ（既存の挙動）
-    return next();
-  }
-
-  const signatureHeader = req.get("X-Signature") || ""; // 期待形式: sha256=<hex>
-  if (!signatureHeader.startsWith("sha256=")) {
-    console.warn("[HMAC] Missing or invalid X-Signature header");
-    return res.status(401).json({ error: "Unauthorized: missing signature" });
-  }
-  const recvSigHex = signatureHeader.slice(7);
-
-  // 受け取り値の基本検証（hex で偶数長であること）
-  if (!/^[0-9a-fA-F]+$/.test(recvSigHex) || recvSigHex.length % 2 !== 0) {
-    console.warn("[HMAC] Received signature not valid hex or wrong length");
-    return res
-      .status(401)
-      .json({ error: "Unauthorized: invalid signature format" });
-  }
-
-  let bodyString;
-  try {
-    bodyString = JSON.stringify(req.body || {});
-  } catch (e) {
-    console.error("[HMAC] Failed to stringify body for HMAC:", e.message);
-    return res.status(400).json({ error: "Bad request body" });
-  }
-
-  const hmac = crypto.createHmac("sha256", NOTIFY_HMAC_SECRET);
-  hmac.update(bodyString);
-  const expectedHex = hmac.digest("hex");
-
-  // 長さが違うと timingSafeEqual が throw するため先に長さチェック
-  const expectedBuf = Buffer.from(expectedHex, "hex");
-  const recvBuf = Buffer.from(recvSigHex, "hex");
-
-  if (expectedBuf.length !== recvBuf.length) {
-    console.warn("[HMAC] Signature length mismatch");
-    return res.status(401).json({ error: "Unauthorized: invalid signature" });
-  }
-
-  try {
-    if (!crypto.timingSafeEqual(expectedBuf, recvBuf)) {
-      console.warn("[HMAC] Signature mismatch");
-      return res.status(401).json({ error: "Unauthorized: invalid signature" });
-    }
-  } catch (e) {
-    console.error("[HMAC] timingSafeEqual error:", e.message);
-    return res.status(401).json({ error: "Unauthorized: invalid signature" });
-  }
-
-  // 検証成功
-  next();
-}
-
-// history.json を更新する関数
+// --- updateHistoryJson ---
 async function updateHistoryJson() {
   try {
-    // -------------------------
-    // DB → Promise化
-    // -------------------------
     const query = (limit) =>
       new Promise((resolve, reject) => {
         db.all(
-          `SELECT id, title, body, url, icon, platform, status,
-                  strftime('%s', created_at) AS timestamp
-           FROM notifications
-           ORDER BY created_at DESC
+          `SELECT n.id, n.title, n.body, n.url, n.icon, n.platform, n.status,
+                  strftime('%s', n.created_at) AS timestamp,
+                  (SELECT tm.id FROM twitter_media tm WHERE tm.tweet_id = n.tweet_id ORDER BY tm.id LIMIT 1) AS media_id,
+                  (SELECT tm.media_type FROM twitter_media tm WHERE tm.tweet_id = n.tweet_id ORDER BY tm.id LIMIT 1) AS media_type
+           FROM notifications n
+           ORDER BY n.created_at DESC
            LIMIT ?`,
           [limit],
           (err, rows) => {
@@ -3008,11 +2630,10 @@ async function updateHistoryJson() {
       platform: r.platform || "不明",
       status: r.status || "success",
       timestamp: r.timestamp ? Number(r.timestamp) : 0,
+      media_url: (r.media_id && r.platform !== 'twitterSub') ? `/api/twitter-media/file/${r.media_id}` : null,
+      media_type: (r.platform !== 'twitterSub') ? r.media_type : null,
     }));
 
-    // -------------------------
-    // JSON生成
-    // -------------------------
     const jsonData = {
       logs: jsonLogs,
       total: dbTotal,
@@ -3020,9 +2641,6 @@ async function updateHistoryJson() {
       lastUpdated: Math.floor(Date.now() / 1000),
     };
 
-    // -------------------------
-    // 非同期書き込み（debounce済みなので安全）
-    // -------------------------
     await fs.promises.writeFile(
       HISTORY_JSON_PATH,
       JSON.stringify(jsonData),
@@ -3056,6 +2674,24 @@ db.serialize(() => {
     updateHistoryJson().catch(console.error);
   }, 1000);
 });
+
+function requireNotifyToken(req, res, next) {
+  const token = req.headers["x-notify-token"] || req.headers["x-local-api-token"];
+  if (!ADMIN_NOTIFY_TOKEN) return next();
+  if (token === ADMIN_NOTIFY_TOKEN) return next();
+  return res.status(401).json({ error: "Unauthorized: invalid notify token" });
+}
+
+function verifyNotifyHmac(req, res, next) {
+  if (!NOTIFY_HMAC_SECRET) return next();
+  const hmac = req.headers["x-notify-hmac"] || req.headers["x-hmac-signature"];
+  if (!hmac) return res.status(401).json({ error: "Missing HMAC signature" });
+  const crypto = require("crypto");
+  const payload = JSON.stringify(req.body);
+  const expected = crypto.createHmac("sha256", NOTIFY_HMAC_SECRET).update(payload).digest("hex");
+  if (hmac !== expected) return res.status(401).json({ error: "Invalid HMAC signature" });
+  next();
+}
 
 // --- 通知受信（外部サービスから） --- (改善版、並列送信かつ同時上限あり)
 app.post(
@@ -3102,7 +2738,7 @@ app.post(
 
     // 履歴保存は非同期で行う（失敗しても通知送信には影響させない）
     db.run(
-      "INSERT INTO notifications (title, body, url, icon, platform, status) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO notifications (title, body, url, icon, platform, status, tweet_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
       [
         data.title,
         data.body,
@@ -3110,6 +2746,7 @@ app.post(
         data.icon,
         settingKey || type,
         "success",
+        data.tweet_id || null,
       ],
       function (insertErr) {
         if (insertErr) {

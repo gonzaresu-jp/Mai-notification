@@ -581,13 +581,218 @@ include __DIR__ . '/head.php';
         }
       }
 
+      // Zoom/pan state (image only, not video)
+      let zoomState = null;
+      let zoomMediaEl = null;
+
+      function resetZoomState() {
+        zoomState = null;
+        zoomMediaEl = null;
+      }
+
+      function setupZoomPan(mediaEl) {
+        if (!mediaEl || mediaEl.tagName === 'VIDEO') return;
+        zoomMediaEl = mediaEl;
+        mediaEl.style.transformOrigin = '0 0';
+        mediaEl.style.willChange = 'transform';
+        zoomState = { scale: 1, x: 0, y: 0, dragging: false, startX: 0, startY: 0, vx: 0, vy: 0, history: [], momentumRaf: 0 };
+
+        function apply() {
+          if (!zoomState || !mediaEl) return;
+          mediaEl.style.transform = zoomState.scale > 1
+            ? `translate(${zoomState.x}px, ${zoomState.y}px) scale(${zoomState.scale})`
+            : '';
+        }
+
+        function runMomentum() {
+          if (!zoomState || (Math.abs(zoomState.vx) < 0.5 && Math.abs(zoomState.vy) < 0.5)) return;
+          zoomState.vx *= 0.92;
+          zoomState.vy *= 0.92;
+          zoomState.x += zoomState.vx;
+          zoomState.y += zoomState.vy;
+          apply();
+          zoomState.momentumRaf = requestAnimationFrame(runMomentum);
+        }
+
+        function stopMomentum() {
+          if (zoomState?.momentumRaf) {
+            cancelAnimationFrame(zoomState.momentumRaf);
+            zoomState.momentumRaf = 0;
+          }
+          zoomState.vx = 0; zoomState.vy = 0;
+        }
+
+        function onWheel(e) {
+          if (!zoomState) return;
+          e.preventDefault();
+          stopMomentum();
+          const rect = mediaEl.getBoundingClientRect();
+          const mx = e.clientX - rect.left;
+          const my = e.clientY - rect.top;
+          const prev = zoomState.scale;
+          const next = Math.max(1, Math.min(20, prev * Math.pow(1.08, -e.deltaY / 100)));
+          if (next === 1) {
+            zoomState.scale = 1; zoomState.x = 0; zoomState.y = 0;
+          } else {
+            const r = next / prev;
+            zoomState.scale = next;
+            zoomState.x = mx * (1 - r) + zoomState.x;
+            zoomState.y = my * (1 - r) + zoomState.y;
+          }
+          apply();
+        }
+
+        function onDown(e) {
+          if (!zoomState || e.button !== 0 || zoomState.scale <= 1) return;
+          stopMomentum();
+          zoomState.dragging = true;
+          zoomState.startX = e.clientX - zoomState.x;
+          zoomState.startY = e.clientY - zoomState.y;
+          zoomState.history = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
+          mediaEl.style.cursor = 'grabbing';
+          e.preventDefault();
+        }
+
+        function onMove(e) {
+          if (!zoomState?.dragging) return;
+          zoomState.x = e.clientX - zoomState.startX;
+          zoomState.y = e.clientY - zoomState.startY;
+          zoomState.history.push({ t: performance.now(), x: e.clientX, y: e.clientY });
+          if (zoomState.history.length > 10) zoomState.history.shift();
+          apply();
+        }
+
+        function onUp() {
+          if (!zoomState) return;
+          zoomState.dragging = false;
+          if (mediaEl) mediaEl.style.cursor = zoomState.scale > 1 ? 'grab' : '';
+          const h = zoomState.history;
+          if (h.length >= 2) {
+            const recent = h.slice(-5);
+            const first = recent[0], last = recent[recent.length - 1];
+            const dt = last.t - first.t;
+            if (dt > 0 && dt < 150) {
+              zoomState.vx = (last.x - first.x) / dt * 16 * 0.5;
+              zoomState.vy = (last.y - first.y) / dt * 16 * 0.5;
+              zoomState.momentumRaf = requestAnimationFrame(runMomentum);
+            }
+          }
+          zoomState.history = [];
+        }
+
+        function onDbl(e) {
+          if (!zoomState) return;
+          e.preventDefault();
+          stopMomentum();
+          if (zoomState.scale > 1) {
+            zoomState.scale = 1; zoomState.x = 0; zoomState.y = 0;
+          } else {
+            zoomState.scale = 3; zoomState.x = 0; zoomState.y = 0;
+          }
+          if (mediaEl) mediaEl.style.cursor = zoomState.scale > 1 ? 'grab' : '';
+          apply();
+        }
+
+        // --- Touch handling (mobile) ---
+        let touchId = null;
+        let pinchDist = 0;
+
+        function onTouchStart(e) {
+          if (!zoomState) return;
+          if (e.touches.length === 1 && zoomState.scale > 1) {
+            touchId = e.touches[0].identifier;
+            const t = e.touches[0];
+            stopMomentum();
+            zoomState.dragging = true;
+            zoomState.startX = t.clientX - zoomState.x;
+            zoomState.startY = t.clientY - zoomState.y;
+            zoomState.history = [{ t: performance.now(), x: t.clientX, y: t.clientY }];
+          } else if (e.touches.length === 2) {
+            stopMomentum();
+            touchId = null;
+            const t0 = e.touches[0], t1 = e.touches[1];
+            pinchDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+            zoomState.pinchCx = (t0.clientX + t1.clientX) / 2;
+            zoomState.pinchCy = (t0.clientY + t1.clientY) / 2;
+            zoomState.pinchS = zoomState.scale;
+            zoomState.pinchX = zoomState.x;
+            zoomState.pinchY = zoomState.y;
+          }
+        }
+
+        function onTouchMove(e) {
+          if (!zoomState) return;
+          if (e.touches.length === 1 && zoomState.dragging && touchId !== null) {
+            e.preventDefault();
+            const t = e.touches[0];
+            zoomState.x = t.clientX - zoomState.startX;
+            zoomState.y = t.clientY - zoomState.startY;
+            zoomState.history.push({ t: performance.now(), x: t.clientX, y: t.clientY });
+            if (zoomState.history.length > 10) zoomState.history.shift();
+            apply();
+          } else if (e.touches.length === 2) {
+            e.preventDefault();
+            const t0 = e.touches[0], t1 = e.touches[1];
+            const d = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+            const cx = (t0.clientX + t1.clientX) / 2;
+            const cy = (t0.clientY + t1.clientY) / 2;
+            const ratio = d / pinchDist;
+            const next = Math.max(1, Math.min(20, zoomState.pinchS * ratio));
+            if (next === 1) {
+              zoomState.scale = 1; zoomState.x = 0; zoomState.y = 0;
+            } else {
+              const r = next / zoomState.scale;
+              zoomState.scale = next;
+              const rect = mediaEl.getBoundingClientRect();
+              const mx = cx - rect.left;
+              const my = cy - rect.top;
+              zoomState.x = mx * (1 - r) + zoomState.x;
+              zoomState.y = my * (1 - r) + zoomState.y;
+            }
+          }
+        }
+
+        function onTouchEnd(e) {
+          if (!zoomState) return;
+          const remaining = e.touches.length;
+          if (remaining === 0 && zoomState.dragging) {
+            zoomState.dragging = false;
+            const h = zoomState.history;
+            if (h.length >= 2) {
+              const recent = h.slice(-5);
+              const first = recent[0], last = recent[recent.length - 1];
+              const dt = last.t - first.t;
+              if (dt > 0 && dt < 150) {
+                zoomState.vx = (last.x - first.x) / dt * 16 * 0.5;
+                zoomState.vy = (last.y - first.y) / dt * 16 * 0.5;
+                zoomState.momentumRaf = requestAnimationFrame(runMomentum);
+              }
+            }
+            zoomState.history = [];
+            touchId = null;
+          } else if (remaining < 2) {
+            pinchDist = 0;
+          }
+        }
+
+        mediaEl.addEventListener('wheel', onWheel, { passive: false });
+        mediaEl.addEventListener('mousedown', onDown);
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        mediaEl.addEventListener('dblclick', onDbl);
+        mediaEl.addEventListener('touchstart', onTouchStart, { passive: false });
+        mediaEl.addEventListener('touchmove', onTouchMove, { passive: false });
+        mediaEl.addEventListener('touchend', onTouchEnd);
+        mediaEl.addEventListener('touchcancel', onTouchEnd);
+      }
+
       function openLightbox(item) {
         const isVideo = item.media_type === 'video';
         let html = '';
         if (isVideo) {
-          html = `<video src="${item.file_url}" controls autoplay style="max-width:90vw;max-height:85vh;border-radius:8px;"></video>`;
+          html = `<video src="${item.file_url}" controls autoplay style="max-width:90vw;max-height:85vh;"></video>`;
         } else {
-          html = `<img src="${item.file_url}" alt="" style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:8px;">`;
+          html = `<img src="${item.file_url}" alt="" style="max-width:90vw;max-height:85vh;object-fit:contain;">`;
         }
         html += `
           <div class="media-lightbox-actions">
@@ -596,7 +801,9 @@ include __DIR__ . '/head.php';
           </div>
         `;
         lightboxContent.innerHTML = html;
+        resetZoomState();
         lightbox.classList.add('is-open');
+        setupZoomPan(lightboxContent.querySelector('img, video'));
       }
 
       function closeLightbox() {
@@ -604,7 +811,10 @@ include __DIR__ . '/head.php';
         // 動画を停止
         const video = lightboxContent.querySelector('video');
         if (video) video.pause();
+        if (zoomMediaEl) zoomMediaEl.removeAttribute('style');
         lightboxContent.innerHTML = '';
+        if (zoomState?.momentumRaf) cancelAnimationFrame(zoomState.momentumRaf);
+        resetZoomState();
       }
 
       // イベント
