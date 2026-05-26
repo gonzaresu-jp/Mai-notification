@@ -210,10 +210,11 @@ async function checkLiveStatus(screenId){
     const prevLiveId = currentLiveId;
 
     try{
-        if(!accessToken) throw new Error('TWITCASTING_ACCESS_TOKEN 未設定 (twitcasting-token.jsonまたは環境変数で設定してください)');
+        if(!CLIENT_ID || !CLIENT_SECRET) throw new Error('TWITCASTING_CLIENT_ID / TWITCASTING_CLIENT_SECRET 未設定 (環境変数で設定してください)');
 
+        const basicAuth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
         const res = await axios.get(`${API_BASE_URL}/users/${screenId}/movies?limit=1&status=live`, {
-            headers: { 'Authorization': `Bearer ${accessToken}`, 'X-Api-Version':'2.0' },
+            headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Api-Version':'2.0' },
             validateStatus:()=>true,
             timeout: 15000
         });
