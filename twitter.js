@@ -189,7 +189,8 @@ async function sendNotify(username, tweet, settingKey, sendText) {
       title: tweet.isRepost ? `リポスト (@${username})` : `新着ツイート (@${username})`,
       body: notificationBody,
       url: `https://x.com/${username}/status/${tweet.id}`,
-      icon: ICON_URL
+      icon: ICON_URL,
+      tweet_id: tweet.id
     }
   };
 
@@ -502,19 +503,16 @@ async function check(username, isRetry = false) {
     }
 
     const browser = await getSharedBrowser({
-      product: 'firefox',
+      product: 'chrome',
       headless: HEADLESS,
       userDataDir: PROFILE_PATH,
-      extraPrefs: {
-        'network.http.referer.XOriginPolicy': 0,
-        'privacy.trackingprotection.enabled': false
-      }
+      extraArgs: [
+        '--disable-blink-features=AutomationControlled',
+      ]
     });
     page = await browser.newPage();
 
-    // 🔧 セッション維持のため User Agent を一般的な Firefox に固定
-    // (GUI版に近づける)
-    await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0');
+    await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
 
     // 不要なリソースをブロックしてメモリと通信量を節約
     await page.setRequestInterception(true);

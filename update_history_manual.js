@@ -12,10 +12,12 @@ async function updateHistoryJson() {
     const query = (limit) =>
       new Promise((resolve, reject) => {
         db.all(
-          `SELECT id, title, body, url, icon, platform, status,
-                  strftime('%s', created_at) AS timestamp
-           FROM notifications
-           ORDER BY created_at DESC
+          `SELECT n.id, n.title, n.body, n.url, n.icon, n.platform, n.status,
+                  strftime('%s', n.created_at) AS timestamp,
+                  tm.original_url AS media_url, tm.media_type
+           FROM notifications n
+           LEFT JOIN twitter_media tm ON n.tweet_id = tm.tweet_id
+           ORDER BY n.created_at DESC
            LIMIT ?`,
           [limit],
           (err, rows) => {

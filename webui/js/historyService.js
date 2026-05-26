@@ -129,12 +129,21 @@ export function createLogItem(log) {
   const statusClass = log.status === 'fail' ? ' status-fail' : '';
   const platformData = normalizePlatformName(log.platform || '不明');
 
+  // Generate HTML for log item with optional media thumbnail
+  const mediaThumbHtml = (log.media_url && log.media_type) ? `
+    <div class="log-media-thumb" data-media-url="${escapeHtml(log.media_url)}" data-media-type="${escapeHtml(log.media_type)}">
+      ${log.media_type === 'video' 
+        ? `<div class="media-thumb-content"><video src="${escapeHtml(log.media_url)}" preload="metadata" muted></video><div class="video-badge"><i class="fa-solid fa-play"></i> 動画</div></div>` 
+        : `<div class="media-thumb-content"><img src="${escapeHtml(log.media_url)}" alt="" loading="lazy"></div>`}
+    </div>` : '';
+
   return `
     <div class="card${statusClass}" data-platform="${escapeHtml(platformData)}">
       ${iconHtml}
       <div class="card-content">
         <div class="title">${titleHtml}</div>
         <p class="body">${safeBody}</p>
+        ${mediaThumbHtml}
         <div class="meta">
           <span class="platform">${escapeHtml(log.platform || '不明')}</span>
           <span class="time">${dateStr}</span>
@@ -420,3 +429,277 @@ export function clearJsonCache() {
 }
 
 export const clearHistoryCache = clearJsonCache;
+
+// =========================
+// Media Lightbox Interaction
+// =========================
+;(function initLightbox() {
+  const el = document.getElementById('media-lightbox');
+  if (el && el.parentNode !== document.body) {
+    document.body.appendChild(el);
+  }
+})();
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const lb = document.getElementById('media-lightbox');
+    const ct = document.getElementById('lightbox-content');
+    if (lb?.classList.contains('is-open')) {
+      lb.classList.remove('is-open');
+      document.body.classList.remove('lightbox-open');
+      if (ct) ct.innerHTML = '';
+    }
+  }
+});
+
+// Zoom/pan state (image only, not video)
+let zoomState = null;
+
+function resetZoomState() {
+  if (zoomState?.momentumRaf) cancelAnimationFrame(zoomState.momentumRaf);
+  zoomState = null;
+}
+
+function setupZoomPan(mediaEl) {
+  if (!mediaEl || mediaEl.tagName === 'VIDEO') return;
+  mediaEl.style.transformOrigin = '0 0';
+  mediaEl.style.willChange = 'transform';
+  zoomState = { scale: 1, x: 0, y: 0, dragging: false, startX: 0, startY: 0, vx: 0, vy: 0, history: [], momentumRaf: 0 };
+
+  function apply() {
+    if (!zoomState || !mediaEl) return;
+    mediaEl.style.transform = zoomState.scale > 1
+      ? `translate(${zoomState.x}px, ${zoomState.y}px) scale(${zoomState.scale})`
+      : '';
+  }
+
+  function runMomentum() {
+    if (!zoomState || (Math.abs(zoomState.vx) < 0.5 && Math.abs(zoomState.vy) < 0.5)) return;
+    zoomState.vx *= 0.94;
+    zoomState.vy *= 0.94;
+    zoomState.x += zoomState.vx;
+    zoomState.y += zoomState.vy;
+    apply();
+    zoomState.momentumRaf = requestAnimationFrame(runMomentum);
+  }
+
+  function stopMomentum() {
+    if (zoomState?.momentumRaf) {
+      cancelAnimationFrame(zoomState.momentumRaf);
+      zoomState.momentumRaf = 0;
+    }
+    zoomState.vx = 0; zoomState.vy = 0;
+  }
+
+  function onWheel(e) {
+    if (!zoomState) return;
+    e.preventDefault();
+    stopMomentum();
+    const rect = mediaEl.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const prev = zoomState.scale;
+    const next = Math.max(1, Math.min(20, prev * Math.pow(1.08, -e.deltaY / 100)));
+    if (next === 1) {
+      zoomState.scale = 1; zoomState.x = 0; zoomState.y = 0;
+    } else {
+      const r = next / prev;
+      zoomState.scale = next;
+      zoomState.x = mx * (1 - r) + zoomState.x;
+      zoomState.y = my * (1 - r) + zoomState.y;
+    }
+    apply();
+  }
+
+  function onDown(e) {
+    if (!zoomState || e.button !== 0 || zoomState.scale <= 1) return;
+    stopMomentum();
+    zoomState.dragging = true;
+    zoomState.startX = e.clientX - zoomState.x;
+    zoomState.startY = e.clientY - zoomState.y;
+    zoomState.history = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
+    mediaEl.style.cursor = 'grabbing';
+    e.preventDefault();
+  }
+
+  function onMove(e) {
+    if (!zoomState?.dragging) return;
+    zoomState.x = e.clientX - zoomState.startX;
+    zoomState.y = e.clientY - zoomState.startY;
+    zoomState.history.push({ t: performance.now(), x: e.clientX, y: e.clientY });
+    if (zoomState.history.length > 10) zoomState.history.shift();
+    apply();
+  }
+
+  function onUp() {
+    if (!zoomState) return;
+    zoomState.dragging = false;
+    if (mediaEl) mediaEl.style.cursor = zoomState.scale > 1 ? 'grab' : '';
+    // compute momentum velocity from last ~5 events
+    const h = zoomState.history;
+    if (h.length >= 2) {
+      const recent = h.slice(-5);
+      const first = recent[0], last = recent[recent.length - 1];
+      const dt = last.t - first.t;
+      if (dt > 0 && dt < 150) {
+        zoomState.vx = (last.x - first.x) / dt * 16 * 0.8;
+        zoomState.vy = (last.y - first.y) / dt * 16 * 0.8;
+        zoomState.momentumRaf = requestAnimationFrame(runMomentum);
+      }
+    }
+    zoomState.history = [];
+  }
+
+  function onDbl(e) {
+    if (!zoomState) return;
+    e.preventDefault();
+    stopMomentum();
+    if (zoomState.scale > 1) {
+      zoomState.scale = 1; zoomState.x = 0; zoomState.y = 0;
+    } else {
+      zoomState.scale = 3; zoomState.x = 0; zoomState.y = 0;
+    }
+    if (mediaEl) mediaEl.style.cursor = zoomState.scale > 1 ? 'grab' : '';
+    apply();
+  }
+
+  // --- Touch handling (mobile) ---
+  let touchId = null;
+  let pinchDist = 0;
+  const lb = document.getElementById('media-lightbox');
+  if (!lb) return;
+
+  function onTouchStart(e) {
+    if (!zoomState || !mediaEl) return;
+    if (e.touches.length === 1) {
+      if (!mediaEl.contains(e.target)) return;
+      if (zoomState.scale <= 1) return;
+      e.preventDefault();
+      touchId = e.touches[0].identifier;
+      const t = e.touches[0];
+      stopMomentum();
+      zoomState.dragging = true;
+      zoomState.startX = t.clientX - zoomState.x;
+      zoomState.startY = t.clientY - zoomState.y;
+      zoomState.history = [{ t: performance.now(), x: t.clientX, y: t.clientY }];
+    } else if (e.touches.length >= 2) {
+      e.preventDefault();
+      stopMomentum();
+      touchId = null;
+      zoomState.dragging = false;
+      const t0 = e.touches[0], t1 = e.touches[1];
+      pinchDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+    }
+  }
+
+  function onTouchMove(e) {
+    if (!zoomState || !mediaEl) return;
+    if (e.touches.length === 1 && zoomState.dragging && touchId !== null) {
+      e.preventDefault();
+      const t = e.touches[0];
+      zoomState.x = t.clientX - zoomState.startX;
+      zoomState.y = t.clientY - zoomState.startY;
+      zoomState.history.push({ t: performance.now(), x: t.clientX, y: t.clientY });
+      if (zoomState.history.length > 10) zoomState.history.shift();
+      apply();
+    } else if (e.touches.length >= 2) {
+      e.preventDefault();
+      const t0 = e.touches[0], t1 = e.touches[1];
+      const d = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      const cx = (t0.clientX + t1.clientX) / 2;
+      const cy = (t0.clientY + t1.clientY) / 2;
+      if (pinchDist === 0) {
+        pinchDist = d;
+        return;
+      }
+      const ratio = pinchDist > 0 ? d / pinchDist : 1;
+      pinchDist = d;
+      const s = Math.max(1, Math.min(20, zoomState.scale * ratio));
+      if (s === 1) {
+        zoomState.scale = 1; zoomState.x = 0; zoomState.y = 0;
+      } else {
+        const rect = mediaEl.getBoundingClientRect();
+        const mx = cx - rect.left;
+        const my = cy - rect.top;
+        zoomState.x = mx * (1 - ratio) + zoomState.x;
+        zoomState.y = my * (1 - ratio) + zoomState.y;
+        zoomState.scale = s;
+      }
+      apply();
+    }
+  }
+
+  function onTouchEnd(e) {
+    if (!zoomState) return;
+    if (e.touches.length === 0 && zoomState.dragging) {
+      zoomState.dragging = false;
+      const h = zoomState.history;
+      if (h.length >= 2) {
+        const recent = h.slice(-5);
+        const first = recent[0], last = recent[recent.length - 1];
+        const dt = last.t - first.t;
+        if (dt > 0 && dt < 150) {
+          zoomState.vx = (last.x - first.x) / dt * 16 * 0.5;
+          zoomState.vy = (last.y - first.y) / dt * 16 * 0.5;
+          zoomState.momentumRaf = requestAnimationFrame(runMomentum);
+        }
+      }
+      zoomState.history = [];
+      touchId = null;
+    } else if (e.touches.length < 2) {
+      pinchDist = 0;
+    }
+  }
+
+  lb.style.touchAction = 'none';
+  mediaEl.addEventListener('wheel', onWheel, { passive: false });
+  mediaEl.addEventListener('mousedown', onDown);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  mediaEl.addEventListener('dblclick', onDbl);
+  lb.addEventListener('touchstart', onTouchStart, { passive: false });
+  lb.addEventListener('touchmove', onTouchMove, { passive: false });
+  lb.addEventListener('touchend', onTouchEnd, { passive: false });
+  lb.addEventListener('touchcancel', onTouchEnd, { passive: false });
+}
+
+document.addEventListener('click', (event) => {
+  const lightbox = document.getElementById('media-lightbox');
+  const content = document.getElementById('lightbox-content');
+  if (!lightbox) return;
+
+  // Close when clicking overlay background or close button
+  if (lightbox.classList.contains('is-open')) {
+    if (event.target === lightbox || event.target.closest('#lightbox-close')) {
+      lightbox.classList.remove('is-open');
+      document.body.classList.remove('lightbox-open');
+      if (content) {
+        const media = content.querySelector('img, video');
+        if (media) {
+          media.removeAttribute('style');
+          media.style.maxWidth = '90vw';
+          media.style.maxHeight = '90vh';
+        }
+        content.innerHTML = '';
+      }
+      resetZoomState();
+      return;
+    }
+  }
+
+  // Open lightbox when a media thumbnail is clicked
+  const thumb = event.target.closest('.log-media-thumb');
+  if (thumb && content) {
+    const mediaUrl = thumb.dataset.mediaUrl;
+    const mediaType = thumb.dataset.mediaType;
+    resetZoomState();
+    if (mediaType === 'video') {
+      content.innerHTML = `<video src="${mediaUrl}" controls autoplay style="max-width:90vw; max-height:90vh;"></video>`;
+    } else {
+      content.innerHTML = `<img src="${mediaUrl}" style="max-width:90vw; max-height:90vh;" loading="lazy" />`;
+    }
+    lightbox.classList.add('is-open');
+    document.body.classList.add('lightbox-open');
+    setupZoomPan(content.querySelector('img, video'));
+  }
+});

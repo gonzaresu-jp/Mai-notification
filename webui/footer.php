@@ -103,5 +103,5 @@
     </a>
 
   </div>
-  <p><a href="/logs">Last updated 2026-05-04</a></p>
+  <p><a href="/logs">Last updated 2026-05-26</a></p>
 </footer>
