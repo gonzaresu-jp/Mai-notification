@@ -7,6 +7,8 @@
     $topCardCss = './top-card.min.css?v=' . (@filemtime(__DIR__ . '/top-card.min.css') ?: time());
     $extraHead = '<link rel="preload" href="' . $topCardCss . '" as="style" onload="this.onload=null;this.rel=\'stylesheet\'" />'
         . '<noscript><link rel="stylesheet" href="' . $topCardCss . '" /></noscript>';
+    $extraHead .= "\n<style>\n.media-card-thumb {\n  width: 100%;\n  aspect-ratio: 16 / 10;\n  overflow: hidden;\n  background: #222;\n  position: relative;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n.media-card-thumb::before {\n  content: \"\";\n  position: absolute;\n  inset: -10px;\n  background-image: var(--bg-url);\n  background-size: cover;\n  background-position: center;\n  filter: blur(12px) brightness(0.6);\n  opacity: 0.6;\n  z-index: 0;\n}\n.media-card-thumb img, .media-card-thumb video {\n  max-width: 100%;\n  max-height: 100%;\n  object-fit: contain;\n  display: block;\n  position: relative;\n  z-index: 1;\n  transition: transform 0.3s ease;\n}\n.media-card-thumb:hover img, .media-card-thumb:hover video {\n  transform: scale(1.05);\n}\n.video-badge {\n  position: absolute;\n  top: 6px;\n  right: 6px;\n  background: rgba(0,0,0,0.65);\n  color: #fff;\n  font-size: 0.6rem;\n  font-weight: 700;\n  padding: 3px 7px;\n  border-radius: 6px;\n  backdrop-filter: blur(3px);\n  display: flex;\n  align-items: center;\n  gap: 4px;\n}\n</style>\n";
+
     include __DIR__ . '/head.php';
     ?>
 
@@ -694,6 +696,12 @@
                         <option value="5">初期表示</option>
                         <option value="50">追加読み込み</option>
                     </select>
+                </div>
+
+                <!-- Lightbox -->
+                <div class="media-lightbox" id="media-lightbox">
+                    <button class="media-lightbox-close" id="lightbox-close"><i class="fa-solid fa-xmark"></i></button>
+                    <div class="media-lightbox-content" id="lightbox-content"></div>
                 </div>
 
                 <div id="logs" class="log-container" aria-live="polite" aria-atomic="false">
