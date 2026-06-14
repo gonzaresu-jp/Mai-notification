@@ -190,6 +190,7 @@ async function sendNotify(username, tweet, settingKey, sendText) {
       body: notificationBody,
       url: `https://x.com/${username}/status/${tweet.id}`,
       icon: ICON_URL,
+      image: tweet.thumbnail_url || (Array.isArray(tweet.media_urls) ? tweet.media_urls[0] : null) || null,
       tweet_id: tweet.id
     }
   };
@@ -286,7 +287,9 @@ async function updateSchedule(username, scheduleId, scheduleInfo, urls) {
     note: `[Gemma再分析] 時刻更新`,
     url: scheduleInfo.url || urls[0] || null,
     thumbnail_url: scheduleInfo.thumbnail_url || null,
-    platform: scheduleInfo.platform || 'twitter'
+    platform: scheduleInfo.platform || 'twitter',
+    // 具体時刻が確定すれば null を渡して時間帯ラベルを消す（実時刻表示へ）
+    time_period: scheduleInfo.time_period || null
   };
 
   try {
@@ -323,7 +326,7 @@ async function createScheduleFromTweet(username, tweet, analysis) {
   const urls = extractUrlsFromTweet(tweet.text || '');
   
   // スケジュール抽出
-  const scheduleInfo = extractScheduleFromAnalysis(analysis, new Date(), urls);
+  const scheduleInfo = extractScheduleFromAnalysis(analysis, new Date(), urls, tweet.text || '');
   if (!scheduleInfo) {
     console.log(`[${username}] No schedule info extracted from analysis`);
     return;
@@ -358,10 +361,11 @@ async function createScheduleFromTweet(username, tweet, analysis) {
   const payload = {
     title: scheduleInfo.title,
     scheduled_at: scheduleInfo.scheduled_at,
-    note: `[Gemma分析] ツイート: ${tweet.text.substring(0, 100)}...`,
+    note: `[Gemma分析${scheduleInfo.time_estimated ? '/時刻は時間帯から推定' : ''}] ツイート: ${tweet.text.substring(0, 100)}...`,
     url: scheduleInfo.url || urls[0] || `https://x.com/${username}/status/${tweet.id}`,
     thumbnail_url: scheduleInfo.thumbnail_url || null,
     platform: scheduleInfo.platform || 'twitter',
+    time_period: scheduleInfo.time_period || null,
     external_id: `gemma_${tweet.id}`
   };
 

@@ -1,5 +1,7 @@
 // main.js - 起動専用版(改良版 + notifyConfig 注入 + listen修正)
 require("dotenv").config({ path: "/var/www/html/mai-push/.env" });
+// 日時処理を JST に固定（スケジュールのタイムゾーンずれ防止）
+process.env.TZ = process.env.TZ || "Asia/Tokyo";
 const path = require("path");
 const fs = require("fs");
 const express = require("express");
@@ -18,7 +20,7 @@ const fanbox = require("./fanbox");
 const MilestoneScheduler = require("./milestone");
 const gipt = require("./gipt");
 const { startTwitchPolling } = require("./twitch");
-const { closeAllBrowsers } = require("./browser");
+const { closeAllBrowsers, closeSharedBrowser } = require("./browser");
 const discordAlert = require("./discord-alert");
 const twitterMediaSaver = require("./twitter-media-saver");
 const helmet = require("helmet");
@@ -82,6 +84,33 @@ try {
     err && err.message ? err.message : err,
   );
 }
+
+// --- Health check (死活監視用) ---
+app.get("/api/health", (req, res) => {
+  const mem = process.memoryUsage();
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    pid: process.pid,
+    memory: {
+      rss: Math.round(mem.rss / 1024 / 1024) + "MB",
+      heapTotal: Math.round(mem.heapTotal / 1024 / 1024) + "MB",
+      heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + "MB",
+    },
+    port: PORT,
+    node: process.version,
+    started,
+  });
+});
+
+app.get("/api/health/live", (req, res) => {
+  res.status(200).type("text/plain").send("ok");
+});
+
+app.get("/api/health/ready", (req, res) => {
+  if (!started) return res.status(503).type("text/plain").send("not ready");
+  res.status(200).type("text/plain").send("ready");
+});
 
 // --- API (モジュールからの POST を受ける) ---
 app.post("/api/notify", (req, res) => {
@@ -251,12 +280,18 @@ async function main() {
   };
 
   // --- Twitch 設定 ---
+  const scheduleConfig = {
+    apiUrl: process.env.SCHEDULE_ENDPOINT || 'http://localhost:8080/api/internal/events/create',
+    token: process.env.ADMIN_NOTIFY_TOKEN || null,
+  };
+
   const twitchConfig = {
     clientId: process.env.TWITCH_CLIENT_ID,
     clientSecret: process.env.TWITCH_CLIENT_SECRET, // ★追加
     appAccessToken: process.env.TWITCH_APP_ACCESS_TOKEN,
     twitchUrl: process.env.TWITCH_URL || "https://www.twitch.tv/koinoya_mai",
     notifyConfig,
+    scheduleConfig,
     interval: 2000, // 2秒間隔
   };
 
@@ -418,12 +453,18 @@ async function main() {
         const intervalMs = 5 * 60 * 1000; // ★ 5分
 
         const run = async () => {
+          const errors = [];
           for (const handle of MONITOR_YT_COMMUNITY) {
             try {
               await youtubeCommunity.pollAndNotify(handle);
             } catch (e) {
-              console.error(`[${handle}] poll error:`, e?.message || e);
+              const msg = e?.message || String(e);
+              console.error(`[${handle}] poll error:`, msg);
+              errors.push(`${handle}: ${msg}`);
             }
+          }
+          if (errors.length > 0) {
+            throw new Error(errors.join("; "));
           }
         };
 
@@ -432,12 +473,21 @@ async function main() {
           "YouTube Community",
           "running",
         );
-        await run(); // 起動直後1回
-        await sendStatusUpdate(
-          "youtube_community",
-          "YouTube Community",
-          "success",
-        );
+        try {
+          await run(); // 起動直後1回
+          await sendStatusUpdate(
+            "youtube_community",
+            "YouTube Community",
+            "success",
+          );
+        } catch (e) {
+          await sendStatusUpdate(
+            "youtube_community",
+            "YouTube Community",
+            "error",
+            e?.message || String(e),
+          );
+        }
 
         const schedule = async () => {
           await sendStatusUpdate(
@@ -445,12 +495,21 @@ async function main() {
             "YouTube Community",
             "running",
           );
-          await run();
-          await sendStatusUpdate(
-            "youtube_community",
-            "YouTube Community",
-            "success",
-          );
+          try {
+            await run();
+            await sendStatusUpdate(
+              "youtube_community",
+              "YouTube Community",
+              "success",
+            );
+          } catch (e) {
+            await sendStatusUpdate(
+              "youtube_community",
+              "YouTube Community",
+              "error",
+              e?.message || String(e),
+            );
+          }
           const t = setTimeout(schedule, intervalMs);
           if (t && typeof t.unref === "function") t.unref();
         };
@@ -496,10 +555,13 @@ async function main() {
             const name = `Twitter (@${u})`;
 
             // ポーリングループを main.js 側で管理し、毎回ステータスを更新する
+            let twPolling = false;
             const poll = async () => {
+              if (twPolling) { console.warn(`[Twitter @${u}] 前回のチェックが未完了のためスキップ`); return; }
+              twPolling = true;
               await sendStatusUpdate(id, name, "running");
               try {
-                const r = (await twitter.check) ? twitter.check(u) : null;
+                const r = await twitter.check(u);
                 if (r && r.error) {
                   await sendStatusUpdate(id, name, "error", String(r.error));
                 } else {
@@ -512,6 +574,8 @@ async function main() {
                   "error",
                   e?.message || String(e),
                 );
+              } finally {
+                twPolling = false;
               }
             };
 
@@ -544,7 +608,11 @@ async function main() {
       (async () => {
         try {
           await sendStatusUpdate("twitch", "Twitch", "running");
-          startTwitchPolling(twitchConfig); // ここは内部で setTimeout するだけなので await 不要なはず
+          startTwitchPolling({
+            ...twitchConfig,
+            onError: (msg) => sendStatusUpdate("twitch", "Twitch", "error", msg),
+            onRecovery: () => sendStatusUpdate("twitch", "Twitch", "success"),
+          });
           console.log("Twitch polling 起動 (10s interval)");
           await sendStatusUpdate("twitch", "Twitch", "success");
         } catch (e) {
@@ -570,7 +638,13 @@ async function main() {
               "running",
             );
             // twitcasting.startWatcher(screenId, intervalMs)
-            twitcasting.startWatcher(s, 5 * 1000); // 30秒間隔でポーリング
+            const twitcastingOnError = (msg) => {
+              sendStatusUpdate(`twitcasting_watcher_${s}`, `TwitCasting (@${s})`, "error", msg);
+            };
+            const twitcastingOnRecovery = () => {
+              sendStatusUpdate(`twitcasting_watcher_${s}`, `TwitCasting (@${s})`, "success");
+            };
+            twitcasting.startWatcher(s, 5 * 1000, twitcastingOnError, twitcastingOnRecovery);
             results.push({ screen: s, status: "ok" });
             console.log(`twitcasting.startWatcher(${s}) 起動`);
             await sendStatusUpdate(
@@ -624,6 +698,8 @@ async function main() {
               };
               await sendNotifyApi(payload);
             },
+            onError: (msg) => sendStatusUpdate("bilibili_live", "Bilibili Live", "error", msg),
+            onRecovery: () => sendStatusUpdate("bilibili_live", "Bilibili Live", "success"),
           });
           console.log("Bilibili live watcher 起動");
           await sendStatusUpdate("bilibili_live", "Bilibili Live", "success");
@@ -659,6 +735,8 @@ async function main() {
           const started = startBilibiliDynamicWatcher({
             uid: process.env.BILI_UID,
             notifyConfig,
+            onError: (msg) => sendStatusUpdate("bilibili_dynamic", "Bilibili Dynamic", "error", msg),
+            onRecovery: () => sendStatusUpdate("bilibili_dynamic", "Bilibili Dynamic", "success"),
           });
           if (started) {
             console.log("Bilibili Dynamic polling 起動");
@@ -701,7 +779,11 @@ async function main() {
         (async () => {
           try {
             await sendStatusUpdate("fanbox", "pixiv FANBOX", "running");
-            fanbox.startPolling(60 * 1000);
+            fanbox.startPolling(
+              60 * 1000,
+              (msg) => { sendStatusUpdate("fanbox", "pixiv FANBOX", "error", msg); },
+              () => { sendStatusUpdate("fanbox", "pixiv FANBOX", "success"); }
+            );
             console.log("Fanbox polling 起動");
             await sendStatusUpdate("fanbox", "pixiv FANBOX", "success");
           } catch (e) {
@@ -838,6 +920,35 @@ startPromises.push((async () => {
       "⚠️ youtube.subscribeAllChannels 関数が定義されていません。自動更新は無効です。",
     );
   }
+
+  // ──────────────────────────────────────────
+  // Puppeteer shared プロファイルの定期クリーンアップ
+  // ──────────────────────────────────────────
+  const SHARED_PROFILE_DIR = '/dev/shm/puppeteer-profile-shared';
+  const MAX_PROFILE_MB = 500;
+  const CLEANUP_INTERVAL_MS = 30 * 60 * 1000; // 30分
+
+  setInterval(async () => {
+    try {
+      if (process.platform !== 'linux') return;
+      const stat = await fs.promises.stat(SHARED_PROFILE_DIR).catch(() => null);
+      if (!stat || !stat.isDirectory()) return;
+
+      const { execSync } = require('child_process');
+      const sizeKb = Number(execSync(`du -sk '${SHARED_PROFILE_DIR}' 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim());
+      const sizeMb = Math.round(sizeKb / 1024);
+
+      if (sizeMb > MAX_PROFILE_MB) {
+        console.log(`[Cleanup] Shared Chrome profile ${sizeMb}MB > ${MAX_PROFILE_MB}MB, restarting browser...`);
+        await closeSharedBrowser({ userDataDir: SHARED_PROFILE_DIR });
+        console.log(`[Cleanup] Shared browser closed, profile will be wiped on next launch (ephemeral:true)`);
+      }
+    } catch (e) {
+      console.warn('[Cleanup] Shared profile check error:', e.message);
+    }
+  }, CLEANUP_INTERVAL_MS).unref();
+
+  console.log(`[Cleanup] Shared Chrome profile monitor started (every ${CLEANUP_INTERVAL_MS/60000}min, threshold ${MAX_PROFILE_MB}MB)`);
 }
 
 // 優雅なシャットダウン

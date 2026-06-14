@@ -10,9 +10,10 @@
 const axios = require('axios');
 const crypto = require('crypto');
 const fs = require('fs');
-const https = require('https');
 const path = require('path');
-require('dotenv').config();
+// env vars は main.js 経由で既に読み込まれているが、
+// 単体起動時のために明示パスで dotenv も読む
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 /* =========================================================
    設定
@@ -43,6 +44,8 @@ let backoffMs = 0;
 let notifyConfig = { ...DEFAULT_NOTIFY_CONFIG };
 let uid = DEFAULT_UID;
 let cookie = null;
+let onError = null;
+let onRecovery = null;
 
 if (fs.existsSync(STATE_FILE)) {
   lastId = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')).lastId || null;
@@ -55,7 +58,6 @@ if (fs.existsSync(STATE_FILE)) {
 function createClient() {
   return axios.create({
     timeout: 10000,
-    httpsAgent: new https.Agent({ keepAlive: true }),
     headers: {
       'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
@@ -221,6 +223,7 @@ async function fetchDynamic() {
     }
 
     backoffMs = 0;
+    if (typeof onRecovery === 'function') onRecovery();
 
   } catch (e) {
     const status = e.response?.status;
@@ -238,10 +241,12 @@ async function fetchDynamic() {
         : BASE_INTERVAL_MS;
     }
 
-    console.error('[dynamic error]', status, e.message);
+    const errMsg = `[dynamic error] status=${status} ${e.message}`;
+    console.error(errMsg);
     if (retriable) {
       console.log(`backoff: ${Math.round(backoffMs / 1000)}s`);
     }
+    if (typeof onError === 'function') onError(errMsg);
   }
 }
 
@@ -324,6 +329,8 @@ function startBilibiliDynamicWatcher(config = {}) {
   uid = String(config.uid || process.env.BILI_UID || DEFAULT_UID);
   cookie = config.cookie || process.env.BILI_COOKIE || null;
   notifyConfig = { ...DEFAULT_NOTIFY_CONFIG, ...(config.notifyConfig || {}) };
+  onError = typeof config.onError === 'function' ? config.onError : null;
+  onRecovery = typeof config.onRecovery === 'function' ? config.onRecovery : null;
 
   if (!cookie) {
     console.error('[bilibili-dynamic] BILI_COOKIE 未設定。スキップします。');

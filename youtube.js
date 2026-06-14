@@ -277,6 +277,11 @@ function startWebhook(port = 3001) {
             const status = item.status || {};
             const url = `https://www.youtube.com/watch?v=${videoId}`;
             title = title || 'YouTube動画';
+            const thumbnail =
+                item.snippet?.thumbnails?.maxres?.url ||
+                item.snippet?.thumbnails?.high?.url ||
+                item.snippet?.thumbnails?.medium?.url ||
+                (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null);
 
             // 判定フラグ
             // 既存の isUpcoming は使用しません
@@ -303,6 +308,7 @@ function startWebhook(port = 3001) {
                             body: `${title}`,
                             url,
                             icon: ICON_URL,
+                            image: thumbnail,
                             published: publishedStr || null
                         }
                     };
@@ -335,6 +341,7 @@ function startWebhook(port = 3001) {
                             body: `${title}`,
                             url,
                             icon: ICON_URL,
+                            image: thumbnail,
                             published: publishedStr || null
                         }
                     };
@@ -389,6 +396,7 @@ function startWebhook(port = 3001) {
                                 body: `${title}`,
                                 url,
                                 icon: ICON_URL,
+                                image: thumbnail,
                                 published: publishedStr || null
                             }
                         };

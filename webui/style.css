@@ -89,7 +89,7 @@ body {
 
 /* メニュー開閉時のスクロール制御 */
 body.menu-open {
-  overflow: visible;
+  overflow: hidden;
   touch-action: none;
 }
 
@@ -363,6 +363,10 @@ header h1 {
   -webkit-overflow-scrolling: touch;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  scrollbar-width: none;
+}
+#nav-menu::-webkit-scrollbar {
+  display: none;
 }
 
 .menu-open #nav-menu {
@@ -484,6 +488,14 @@ body.notifications-enabled .toggle-image.on {
   width: 100%;
 }
 
+.toggle-controls-wrapper span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 !important;
+}
+
 .menu-notification-toggle>span {
   padding-left: 0 !important;
   flex: 1;
@@ -563,6 +575,7 @@ body.notifications-enabled .toggle-image.on {
   display: flex;
   align-items: center;
   justify-content: center;
+  white-space: nowrap;
 }
 
 .subscriber-linked {
@@ -617,6 +630,7 @@ body.notifications-enabled .toggle-image.on {
   padding: 6px;
   border-radius: 8px;
   position: relative;
+  flex-shrink: 0;
 }
 
 .toggle-notify input[type="checkbox"] {

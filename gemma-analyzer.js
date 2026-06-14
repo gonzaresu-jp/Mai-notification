@@ -97,6 +97,14 @@ async function analyzeTweet(tweetText) {
 - ツイートに具体的な時刻があれば HH:MM 形式で抽出（例: "21:00"）
 - 時刻が不明または配信と無関係なら null
 
+【time_period】(具体的な時刻が無い配信予告のときの時間帯)
+- 「今夜」「夜」など → "NIGHT"
+- 「深夜」「真夜中」など → "LATE_NIGHT"
+- 「夕方」など → "EVENING"
+- 「お昼」「昼」「ごご」「午後」など → "NOON"
+- 「朝」「午前」など → "MORNING"
+- 時間帯が分からない、または配信と無関係なら null
+
 【previous_time】
 - 時刻変更の場合、変更前の時刻を HH:MM 形式で抽出
 - なければ null
@@ -118,6 +126,7 @@ async function analyzeTweet(tweetText) {
   "category": "",
   "status": "",
   "start_time": null,
+  "time_period": null,
   "previous_time": null,
   "title": null,
   "sentiment": "",
@@ -170,6 +179,7 @@ ${tweetText}`;
       category: validateEnum(result.category, ['LIVE', 'NEWS', 'PROMOTION', 'REPOST', 'MORNING', 'DAILY', 'OTHER'], 'OTHER'),
       status: validateEnum(result.status, ['LIVE_NOW', 'LIVE_SOON', 'TIME_CHANGE', 'NONE'], 'NONE'),
       start_time: result.start_time || null,
+      time_period: validateEnum(result.time_period, ['MORNING', 'NOON', 'EVENING', 'NIGHT', 'LATE_NIGHT'], null),
       previous_time: result.previous_time || null,
       title: result.title || null,
       sentiment: validateEnum(result.sentiment, ['POSITIVE', 'NEUTRAL', 'NEGATIVE'], 'NEUTRAL'),
@@ -184,7 +194,7 @@ ${tweetText}`;
 // --- 補助関数群（元のロジックを完全維持） ---
 
 function getFallbackResult() {
-  return { category: 'OTHER', status: 'NONE', start_time: null, previous_time: null, title: null, sentiment: 'NEUTRAL', confidence: 0 };
+  return { category: 'OTHER', status: 'NONE', start_time: null, time_period: null, previous_time: null, title: null, sentiment: 'NEUTRAL', confidence: 0 };
 }
 
 function validateEnum(value, validValues, defaultValue) {
@@ -197,10 +207,65 @@ function extractUrlsFromTweet(text) {
   return Array.from(new Set(text.match(urlRegex) || []));
 }
 
-function extractScheduleFromAnalysis(analysis, tweetDate, urls = []) {
-  if (analysis.category !== 'LIVE' || analysis.status === 'NONE' || !analysis.start_time) return null;
+// 時刻未定の配信予告で使う、時間帯ごとの既定時刻（必要に応じて編集可）。
+// 環境変数 PERIOD_TIMES（例: "NIGHT=22:00,NOON=12:00"）で上書き可能。
+const PERIOD_DEFAULT_TIMES = {
+  MORNING:    '09:00', // 朝・午前
+  NOON:       '12:00', // 昼・ごご・午後
+  EVENING:    '18:00', // 夕方
+  NIGHT:      '22:00', // 夜・今夜
+  LATE_NIGHT: '23:00', // 深夜
+};
+(function applyPeriodTimeOverrides() {
+  const raw = process.env.PERIOD_TIMES;
+  if (!raw) return;
+  for (const pair of raw.split(',')) {
+    const [k, v] = pair.split('=').map(s => (s || '').trim());
+    if (k && /^\d{1,2}:\d{2}$/.test(v) && k in PERIOD_DEFAULT_TIMES) {
+      PERIOD_DEFAULT_TIMES[k] = v;
+    }
+  }
+})();
 
-  const [hh, mm] = analysis.start_time.split(':').map(Number);
+/**
+ * ツイート本文から時間帯を推定する（Gemma の time_period が空のときのフォールバック）。
+ * 配信予告という前提で呼ばれるため、汎用的な「夜」等もマッチさせる。
+ */
+function detectPeriodFromText(text) {
+  if (!text) return null;
+  if (/深夜|真夜中/.test(text)) return 'LATE_NIGHT';
+  if (/今夜|今晩|夜の部|夜から|夜に|ナイト|tonight/i.test(text)) return 'NIGHT';
+  if (/夕方|夕刻|イブニング/.test(text)) return 'EVENING';
+  if (/お昼|ごご|ごごまい|正午|午後|ランチ|昼/.test(text)) return 'NOON';
+  if (/午前|モーニング|朝/.test(text)) return 'MORNING';
+  return null;
+}
+
+// Date → "YYYY-MM-DDTHH:MM:SS"（ローカル=JST、UTC変換なし）。管理画面の保存形式と揃える。
+function formatNaiveLocal(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function extractScheduleFromAnalysis(analysis, tweetDate, urls = [], tweetText = '') {
+  if (analysis.category !== 'LIVE' || analysis.status === 'NONE') return null;
+
+  // 具体的な時刻があればそれを使う。無ければ時間帯を解決し、
+  // 曜日配置・並び順のための代表時刻（PERIOD_DEFAULT_TIMES）を内部的に当てる。
+  // 画面表示は time_period（"夜"等）で行うため、この代表時刻は表示されない。
+  let timeStr = analysis.start_time;
+  let resolvedPeriod = null;
+  if (!timeStr) {
+    const period = analysis.time_period || detectPeriodFromText(tweetText);
+    if (period && PERIOD_DEFAULT_TIMES[period]) {
+      timeStr = PERIOD_DEFAULT_TIMES[period];
+      resolvedPeriod = period;
+    }
+  }
+  if (!timeStr) return null; // 具体時刻も時間帯も取れない → 登録しない（従来通り）
+  const timeEstimated = !!resolvedPeriod;
+
+  const [hh, mm] = timeStr.split(':').map(Number);
   if (isNaN(hh) || isNaN(mm)) return null;
 
   const scheduleDate = new Date(tweetDate);
@@ -216,12 +281,22 @@ function extractScheduleFromAnalysis(analysis, tweetDate, urls = []) {
 
   return {
     title: analysis.title || (analysis.status === 'LIVE_NOW' ? 'ライブ配信中' : '配信予定'),
-    scheduled_at: scheduleDate.toISOString(),
+    // ナイーブJST文字列で保存（管理画面と同形式）。toISOString()のUTC保存は
+    // 曜日配置・時刻表示が9時間ずれる原因になるため使わない。TZ=Asia/Tokyo前提。
+    scheduled_at: formatNaiveLocal(scheduleDate),
     url: primaryUrl,
     platform: platform,
     sentiment: analysis.sentiment,
-    status: analysis.status
+    status: analysis.status,
+    time_estimated: timeEstimated,
+    time_period: resolvedPeriod // "NIGHT"等。具体時刻ありなら null（時刻表示）
   };
 }
 
-module.exports = { analyzeTweet, extractScheduleFromAnalysis, extractUrlsFromTweet };
+// 時間帯（NIGHT等）→ 代表時刻（HH:MM）。未知なら null。
+function periodToTime(period) {
+  if (typeof period !== 'string') return null;
+  return PERIOD_DEFAULT_TIMES[period.toUpperCase()] || null;
+}
+
+module.exports = { analyzeTweet, extractScheduleFromAnalysis, extractUrlsFromTweet, periodToTime, PERIOD_DEFAULT_TIMES };

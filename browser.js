@@ -4,8 +4,48 @@
 
 const puppeteer = require('puppeteer');
 
-// ── プール: Map<cacheKey, { browser, initPromise }> ───────────────────────
+// ── プール: Map<cacheKey, { browser, initPromise, idleTimer }> ─────────────
 const _pool = new Map();
+
+// アイドル自動クローズ: 最後の利用から IDLE_MS 経過し、かつ開いているページが
+// 無ければブラウザを閉じてメモリを解放する（次回 getSharedBrowser で自動再起動）。
+// 0 を指定すると無効。環境変数 BROWSER_IDLE_MS で調整可能（既定 3分）。
+const IDLE_MS = parseInt(process.env.BROWSER_IDLE_MS || '180000', 10);
+
+/**
+ * 指定キーのアイドルタイマーを張り直す（利用のたびに呼ぶ）。
+ * タイマー発火時、ページが残っていれば閉じずに再スケジュールする。
+ */
+function scheduleIdleClose(key) {
+  if (!IDLE_MS) return;
+  const entry = _pool.get(key);
+  if (!entry) return;
+  if (entry.idleTimer) clearTimeout(entry.idleTimer);
+
+  entry.idleTimer = setTimeout(async () => {
+    const e = _pool.get(key);
+    if (!e || !e.browser || !e.browser.isConnected()) return;
+    try {
+      // Puppeteer は起動時に空白ページを1枚持つため、>1 を「利用中」とみなす
+      const pages = await e.browser.pages();
+      const openPages = pages.filter(p => !(p.isClosed && p.isClosed())).length;
+      if (openPages > 1) {
+        // まだページが開いている → 閉じずに再スケジュール
+        scheduleIdleClose(key);
+        return;
+      }
+      console.log(`[browser.js] idle ${IDLE_MS}ms, closing browser to free memory: ${key}`);
+      await e.browser.close().catch(() => {});
+      _pool.delete(key);
+    } catch (err) {
+      console.warn('[browser.js] idle close failed:', err && err.message ? err.message : err);
+    }
+  }, IDLE_MS);
+
+  if (entry.idleTimer && typeof entry.idleTimer.unref === 'function') {
+    entry.idleTimer.unref();
+  }
+}
 
 const DEFAULT_ARGS = [
   '--no-sandbox',
@@ -50,6 +90,7 @@ async function getSharedBrowser(options = {}) {
 
   // 接続済みのブラウザがあればそのまま返す
   if (entry && entry.browser && entry.browser.isConnected()) {
+    scheduleIdleClose(key); // 利用したのでアイドルタイマーを延長
     return entry.browser;
   }
 
@@ -118,12 +159,14 @@ async function getSharedBrowser(options = {}) {
       const current = _pool.get(key);
       // まだ同じインスタンスがプールにあれば削除
       if (current && current.browser === browser) {
+        if (current.idleTimer) clearTimeout(current.idleTimer);
         _pool.delete(key);
         console.warn(`[browser.js] Browser disconnected, removed from pool: ${key}`);
       }
     });
 
     _pool.set(key, { browser, initPromise: null });
+    scheduleIdleClose(key); // 起動直後からアイドル監視を開始
     return browser;
   })();
 
@@ -141,11 +184,14 @@ async function closeSharedBrowser(options = {}) {
   const key   = makeCacheKey(options);
   const entry = _pool.get(key);
 
-  if (entry && entry.browser) {
-    try {
-      await entry.browser.close();
-    } catch (e) {
-      // ignore
+  if (entry) {
+    if (entry.idleTimer) clearTimeout(entry.idleTimer);
+    if (entry.browser) {
+      try {
+        await entry.browser.close();
+      } catch (e) {
+        // ignore
+      }
     }
   }
   _pool.delete(key);
@@ -160,8 +206,11 @@ async function closeAllBrowsers() {
     keys.map(key => {
       const entry = _pool.get(key);
       _pool.delete(key);
-      if (entry && entry.browser) {
-        return entry.browser.close().catch(() => {});
+      if (entry) {
+        if (entry.idleTimer) clearTimeout(entry.idleTimer);
+        if (entry.browser) {
+          return entry.browser.close().catch(() => {});
+        }
       }
     })
   );
@@ -175,6 +224,7 @@ function cleanupDisconnected() {
   let removed = 0;
   for (const [key, entry] of _pool.entries()) {
     if (entry.browser && !entry.browser.isConnected()) {
+      if (entry.idleTimer) clearTimeout(entry.idleTimer);
       _pool.delete(key);
       removed++;
     }

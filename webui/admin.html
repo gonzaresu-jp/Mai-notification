@@ -542,6 +542,19 @@
                     <input type="datetime-local" id="ev-start-time">
                 </div>
 
+                <div class="form-group" id="ev-time-period-group">
+                    <label for="ev-time-period">時間帯（時刻が曖昧なとき）</label>
+                    <select id="ev-time-period">
+                        <option value="">指定なし（上の時刻を表示）</option>
+                        <option value="MORNING">朝</option>
+                        <option value="NOON">昼</option>
+                        <option value="EVENING">夕方</option>
+                        <option value="NIGHT">夜</option>
+                        <option value="LATE_NIGHT">深夜</option>
+                    </select>
+                    <small style="color:#888">選ぶと予定表に時刻ではなく「夜ごろ」等を表示します（曜日への配置には上の開始日時の日付を使います）。</small>
+                </div>
+
                 <div class="form-group" id="ev-memo-date-group" style="display:none">
                     <label for="ev-memo-date">日付 *</label>
                     <input type="date" id="ev-memo-date">
@@ -656,6 +669,7 @@
         const evForm = document.getElementById('ev-form');
         const evTitle = document.getElementById('ev-title');
         const evStartTime = document.getElementById('ev-start-time');
+        const evTimePeriod = document.getElementById('ev-time-period');
         const evConfirmed = document.getElementById('ev-confirmed');
         const evPlatform = document.getElementById('ev-platform');
         const evType = document.getElementById('ev-type');
@@ -949,12 +963,16 @@
                 : event.platform === 'twitcasting'
                     ? '<span class="badge badge-twitcasting">TwitCasting</span>'
                     : '';
-            const confirmedBadge = String(event.confirmed) === 'true'
+            const confirmedBadge = Number(event.confirmed) === 1
                 ? '<span class="badge badge-confirmed">確定</span>'
                 : '<span class="badge badge-unconfirmed">未定</span>';
-            const startTimeText = event.start_time
-                ? new Date(event.start_time).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                : '日時未定';
+            const EV_PERIOD_LABELS = { MORNING: '朝', NOON: '昼', EVENING: '夕方', NIGHT: '夜', LATE_NIGHT: '深夜' };
+            const periodLabel = event.time_period ? EV_PERIOD_LABELS[event.time_period] : null;
+            const startTimeText = periodLabel
+                ? (event.start_time ? new Date(event.start_time).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' }) : '') + ` ${periodLabel}ごろ`
+                : (event.start_time
+                    ? new Date(event.start_time).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    : '日時未定');
 
             return `
                 <div class="event-item">
@@ -1012,13 +1030,15 @@
                 editingEventId = id;
                 evModalTitle.textContent = 'イベント編集';
                 evTitle.value = event.title || '';
+                evStartTime.type = 'datetime-local'; // 値代入前に必ず日時モードへ（前回編集のdateモード残りを解消）
                 evStartTime.value = evToDatetimeLocal(event.start_time);
+                evTimePeriod.value = event.time_period || '';
                 evPlatform.value = event.platform || 'other';
                 evType.value = event.event_type || 'live';
                 evUrl.value = event.url || '';
                 evThumbUrl.value = event.thumbnail_url || '';
                 evDescription.value = event.description || '';
-                evConfirmed.value = event.confirmed === true ? 'true' : '';
+                evConfirmed.value = Number(event.confirmed) === 1 ? 'true' : '';
                 // メモの場合は日付フィールドに復元
                 if (event.event_type === 'memo' && event.start_time) {
                     evMemoDate.value = event.start_time.slice(0, 10);
@@ -1056,6 +1076,7 @@
                     : (evStartTime.value || null),
                 platform: evPlatform.value,
                 event_type: evType.value,
+                time_period: (!isMemo && evTimePeriod.value) ? evTimePeriod.value : null,
                 url: evUrl.value.trim(),
                 thumbnail_url: evThumbUrl.value.trim(),
                 description: evDescription.value.trim(),
@@ -1067,6 +1088,10 @@
             }
             if (isMemo && !evMemoDate.value) {
                 showStatus('メモには日付が必須です', 'error');
+                return;
+            }
+            if (payload.time_period && !payload.start_time) {
+                showStatus('時間帯を指定する場合は開始日を入力してください', 'error');
                 return;
             }
 
@@ -1098,9 +1123,30 @@
         const evMemoDateGroup  = document.getElementById('ev-memo-date-group');
         const evMemoDate       = document.getElementById('ev-memo-date');
 
+        const evTimePeriodGroup = document.getElementById('ev-time-period-group');
+        const evStartTimeLabel  = document.querySelector('label[for="ev-start-time"]');
+
+        // 時間帯を選ぶと開始日時欄を「日付のみ」に切替（時刻入力は不要）。
+        // 解除すると日時入力に戻す。date部分は保持する。
+        function evToggleTimePeriodMode() {
+            const hasPeriod = !!evTimePeriod.value && evType.value !== 'memo';
+            const datePart = (evStartTime.value || '').slice(0, 10);
+            if (hasPeriod) {
+                evStartTime.type = 'date';
+                evStartTime.value = datePart; // "YYYY-MM-DD"
+                if (evStartTimeLabel) evStartTimeLabel.textContent = '開始日（時刻は「時間帯」で表示）';
+            } else {
+                evStartTime.type = 'datetime-local';
+                if (evStartTimeLabel) evStartTimeLabel.textContent = '開始日時';
+            }
+        }
+        evTimePeriod.addEventListener('change', evToggleTimePeriodMode);
+
         function evToggleMemoMode() {
             const isMemo = evType.value === 'memo';
             evMemoHideTargets.forEach(el => { if (el) el.style.display = isMemo ? 'none' : ''; });
+            evTimePeriodGroup.style.display = isMemo ? 'none' : '';
+            if (isMemo) evTimePeriod.value = '';
             evStartTimeGroup.style.display = isMemo ? 'none' : '';
             evMemoDateGroup.style.display  = isMemo ? '' : 'none';
             if (isMemo) {
@@ -1111,6 +1157,7 @@
             } else {
                 evMemoDate.value = '';
             }
+            evToggleTimePeriodMode();
         }
         evType.addEventListener('change', evToggleMemoMode);
 
