@@ -300,6 +300,21 @@ const _paging = {
   hasMore: true,
 };
 
+// XSS対策: innerHTML に差し込む値はすべてエスケープする
+function escHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+// http(s) のみ許可（javascript: 等を排除）。不正なら空文字。
+function safeHttp(u) {
+    if (!u) return '';
+    try {
+        const parsed = new URL(u, location.origin);
+        return (parsed.protocol === 'http:' || parsed.protocol === 'https:') ? parsed.href : '';
+    } catch { return ''; }
+}
+
 function createLogItem(log) {
     const date = new Date(log.timestamp * 1000);
     const dateStr = date.toLocaleString('ja-JP', {
@@ -313,25 +328,27 @@ function createLogItem(log) {
         timeZone: 'Asia/Tokyo'
     });
     
-    const iconHtml = log.icon ? `<img src="${log.icon}" alt="icon" class="icon" />` : '';
-    
-    const titleHtml = log.url 
-        ? `<a href="${log.url}" target="_blank" rel="noopener noreferrer">${log.title || '通知'}</a>`
-        : (log.title || '通知');
-    
+    const safeIcon = safeHttp(log.icon);
+    const iconHtml = safeIcon ? `<img src="${escHtml(safeIcon)}" alt="icon" class="icon" />` : '';
+
+    const safeUrl = safeHttp(log.url);
+    const titleHtml = safeUrl
+        ? `<a href="${escHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">${escHtml(log.title || '通知')}</a>`
+        : escHtml(log.title || '通知');
+
     const statusClass = log.status === 'fail' ? ' status-fail' : '';
-    
+
     // プラットフォーム名を正規化してdata属性に追加
     const platformData = normalizePlatformName(log.platform || '不明');
-    
+
     return `
-        <div class="card${statusClass}" data-platform="${platformData}">
+        <div class="card${statusClass}" data-platform="${escHtml(platformData)}">
             ${iconHtml}
             <div class="card-content">
                 <div class="title">${titleHtml}</div>
-                <p class="body">${log.body || 'メッセージなし'}</p>
+                <p class="body">${escHtml(log.body || 'メッセージなし')}</p>
                 <div class="meta">
-                    <span class="platform">${log.platform || '不明'}</span>
+                    <span class="platform">${escHtml(log.platform || '不明')}</span>
                     <span class="time">${dateStr}</span>
                     ${log.status === 'fail' ? '<span class="status-badge">送信失敗</span>' : ''}
                 </div>

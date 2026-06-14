@@ -13,6 +13,19 @@ const USM_THUMBNAILS = [
   'https://mai.honna-yuzuki.com/user-thumb/7.webp',
 ];
 
+// 時間帯（time_period）→ 日本語ラベル。具体時刻が無い配信予告で使う。
+const TIME_PERIOD_LABELS = {
+  MORNING: '朝',
+  NOON: '昼',
+  EVENING: '夕方',
+  NIGHT: '夜',
+  LATE_NIGHT: '深夜',
+};
+function timePeriodLabel(period) {
+  if (!period) return null;
+  return TIME_PERIOD_LABELS[String(period).toUpperCase()] || null;
+}
+
 // サムネピッカー用スタイルを動的に挿入（重複挿入防止）
 function ensureUsmThumbPickerStyle() {
   if (document.getElementById('usm-thumb-picker-style')) return;
@@ -271,7 +284,7 @@ function renderEventCard(event) {
     const safeUrl = toSafeHttpUrl(event.url);
     return `
       <article class="event user-schedule has-link ${readonly ? 'readonly' : ''}" data-user-url="${safeUrl ? encodeURIComponent(safeUrl) : ''}">
-        ${event.thumbnail_url ? `<div class="event-thumb"><img src="${escapeHtml(event.thumbnail_url)}" alt="${escapeHtml(event.title || '')}" loading="lazy" referrerpolicy="no-referrer"></div>` : ''}
+        ${toSafeHttpUrl(event.thumbnail_url) ? `<div class="event-thumb"><img src="${escapeHtml(toSafeHttpUrl(event.thumbnail_url))}" alt="${escapeHtml(event.title || '')}" loading="lazy" referrerpolicy="no-referrer"></div>` : ''}
         <div class="event-info">
           <div class="schedule-item-head">
             <div class="event-time">
@@ -309,11 +322,15 @@ function renderEventCard(event) {
   else statusBadge = '<span class="event-status-badge other">【その他】</span>';
 
   let timeDisplay = '';
-  if (event.start_time) {
+  const periodLabel = timePeriodLabel(event.time_period);
+  if (periodLabel) {
+    // 時間帯のみ判明（具体時刻は未定）→ 「夜」等のラベルを表示
+    timeDisplay = `<span class="time-period-label">${periodLabel}ごろ</span>`;
+  } else if (event.start_time) {
     const start = new Date(event.start_time);
     const now = new Date();
     const timeStr = start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
-    if (start > now && (event.confirmed === null || event.confirmed === false)) {
+    if (start > now && Number(event.confirmed) !== 1) {
       timeDisplay = `${timeStr} <span class="unconfirmed-badge">未定</span>`;
     } else {
       timeDisplay = timeStr;
@@ -325,7 +342,7 @@ function renderEventCard(event) {
   const safeAdminUrl = toSafeHttpUrl(url);
   return `
     <article class="event ${eventType}${safeAdminUrl ? ' has-link' : ''}" ${safeAdminUrl ? `data-event-url="${encodeURIComponent(safeAdminUrl)}"` : ''}>
-      ${thumbnail ? `<div class="event-thumb"><img src="${thumbnail}" alt="${escapeHtml(event.title)}" loading="lazy" referrerpolicy="no-referrer"></div>` : ''}
+      ${toSafeHttpUrl(thumbnail) ? `<div class="event-thumb"><img src="${escapeHtml(toSafeHttpUrl(thumbnail))}" alt="${escapeHtml(event.title)}" loading="lazy" referrerpolicy="no-referrer"></div>` : ''}
       <div class="event-info">
         <div class="event-time">${statusBadge} ${timeDisplay}</div>
         <div class="event-title">${escapeHtml(event.title)}</div>
@@ -568,7 +585,7 @@ function openEventPopup(card) {
   const popup = document.createElement('div');
   popup.id = 'event-popup';
   popup.innerHTML = `
-    ${thumbSrc ? `<div class="popup-thumb"><img src="${thumbSrc}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>` : ''}
+    ${toSafeHttpUrl(thumbSrc) ? `<div class="popup-thumb"><img src="${escapeHtml(toSafeHttpUrl(thumbSrc))}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>` : ''}
     <div class="popup-info">
       ${timeHTML ? `<div class="popup-time">${timeHTML}</div>` : ''}
       ${titleText ? `<div class="popup-title">${escapeHtml(titleText)}</div>` : ''}

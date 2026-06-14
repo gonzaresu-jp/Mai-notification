@@ -75,7 +75,7 @@ async function getBroadcasterId(login, token, clientId) {
 ================================ */
 
 async function startTwitchPolling(config) {
-  const { twitchUrl, clientId, clientSecret, notifyConfig, interval = 10000 } = config;
+  const { twitchUrl, clientId, clientSecret, notifyConfig, scheduleConfig, interval = 10000, onError, onRecovery } = config;
 
   let currentToken = config.appAccessToken;
   let broadcasterId = null;
@@ -115,6 +115,9 @@ async function startTwitchPolling(config) {
                   body: stream.title || '',
                   url: `https://www.twitch.tv/${broadcasterLogin}`,
                   icon: 'https://assets.twitch.tv/assets/favicon-32-e29e246c157142c94346.png',
+                  image: stream.thumbnail_url
+                    ? stream.thumbnail_url.replace('{width}', '640').replace('{height}', '360')
+                    : null,
                 },
               },
               {
@@ -123,14 +126,44 @@ async function startTwitchPolling(config) {
               }
             ).catch(() => {});
           }
+
+          if (scheduleConfig?.apiUrl && scheduleConfig?.token) {
+            const thumbUrl = stream.thumbnail_url
+              ? stream.thumbnail_url.replace('{width}', '640').replace('{height}', '360')
+              : null;
+            try {
+              await axios.post(
+                scheduleConfig.apiUrl,
+                {
+                  title: stream.title || `${broadcasterLogin} の配信`,
+                  scheduled_at: stream.started_at || new Date().toISOString(),
+                  url: `https://www.twitch.tv/${broadcasterLogin}`,
+                  thumbnail_url: thumbUrl,
+                  platform: 'twitch',
+                  external_id: `twitch_${stream.id}`
+                },
+                {
+                  headers: { 'Content-Type': 'application/json', 'X-Notify-Token': scheduleConfig.token },
+                  timeout: 10000,
+                }
+              );
+              console.log(`[Twitch] schedule event created for stream ${stream.id}`);
+            } catch (e) {
+              console.warn(`[Twitch] schedule event creation failed:`, e.message);
+            }
+          }
         }
       }
+
+      if (typeof onRecovery === 'function') onRecovery();
 
     } catch (e) {
       if (e.response?.status === 401) {
         currentToken = await fetchAppAccessToken(clientId, clientSecret);
       } else {
-        console.error('[Twitch] Polling error:', e.message);
+        const msg = `[Twitch] Polling error: ${e.message}`;
+        console.error(msg);
+        if (typeof onError === 'function') onError(e.message);
       }
     }
 

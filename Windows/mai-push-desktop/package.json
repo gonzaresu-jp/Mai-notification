@@ -1,0 +1,59 @@
+{
+  "name": "mai-push-desktop",
+  "version": "1.0.0",
+  "description": "Mai Push Desktop - Web版と同じ通知をデスクトップで",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder build --win --x64",
+    "build:portable": "electron-builder build --win --x64 --config.portable=1",
+    "build:dir": "electron-builder build --win --x64 --dir"
+  },
+  "dependencies": {
+    "node-notifier": "^10.0.0",
+    "sharp": "^0.33.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.mai-push.desktop",
+    "productName": "まいちゃん通知",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "toast-helper.exe",
+      "icons/**/*"
+    ],
+    "asarUnpack": [
+      "toast-helper.exe",
+      "icons/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "icons/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "icons/icon.ico",
+      "uninstallerIcon": "icons/icon.ico",
+      "installerHeaderIcon": "icons/icon.ico",
+      "language": "1041",
+      "shortcutName": "まいちゃん通知",
+      "createDesktopShortcut": true
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.exe"
+    }
+  }
+}

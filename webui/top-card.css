@@ -794,6 +794,16 @@
   margin-left: 4px;
 }
 
+/* 時間帯ラベル（「夜ごろ」等。具体時刻が未定の配信予告） */
+.time-period-label {
+  display: inline-block;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: #ede7f6;
+  color: #5e35b1;
+}
+
 /* =====================================================
    登録者数ページ (sub-page)  v2.0
    top-card.v1.9.css の末尾に追記してください

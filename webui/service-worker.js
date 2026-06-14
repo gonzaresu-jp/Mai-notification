@@ -275,21 +275,24 @@ self.addEventListener('push', event => {
         }
       }
 
-      // title, body, icon, url を抽出
+      // title, body, icon, image, url を抽出
       let title = '通知';
       let body = '通知内容';
       let icon = './icon.ico';
+      let image = null;
       let url = null;
 
       if (data?.data && typeof data.data === 'object') {
         title = data.data.title || data.type || title;
         body = data.data.body || data.data.title || body;
         icon = data.data.icon || icon;
+        image = data.data.image || null;
         url = data.data.url || null;
       } else {
         title = data.title || title;
         body = data.body || body;
         icon = data.icon || icon;
+        image = data.image || null;
         url = data.url || null;
       }
 
@@ -310,6 +313,7 @@ self.addEventListener('push', event => {
       const options = {
         body,
         icon: icon || './icon-192.webp',
+        image: image || undefined,
         data: { url, timestamp: now, notificationId: uniqueTag, raw: data },
         requireInteraction: false,
         tag: uniqueTag,

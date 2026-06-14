@@ -139,7 +139,7 @@ async function checkFanboxPosts() {
   }
 }
 
-function startPolling(interval = POLL_INTERVAL) {
+function startPolling(interval = POLL_INTERVAL, onError = null, onRecovery = null) {
   console.log(`Fanbox polling started for @${FANBOX_USER} (interval: ${interval / 1000}s)`);
 
   let running = false;
@@ -149,8 +149,12 @@ function startPolling(interval = POLL_INTERVAL) {
     running = true;
     try {
       await checkFanboxPosts();
+      if (typeof onRecovery === 'function') onRecovery();
     } catch (e) {
       console.error('Fanbox check error:', e);
+      if (typeof onError === 'function') {
+        onError(e?.message || String(e));
+      }
     } finally {
       running = false;
     }

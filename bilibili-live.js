@@ -11,7 +11,7 @@ async function fetchLiveStatus(roomId) {
   return liveStatus === 1;
 }
 
-function startBilibiliWatcher({ roomId, onLiveStart }) {
+function startBilibiliWatcher({ roomId, onLiveStart, onError, onRecovery }) {
   if (live) {
     console.log('[bilibili] already started');
     return;
@@ -31,6 +31,7 @@ function startBilibiliWatcher({ roomId, onLiveStart }) {
       const nowLive = await fetchLiveStatus(roomId);
       isLive = nowLive;
       console.log(nowLive ? 'livestart (already live)' : 'offline');
+      if (typeof onRecovery === 'function') onRecovery();
     } catch (e) {
       console.error('[bilibili] failed to fetch initial live status:', e?.message || e);
     }
@@ -54,7 +55,11 @@ function startBilibiliWatcher({ roomId, onLiveStart }) {
     console.log('offline');
   });
 
-  live.on('error', console.error);
+  live.on('error', (err) => {
+    const msg = err?.message || String(err);
+    console.error('[bilibili] websocket error:', msg);
+    if (typeof onError === 'function') onError(msg);
+  });
 }
 
 module.exports = { startBilibiliWatcher };
