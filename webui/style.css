@@ -808,7 +808,8 @@ main {
     background-color 0.3s ease,
     opacity 0.3s ease,
     max-height 0.3s ease;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto; /* max-height(500px)を超えたら縦スクロール可能にする */
   max-height: 500px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);

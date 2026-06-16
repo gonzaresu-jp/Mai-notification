@@ -71,6 +71,13 @@ function initDatabase() {
     )`, (err) => { if (err) console.error("weekly_messages create err:", err.message); });
     db.run(`CREATE INDEX IF NOT EXISTS idx_weekly_messages_week_start ON weekly_messages (week_start)`);
 
+    // ベクトルDB同期の進捗（source 毎に最後に同期した行ID）
+    db.run(`CREATE TABLE IF NOT EXISTS vector_sync_state (
+      source TEXT PRIMARY KEY,
+      last_id INTEGER NOT NULL DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => { if (err) console.error("vector_sync_state create err:", err.message); });
+
     ensureNotificationsSchema();
     ensureScheduledSchema();
     ensureEventsSchema();

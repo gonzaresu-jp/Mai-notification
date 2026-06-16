@@ -99,6 +99,7 @@ require("./routes/system").register(app);
 require("./routes/history").register(app, db);
 require("./routes/notify").register(app, db);
 require("./routes/twitter-media").register(app, db);
+require("./routes/rag").register(app, db);
 // --- Milestone Scheduler ---
 if (ctx.vapidConfig.vapidPublicKey !== "test-key") {
   ctx.milestoneScheduler = new MilestoneScheduler(dbPath, ctx.vapidConfig);
@@ -109,6 +110,9 @@ if (ctx.vapidConfig.vapidPublicKey !== "test-key") {
 
 // --- Periodic Tasks ---
 startPeriodicTasks();
+
+// --- ベクトルDB同期（VECTOR_DB_URL / EMBEDDING_ENDPOINT 設定時のみ稼働） ---
+require("./services/vector-sync").startVectorSync();
 
 // --- System Monitor ---
 discordAlert.startSystemMonitor();

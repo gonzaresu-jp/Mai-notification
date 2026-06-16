@@ -88,12 +88,12 @@
                     <span class="note">これらのプラットフォームの検出ができていない問題を調査中です。</span>
                 </li>
                 <li>
-                    <strong>Fanboxの誤検知</strong>
-                    <span class="note">公式バナーを新規投稿として検知してしまう問題を修正予定です。</span>
+                    <strong><s>Fanboxの誤検知</s></strong>
+                    <span class="note"><s>公式バナーを新規投稿として検知してしまう問題を修正予定です。</s></span>
                 </li>
                 <li>
-                    <strong>Twitterリポストの誤処理</strong>
-                    <span class="note">リポストに対してスケジュールを追加してしまう問題の対応を進めています。</span>
+                    <strong><s>Twitterリポストの誤処理</s></strong>
+                    <span class="note"><s>リポストに対してスケジュールを追加してしまう問題の対応を進めています。</s></span>
                 </li>
                 <li>
                     <strong>AIスケジュール追加の制限</strong>
@@ -112,12 +112,12 @@
                     <span class="note">リンク先カスタム設定の動作確認と修正を進めています。</span>
                 </li>
                 <li>
-                    <strong>ヒートマップのスクロール不具合</strong>
-                    <span class="note">スマートフォン環境でヒートマップのスクロールが正常に動作しない問題の対応を予定しています。</span>
+                    <strong><s>ヒートマップのスクロール不具合</s></strong>
+                    <span class="note"><s>スマートフォン環境でヒートマップのスクロールが正常に動作しない問題の対応を予定しています。</s></span>
                 </li>
                 <li>
-                    <strong>プロセスステータス</strong>
-                    <span class="note">プロセスステータスの表示が不完全な問題の改善を進めています。</span>
+                    <strong><s>プロセスステータス</s></strong>
+                    <span class="note"><s>プロセスステータスの表示が不完全な問題の改善を進めています。</s></span>
                 </li>
             </ul>
         </section>

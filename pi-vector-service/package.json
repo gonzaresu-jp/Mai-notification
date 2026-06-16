@@ -1,0 +1,10 @@
+{
+  "name": "pi-vector-service",
+  "version": "1.0.0",
+  "description": "32bit Raspberry Pi 向けの依存ゼロ軽量ベクトルDB（mai-push用）",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
