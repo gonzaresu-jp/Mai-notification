@@ -48,6 +48,40 @@ function getUpcomingEvents(db, nowStr, limit) {
   });
 }
 
+const pad2 = n => String(n).padStart(2, "0");
+
+// 「最古/最新/特定日付/年月」の質問を検出し、notifications から該当ツイートを直接取得する。
+// （ベクトル検索は時系列・厳密一致に弱いため）。created_at はUTC保存なので +9h で JST 判定。
+function getTemporalTweets(db, q) {
+  return new Promise((resolve) => {
+    const base =
+      "SELECT id, datetime(created_at,'+9 hours') jst, substr(body,1,200) body, tweet_id " +
+      "FROM notifications WHERE (platform LIKE '%twitter%' OR title LIKE '%ツイート%')";
+    let sql = null, params = [], label = null;
+    const md = q.match(/(\d{4})\s*[-/年]\s*(\d{1,2})\s*[-/月]\s*(\d{1,2})/);
+    const ym = q.match(/(\d{4})\s*[-/年]\s*(\d{1,2})\s*月?/);
+    if (/最も古い|一番古い|いちばん古い|最初|最古/.test(q)) {
+      sql = base + " ORDER BY created_at ASC LIMIT 5"; label = "最も古いツイート";
+    } else if (/最新|最近|直近|一番新しい|いちばん新しい/.test(q)) {
+      sql = base + " ORDER BY created_at DESC LIMIT 5"; label = "最新のツイート";
+    } else if (md) {
+      const d = `${md[1]}-${pad2(md[2])}-${pad2(md[3])}`;
+      sql = base + " AND date(created_at,'+9 hours')=? ORDER BY created_at ASC LIMIT 10"; params = [d]; label = `${d} のツイート`;
+    } else if (ym) {
+      const m = `${ym[1]}-${pad2(ym[2])}`;
+      sql = base + " AND strftime('%Y-%m',created_at,'+9 hours')=? ORDER BY created_at ASC LIMIT 10"; params = [m]; label = `${m} のツイート`;
+    } else {
+      return resolve(null);
+    }
+    db.all(sql, params, (err, rows) => resolve(err ? null : { label, rows: rows || [] }));
+  });
+}
+
+function fmtTweet(r) {
+  const url = r.tweet_id ? ` https://x.com/koinoya_mai/status/${r.tweet_id}` : "";
+  return `- ${r.jst} JST: ${(r.body || "").replace(/\s+/g, " ").trim()}${url}`;
+}
+
 function fmtUpcoming(e) {
   const datePart = String(e.start_time || "").slice(0, 10);
   const when = e.time_period ? `${datePart} ${PERIOD_LABELS[e.time_period] || ""}ごろ` : String(e.start_time || "").replace("T", " ");
@@ -114,15 +148,19 @@ function register(app, db) {
     if (!question) return res.status(400).json({ error: "question required" });
     try {
       const nowStr = nowJst();
-      const [vec, upcoming] = await Promise.all([
+      const [vec, upcoming, temporal] = await Promise.all([
         embeddings.embedQuery(question),
         getUpcomingEvents(db, nowStr, 5),
+        getTemporalTweets(db, question),
       ]);
       const hits = await vectordb.search(vec, ASK_TOPK);
       const hitLines = hits.map((h, i) => `${i + 1}. ${sourceLine(h)}`).join("\n");
       const upLines = upcoming.length ? upcoming.map(fmtUpcoming).join("\n") : "(登録されている今後の予定はありません)";
       const knowledge = loadKnowledge();
       const kLines = knowledge.length ? knowledge.map(k => `- ${k.title}: ${k.text}`).join("\n") : "(なし)";
+      const temporalBlock = (temporal && temporal.rows.length)
+        ? `■ 該当ツイート（${temporal.label}・DBから正確に取得）:\n${temporal.rows.map(fmtTweet).join("\n")}\n\n`
+        : (temporal ? `■ 該当ツイート（${temporal.label}）: 見つかりませんでした\n\n` : "");
 
       const messages = [
         {
@@ -130,6 +168,7 @@ function register(app, db) {
           content:
             "あなたはVTuber「恋乃夜まい」の情報アシスタントです。日本語で、前置き・思考過程・引用番号は書かず結論から簡潔に答えてください。" +
             "「次の配信」「今後の予定」を聞かれたら必ず『今後の配信予定』欄のみを根拠にし、『過去の通知・ツイート』を未来の予定として答えないこと。" +
+            "「最も古い/最新/特定の日付のツイート」を聞かれたら、『該当ツイート』欄があればそれだけを根拠に答えること（『関連する過去の通知・ツイート』欄は順不同なので最古/最新の判断に使わない）。" +
             "「どんな人/どんな子/性格/雰囲気」など人物像の質問は、過去のツイート・通知から読み取れる範囲で要約してよい。" +
             "日時・数値・固有名などの事実は与えられた情報にあるものだけを使い、無い情報は創作しないこと。本当に手がかりが無いときだけ「わかりません」と答える。",
         },
@@ -138,6 +177,7 @@ function register(app, db) {
           content:
             `現在日時: ${nowStr}（JST）\n\n` +
             `■ 恋乃夜まいの基本情報（プロフィール）:\n${kLines}\n\n` +
+            temporalBlock +
             `■ 今後の配信予定（時間順）:\n${upLines}\n\n` +
             `■ 関連する過去の通知・ツイート:\n${hitLines || "(なし)"}\n\n` +
             `質問: ${question}`,
