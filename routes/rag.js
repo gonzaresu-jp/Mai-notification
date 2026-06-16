@@ -18,6 +18,34 @@ function ready() {
   return vectordb.isEnabled() && embeddings.isEnabled();
 }
 
+const PERIOD_LABELS = { MORNING: "朝", NOON: "昼", EVENING: "夕方", NIGHT: "夜", LATE_NIGHT: "深夜" };
+
+// 現在時刻を naive JST 文字列 "YYYY-MM-DDTHH:MM:SS" で返す（TZ=Asia/Tokyo前提）
+function nowJst() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// DBから「今後の配信予定」を時間順で取得（ベクトル検索では未来/過去を区別できないため直接SQL）
+function getUpcomingEvents(db, nowStr, limit) {
+  return new Promise((resolve) => {
+    db.all(
+      `SELECT title, start_time, platform, time_period, url, event_type FROM events
+       WHERE start_time IS NOT NULL AND status != 'cancelled' AND event_type != 'memo' AND start_time >= ?
+       ORDER BY start_time ASC LIMIT ?`,
+      [nowStr, limit],
+      (err, rows) => resolve(err ? [] : (rows || []))
+    );
+  });
+}
+
+function fmtUpcoming(e) {
+  const datePart = String(e.start_time || "").slice(0, 10);
+  const when = e.time_period ? `${datePart} ${PERIOD_LABELS[e.time_period] || ""}ごろ` : String(e.start_time || "").replace("T", " ");
+  return `- ${e.title || "配信予定"}（${when}${e.platform ? "/" + e.platform : ""}）${e.url || ""}`;
+}
+
 // 検索結果ペイロード → 表示/コンテキスト用の1行テキスト
 function sourceLine(hit) {
   const p = hit.payload || {};
@@ -74,26 +102,39 @@ function register(app, db) {
     const question = (req.body?.question || req.body?.q || "").toString().trim();
     if (!question) return res.status(400).json({ error: "question required" });
     try {
-      const vec = await embeddings.embedQuery(question);
+      const nowStr = nowJst();
+      const [vec, upcoming] = await Promise.all([
+        embeddings.embedQuery(question),
+        getUpcomingEvents(db, nowStr, 5),
+      ]);
       const hits = await vectordb.search(vec, ASK_TOPK);
-      const context = hits.map((h, i) => `${i + 1}. ${sourceLine(h)}`).join("\n");
+      const hitLines = hits.map((h, i) => `${i + 1}. ${sourceLine(h)}`).join("\n");
+      const upLines = upcoming.length ? upcoming.map(fmtUpcoming).join("\n") : "(登録されている今後の予定はありません)";
 
       const messages = [
         {
           role: "system",
           content:
-            "あなたはVTuber「恋乃夜まい」の情報アシスタントです。" +
-            "以下のコンテキスト（過去の通知・ツイート・配信予定）だけを根拠に、日本語で答えてください。" +
-            "分析・前置き・思考過程・引用番号は書かず、質問への答えだけを結論から簡潔に述べること。" +
-            "コンテキストに無いことは推測せず「わかりません」と答えてください。",
+            "あなたはVTuber「恋乃夜まい」の情報アシスタントです。日本語で、前置き・思考過程・引用番号は書かず結論から簡潔に答えてください。" +
+            "「次の配信」「今後の予定」を聞かれたら必ず『今後の配信予定』欄のみを根拠にし、『過去の通知・ツイート』を未来の予定として答えないこと。" +
+            "「どんな人/どんな子/性格/雰囲気」など人物像の質問は、過去のツイート・通知から読み取れる範囲で要約してよい。" +
+            "日時・数値・固有名などの事実は与えられた情報にあるものだけを使い、無い情報は創作しないこと。本当に手がかりが無いときだけ「わかりません」と答える。",
         },
-        { role: "user", content: `コンテキスト:\n${context || "(該当なし)"}\n\n質問: ${question}` },
+        {
+          role: "user",
+          content:
+            `現在日時: ${nowStr}（JST）\n\n` +
+            `■ 今後の配信予定（時間順）:\n${upLines}\n\n` +
+            `■ 関連する過去の通知・ツイート:\n${hitLines || "(なし)"}\n\n` +
+            `質問: ${question}`,
+        },
       ];
 
       const answer = await chat(messages);
       res.json({
         question,
         answer,
+        upcoming: upcoming.map(e => ({ title: e.title, start_time: e.start_time, time_period: e.time_period, url: e.url })),
         sources: hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, url: h.payload?.url })),
       });
     } catch (e) {
