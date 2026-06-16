@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>まいAI チャット｜恋乃夜まい</title>
+<link rel="icon" href="./icon.webp">
+<style>
+  :root {
+    --mai-primary: #B11E7C;
+    --mai-secondary: #7F2534;
+    --mai-soft: #f7e0ef;
+    --mai-soft-2: #fbeef6;
+    --mai-text: #2c2c3e;
+    --mai-bubble-ai: #ffffff;
+    --mai-bubble-user: linear-gradient(135deg, #d63b97, #B11E7C);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Hiragino Maru Gothic ProN", "Rounded Mplus 1c", "Segoe UI", system-ui, sans-serif;
+    color: var(--mai-text);
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #ffd9ee 0%, transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, #ffe7f5 0%, transparent 55%),
+      linear-gradient(160deg, #fff5fb 0%, #f7e8f3 100%);
+    display: flex; flex-direction: column; height: 100dvh; overflow: hidden;
+  }
+  /* ===== ヘッダー ===== */
+  .chat-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top));
+    background: linear-gradient(135deg, var(--mai-primary), #8e1763);
+    color: #fff; box-shadow: 0 2px 14px rgba(177,30,124,.35); z-index: 5;
+  }
+  .chat-header .avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
+    border: 2px solid rgba(255,255,255,.85); box-shadow: 0 0 0 3px rgba(255,255,255,.25); }
+  .chat-header .meta { line-height: 1.25; }
+  .chat-header .name { font-weight: 800; font-size: 1.05rem; display:flex; align-items:center; gap:6px; }
+  .chat-header .sub { font-size: .72rem; opacity: .9; }
+  .chat-header .heart { color: #ffd1ea; }
+  .chat-header .home { margin-left: auto; color: #fff; text-decoration: none; font-size: .8rem;
+    background: rgba(255,255,255,.18); padding: 6px 10px; border-radius: 999px; }
+  /* ===== メッセージ領域 ===== */
+  .chat-log { flex: 1; overflow-y: auto; padding: 18px 14px 8px; -webkit-overflow-scrolling: touch; }
+  .msg { display: flex; gap: 10px; margin-bottom: 16px; max-width: 100%; animation: pop .25s ease; }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: none; } }
+  .msg .ai-ava { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: 0 0 36px;
+    border: 2px solid #fff; box-shadow: 0 2px 8px rgba(177,30,124,.25); }
+  .bubble { padding: 11px 14px; border-radius: 18px; font-size: .95rem; line-height: 1.65;
+    white-space: pre-wrap; word-break: break-word; max-width: min(78%, 640px); }
+  .msg.ai .bubble { background: var(--mai-bubble-ai); color: var(--mai-text);
+    border: 1px solid #f1d6e8; border-top-left-radius: 6px; box-shadow: 0 3px 12px rgba(177,30,124,.10); }
+  .msg.user { flex-direction: row-reverse; }
+  .msg.user .bubble { background: var(--mai-bubble-user); color: #fff; border-top-right-radius: 6px;
+    box-shadow: 0 3px 12px rgba(177,30,124,.28); }
+  .sources { margin-top: 8px; font-size: .74rem; }
+  .sources summary { cursor: pointer; color: var(--mai-primary); font-weight: 700; outline: none; }
+  .sources ul { margin: 6px 0 0; padding-left: 1.1em; color: #8a6b7d; }
+  .sources a { color: var(--mai-primary); }
+  /* タイピング */
+  .typing { display: inline-flex; gap: 5px; padding: 4px 2px; }
+  .typing i { width: 8px; height: 8px; border-radius: 50%; background: var(--mai-primary); opacity: .5;
+    animation: blink 1.2s infinite both; }
+  .typing i:nth-child(2){ animation-delay: .2s; } .typing i:nth-child(3){ animation-delay: .4s; }
+  @keyframes blink { 0%,80%,100%{ transform: scale(.7); opacity:.4 } 40%{ transform: scale(1); opacity:1 } }
+  /* ===== サジェスト ===== */
+  .suggest { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 8px; }
+  .chip { background: #fff; border: 1.5px solid var(--mai-soft); color: var(--mai-primary);
+    padding: 7px 13px; border-radius: 999px; font-size: .82rem; cursor: pointer; font-weight: 600;
+    box-shadow: 0 2px 6px rgba(177,30,124,.08); transition: .15s; }
+  .chip:hover { background: var(--mai-soft-2); transform: translateY(-1px); }
+  /* ===== 入力 ===== */
+  .composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom)); background: rgba(255,255,255,.85);
+    backdrop-filter: blur(8px); border-top: 1px solid #f0d6e7; }
+  .composer textarea { flex: 1; resize: none; border: 1.5px solid var(--mai-soft); border-radius: 22px;
+    padding: 11px 16px; font: inherit; font-size: .95rem; max-height: 140px; outline: none; background: #fff; }
+  .composer textarea:focus { border-color: var(--mai-primary); box-shadow: 0 0 0 3px rgba(177,30,124,.12); }
+  .send-btn { flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--mai-bubble-user); color: #fff; font-size: 1.2rem; display: grid; place-items: center;
+    box-shadow: 0 4px 12px rgba(177,30,124,.35); transition: .15s; }
+  .send-btn:disabled { opacity: .5; cursor: default; }
+  .send-btn:not(:disabled):active { transform: scale(.92); }
+</style>
+</head>
+<body>
+  <header class="chat-header">
+    <img class="avatar" src="./icon-192.webp" alt="恋乃夜まい">
+    <div class="meta">
+      <div class="name">恋乃夜まい <span class="heart">♥</span> まいAI</div>
+      <div class="sub">恋の魔女 / だーりんの“ドキドキ”を待っています</div>
+    </div>
+    <a class="home" href="./admin.html">管理画面</a>
+  </header>
+
+  <div class="chat-log" id="log" aria-live="polite"></div>
+
+  <div class="suggest" id="suggest">
+    <button class="chip">次の配信はいつ？</button>
+    <button class="chip">まいってどんな子？</button>
+    <button class="chip">最近どんな配信してた？</button>
+    <button class="chip">誕生日と身長は？</button>
+  </div>
+
+  <form class="composer" id="composer">
+    <textarea id="input" rows="1" placeholder="君のドキドキ…聞かせて？（質問を入力）" autocomplete="off"></textarea>
+    <button class="send-btn" id="send" type="submit" aria-label="送信">➤</button>
+  </form>
+
+<script>
+(function () {
+  const AVATAR = "./icon-192.webp";
+  const log = document.getElementById("log");
+  const input = document.getElementById("input");
+  const sendBtn = document.getElementById("send");
+  const form = document.getElementById("composer");
+  const suggest = document.getElementById("suggest");
+  let busy = false;
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+  function safeUrl(u){ try{ const p=new URL(u, location.origin); return (p.protocol==="http:"||p.protocol==="https:")?p.href:""; }catch{ return ""; } }
+
+  function scrollDown(){ log.scrollTop = log.scrollHeight; }
+
+  function addUser(text){
+    const el = document.createElement("div");
+    el.className = "msg user";
+    el.innerHTML = `<div class="bubble">${esc(text)}</div>`;
+    log.appendChild(el); scrollDown();
+  }
+  function addAI(){
+    const el = document.createElement("div");
+    el.className = "msg ai";
+    el.innerHTML = `<img class="ai-ava" src="${AVATAR}" alt="まい"><div class="bubble"></div>`;
+    log.appendChild(el); scrollDown();
+    return el.querySelector(".bubble");
+  }
+  function typing(bubble){
+    bubble.innerHTML = `<span class="typing"><i></i><i></i><i></i></span>`;
+  }
+  function renderAnswer(bubble, answer, sources){
+    let html = esc(answer || "（うまく答えられなかったみたい…ごめんね）");
+    const list = (sources||[]).filter(s => s && s.title);
+    if (list.length){
+      const items = list.map(s => {
+        const u = safeUrl(s.url);
+        const t = esc(s.title);
+        return `<li>${u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>` : t}</li>`;
+      }).join("");
+      html += `<details class="sources"><summary>参照 (${list.length})</summary><ul>${items}</ul></details>`;
+    }
+    bubble.innerHTML = html;
+    scrollDown();
+  }
+
+  async function ask(question){
+    if (busy || !question.trim()) return;
+    busy = true; sendBtn.disabled = true;
+    if (suggest) suggest.style.display = "none";
+    addUser(question);
+    const bubble = addAI(); typing(bubble);
+    try {
+      const r = await fetch("/api/admin/ask", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question })
+      });
+      if (r.status === 401) { location.href = "./admin/login"; return; }
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { bubble.innerHTML = esc("エラー: " + (j.error || r.status)); }
+      else { renderAnswer(bubble, j.answer, j.sources); }
+    } catch (e) {
+      bubble.innerHTML = esc("通信エラー: " + e.message);
+    } finally {
+      busy = false; sendBtn.disabled = false; input.focus();
+    }
+  }
+
+  // 入力欄の自動リサイズ
+  function autosize(){ input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; }
+  input.addEventListener("input", autosize);
+  // Enterで送信 / Shift+Enterで改行
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
+  function submit(){
+    const q = input.value.trim();
+    if (!q) return;
+    input.value = ""; autosize();
+    ask(q);
+  }
+  form.addEventListener("submit", e => { e.preventDefault(); submit(); });
+  suggest.addEventListener("click", e => {
+    const chip = e.target.closest(".chip");
+    if (chip) ask(chip.textContent.trim());
+  });
+
+  // 認証チェック＆ウェルカム
+  (async () => {
+    try {
+      const v = await fetch("/api/admin/verify", { credentials: "include" });
+      if (!v.ok) { location.href = "./admin/login"; return; }
+    } catch { /* オフライン等はそのまま表示 */ }
+    const b = addAI();
+    b.textContent = "やっほー、だーりん！ 恋乃夜まいだよ ♡\n配信予定でも、まいのことでも、なんでも聞いてね？";
+    input.focus();
+  })();
+})();
+</script>
+</body>
+</html>

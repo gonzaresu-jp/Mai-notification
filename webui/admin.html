@@ -523,47 +523,11 @@
         </section>
 
         <section class="sub-panel">
-            <h2>🤖 まいAI（通知履歴・予定にQ&A）</h2>
-            <div style="display:flex; gap:8px;">
-                <input id="ai-q" type="text" placeholder="例: 次の配信はいつ？ / 最近どんな配信してた？" style="flex:1; padding:8px; border-radius:8px; border:1px solid #ccc;">
-                <button type="button" id="ai-send" class="btn-primary">質問</button>
-            </div>
-            <div id="ai-answer" style="margin-top:10px; white-space:pre-wrap; line-height:1.6;"></div>
-            <div id="ai-sources" style="margin-top:8px; font-size:12px; color:#888; white-space:pre-wrap;"></div>
+            <h2>🤖 まいAI</h2>
+            <p style="margin:0 0 10px; color:#666; font-size:.9rem;">通知履歴・配信予定・プロフィールに基づいてQ&Aできる専用チャットです。</p>
+            <a href="./chat.html" class="btn-primary" style="display:inline-block; text-decoration:none; padding:10px 18px; border-radius:999px;">💬 まいAI チャットを開く</a>
         </section>
     </div>
-
-    <script>
-        (function () {
-            const q = document.getElementById('ai-q');
-            const btn = document.getElementById('ai-send');
-            const ans = document.getElementById('ai-answer');
-            const src = document.getElementById('ai-sources');
-            async function ask() {
-                const question = q.value.trim();
-                if (!question) return;
-                btn.disabled = true; ans.textContent = '考え中…'; src.textContent = '';
-                try {
-                    const r = await fetch('/api/admin/ask', {
-                        method: 'POST', credentials: 'include',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ question })
-                    });
-                    if (r.status === 401) { location.href = './admin/login'; return; }
-                    const j = await r.json().catch(() => ({}));
-                    if (!r.ok) { ans.textContent = 'エラー: ' + (j.error || r.status); return; }
-                    ans.textContent = j.answer || '(回答なし)';
-                    src.textContent = (j.sources || []).map(s => '• ' + (s.title || '')).join('\n');
-                } catch (e) {
-                    ans.textContent = 'エラー: ' + e.message;
-                } finally {
-                    btn.disabled = false;
-                }
-            }
-            btn.addEventListener('click', ask);
-            q.addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
-        })();
-    </script>
         
 
     <div id="event-modal" class="event-modal">
