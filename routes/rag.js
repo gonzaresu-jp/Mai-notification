@@ -68,9 +68,8 @@ function register(app, db) {
     }
   });
 
-  // --- RAG Q&A ---
-  // POST /api/ask { question: "次の配信いつ？" }
-  app.post("/api/ask", async (req, res) => {
+  // --- RAG Q&A 本体（公開/管理共通） ---
+  async function handleAsk(req, res) {
     if (!ready()) return res.status(503).json({ error: "RAG not configured" });
     const question = (req.body?.question || req.body?.q || "").toString().trim();
     if (!question) return res.status(400).json({ error: "question required" });
@@ -101,7 +100,14 @@ function register(app, db) {
       console.error("[/api/ask] error:", e?.message);
       res.status(500).json({ error: e.message });
     }
-  });
+  }
+
+  // 管理者専用（管理画面のチャットUI用・認証必須）
+  const adminAuth = require("../admin/admin");
+  app.post("/api/admin/ask", adminAuth.requireAuth, handleAsk);
+
+  // 公開（後方互換・必要なら削除可）
+  app.post("/api/ask", handleAsk);
 }
 
 module.exports = { register };
