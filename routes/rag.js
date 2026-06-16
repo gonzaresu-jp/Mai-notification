@@ -10,7 +10,7 @@ const CHAT_ENDPOINT = process.env.LLAMA_SERVER_ENDPOINT || "http://localhost:808
 const CHAT_MODEL = process.env.LLAMA_CHAT_MODEL || "gemma-4-E4B-it-Q3_K_M";
 const ASK_TOPK = parseInt(process.env.RAG_TOPK || "6", 10);
 const CHAT_TIMEOUT_MS = parseInt(process.env.RAG_CHAT_TIMEOUT_MS || "120000", 10);
-const CHAT_MAX_TOKENS = parseInt(process.env.RAG_MAX_TOKENS || "256", 10);
+const CHAT_MAX_TOKENS = parseInt(process.env.RAG_MAX_TOKENS || "384", 10);
 
 function ready() {
   return vectordb.isEnabled() && embeddings.isEnabled();
@@ -82,7 +82,8 @@ function register(app, db) {
           role: "system",
           content:
             "あなたはVTuber「恋乃夜まい」の情報アシスタントです。" +
-            "以下のコンテキスト（過去の通知・ツイート・配信予定）だけを根拠に、日本語で簡潔に答えてください。" +
+            "以下のコンテキスト（過去の通知・ツイート・配信予定）だけを根拠に、日本語で答えてください。" +
+            "分析・前置き・思考過程・引用番号は書かず、質問への答えだけを結論から簡潔に述べること。" +
             "コンテキストに無いことは推測せず「わかりません」と答えてください。",
         },
         { role: "user", content: `コンテキスト:\n${context || "(該当なし)"}\n\n質問: ${question}` },
