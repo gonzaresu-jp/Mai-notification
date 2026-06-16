@@ -2,9 +2,17 @@
 // 既存の回答用 llama-server(:8081, Gemma) を流用して、Piのベクトル検索結果を根拠に回答する。
 // VECTOR_DB_URL / EMBEDDING_ENDPOINT 未設定時は 503 を返す（機能オフ）。
 
+const fs = require("fs");
+const path = require("path");
 const fetch = require("node-fetch");
 const embeddings = require("../services/embeddings");
 const vectordb = require("../services/vectordb");
+
+const KNOWLEDGE_FILE = process.env.KNOWLEDGE_FILE || path.join(__dirname, "..", "rag-knowledge.json");
+function loadKnowledge() {
+  try { const d = JSON.parse(fs.readFileSync(KNOWLEDGE_FILE, "utf8")); return Array.isArray(d) ? d : []; }
+  catch { return []; }
+}
 
 // RAG回答用は専用に上書き可能（ツイート分析用 Gemma(:8081) と分離するため）。
 // 例: RAG_CHAT_ENDPOINT=http://localhost:11434/v1/chat/completions RAG_CHAT_MODEL=qwen2.5:3b
@@ -49,6 +57,9 @@ function fmtUpcoming(e) {
 // 検索結果ペイロード → 表示/コンテキスト用の1行テキスト
 function sourceLine(hit) {
   const p = hit.payload || {};
+  if (p.source === "knowledge") {
+    return `[プロフィール] ${p.title || ""}: ${p.body || ""}`;
+  }
   if (p.source === "events") {
     return `[予定] ${p.title || ""}${p.start_time ? `（${p.start_time}）` : ""}${p.url ? ` ${p.url}` : ""}`;
   }
@@ -110,6 +121,8 @@ function register(app, db) {
       const hits = await vectordb.search(vec, ASK_TOPK);
       const hitLines = hits.map((h, i) => `${i + 1}. ${sourceLine(h)}`).join("\n");
       const upLines = upcoming.length ? upcoming.map(fmtUpcoming).join("\n") : "(登録されている今後の予定はありません)";
+      const knowledge = loadKnowledge();
+      const kLines = knowledge.length ? knowledge.map(k => `- ${k.title}: ${k.text}`).join("\n") : "(なし)";
 
       const messages = [
         {
@@ -124,6 +137,7 @@ function register(app, db) {
           role: "user",
           content:
             `現在日時: ${nowStr}（JST）\n\n` +
+            `■ 恋乃夜まいの基本情報（プロフィール）:\n${kLines}\n\n` +
             `■ 今後の配信予定（時間順）:\n${upLines}\n\n` +
             `■ 関連する過去の通知・ツイート:\n${hitLines || "(なし)"}\n\n` +
             `質問: ${question}`,

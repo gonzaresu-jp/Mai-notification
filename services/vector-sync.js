@@ -2,15 +2,19 @@
 // notifications(通知/ツイート本文) と events(配信スケジュール) を埋め込み、Piのベクトルへ upsert する。
 // VECTOR_DB_URL / EMBEDDING_ENDPOINT が未設定なら何もしない（既存機能に影響なし）。
 
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
 const ctx = require("./context");
 const embeddings = require("./embeddings");
 const vectordb = require("./vectordb");
 
 const BATCH = parseInt(process.env.VECTOR_SYNC_BATCH || "100", 10);
 const SYNC_INTERVAL_MS = parseInt(process.env.VECTOR_SYNC_INTERVAL_MS || String(5 * 60 * 1000), 10);
+const KNOWLEDGE_FILE = process.env.KNOWLEDGE_FILE || path.join(__dirname, "..", "rag-knowledge.json");
 
 // source 毎に数値IDを衝突しないようオフセットする（Qdrantのpoint idは符号なし整数）
-const SOURCE_OFFSET = { notifications: 1_000_000_000, events: 2_000_000_000 };
+const SOURCE_OFFSET = { notifications: 1_000_000_000, events: 2_000_000_000, knowledge: 3_000_000_000 };
 
 function dbAll(sql, params = []) {
   return new Promise((resolve, reject) => ctx.db.all(sql, params, (e, r) => (e ? reject(e) : resolve(r || []))));
@@ -79,6 +83,26 @@ async function syncEvents() {
   );
 }
 
+// 知識ファイル（プロフィール等）を埋め込み→upsert。内容が変わった時だけ実行（ハッシュ比較）。
+async function syncKnowledge() {
+  if (!fs.existsSync(KNOWLEDGE_FILE)) return 0;
+  let docs;
+  try { docs = JSON.parse(fs.readFileSync(KNOWLEDGE_FILE, "utf8")); } catch { return 0; }
+  if (!Array.isArray(docs) || docs.length === 0) return 0;
+  const hashNum = parseInt(crypto.createHash("md5").update(JSON.stringify(docs)).digest("hex").slice(0, 12), 16) % 2_000_000_000;
+  if ((await getLastId("knowledge")) === hashNum) return 0; // 変更なし
+  const texts = docs.map(d => [d.title, d.text].filter(Boolean).join(" / "));
+  const vectors = await embeddings.embed(texts, "doc");
+  const points = docs.map((d, i) => ({
+    id: SOURCE_OFFSET.knowledge + Number(d.id),
+    vector: vectors[i],
+    payload: { source: "knowledge", ref_id: Number(d.id), title: d.title || "", body: d.text || "" },
+  }));
+  await vectordb.upsert(points);
+  await setLastId("knowledge", hashNum);
+  return docs.length;
+}
+
 let running = false;
 
 // 各ソースを新規が尽きるまで（または安全上限まで）流す。
@@ -89,6 +113,7 @@ async function syncVectors() {
   try {
     await vectordb.ensureCollection(embeddings.getDim());
     let total = 0;
+    total += await syncKnowledge();
     for (const fn of [syncNotifications, syncEvents]) {
       // 1ティックあたり最大 20 バッチで打ち切り（Piへの負荷とループ暴走防止）
       for (let i = 0; i < 20; i++) {
