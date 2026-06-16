@@ -9,7 +9,8 @@ const vectordb = require("../services/vectordb");
 const CHAT_ENDPOINT = process.env.LLAMA_SERVER_ENDPOINT || "http://localhost:8081/v1/chat/completions";
 const CHAT_MODEL = process.env.LLAMA_CHAT_MODEL || "gemma-4-E4B-it-Q3_K_M";
 const ASK_TOPK = parseInt(process.env.RAG_TOPK || "6", 10);
-const CHAT_TIMEOUT_MS = parseInt(process.env.RAG_CHAT_TIMEOUT_MS || "60000", 10);
+const CHAT_TIMEOUT_MS = parseInt(process.env.RAG_CHAT_TIMEOUT_MS || "120000", 10);
+const CHAT_MAX_TOKENS = parseInt(process.env.RAG_MAX_TOKENS || "256", 10);
 
 function ready() {
   return vectordb.isEnabled() && embeddings.isEnabled();
@@ -31,7 +32,7 @@ async function chat(messages) {
     const res = await fetch(CHAT_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: CHAT_MODEL, messages, temperature: 0.2, extra_body: { think: false } }),
+      body: JSON.stringify({ model: CHAT_MODEL, messages, temperature: 0.2, max_tokens: CHAT_MAX_TOKENS, extra_body: { think: false } }),
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`Chat server ${res.status}`);
