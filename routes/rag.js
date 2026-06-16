@@ -6,8 +6,10 @@ const fetch = require("node-fetch");
 const embeddings = require("../services/embeddings");
 const vectordb = require("../services/vectordb");
 
-const CHAT_ENDPOINT = process.env.LLAMA_SERVER_ENDPOINT || "http://localhost:8081/v1/chat/completions";
-const CHAT_MODEL = process.env.LLAMA_CHAT_MODEL || "gemma-4-E4B-it-Q3_K_M";
+// RAG回答用は専用に上書き可能（ツイート分析用 Gemma(:8081) と分離するため）。
+// 例: RAG_CHAT_ENDPOINT=http://localhost:11434/v1/chat/completions RAG_CHAT_MODEL=qwen2.5:3b
+const CHAT_ENDPOINT = process.env.RAG_CHAT_ENDPOINT || process.env.LLAMA_SERVER_ENDPOINT || "http://localhost:8081/v1/chat/completions";
+const CHAT_MODEL = process.env.RAG_CHAT_MODEL || process.env.LLAMA_CHAT_MODEL || "gemma-4-E4B-it-Q3_K_M";
 const ASK_TOPK = parseInt(process.env.RAG_TOPK || "6", 10);
 const CHAT_TIMEOUT_MS = parseInt(process.env.RAG_CHAT_TIMEOUT_MS || "120000", 10);
 const CHAT_MAX_TOKENS = parseInt(process.env.RAG_MAX_TOKENS || "384", 10);
