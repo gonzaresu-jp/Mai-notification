@@ -54,18 +54,24 @@ class ToastHelper {
         var toast = new ToastNotification(doc);
         var notifier = ToastNotificationManager.CreateToastNotifier(aumid);
 
+        // 終了コード: 1=クリックされた(Activated) / 0=消去・タイムアウト(Dismissed) / 2=失敗(Failed)
+        // クリック時のみ 1 を返し、main.js 側がそのときだけリンクを開く（通知が出ただけ・消えただけでは開かない）
+        int exitCode = 0;
         using (var ev = new ManualResetEvent(false))
         {
             toast.Activated += (s, e) => {
                 WriteLog("Activated");
+                exitCode = 1;
                 ev.Set();
             };
             toast.Dismissed += (s, e) => {
                 WriteLog("Dismissed reason=" + e.Reason);
+                exitCode = 0;
                 ev.Set();
             };
             toast.Failed += (s, e) => {
                 WriteLog("Failed error=" + e.ErrorCode);
+                exitCode = 2;
                 ev.Set();
             };
 
@@ -74,9 +80,9 @@ class ToastHelper {
             Console.Error.WriteLine("Show OK");
 
             ev.WaitOne();
-            WriteLog("Event fired, returning code 1");
+            WriteLog("Event fired, returning code " + exitCode);
         }
 
-        return 1;
+        return exitCode;
     }
 }
