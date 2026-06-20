@@ -402,6 +402,9 @@ function createWindow() {
   const settings = loadSettings();
   const baseUrl = settings.url.replace(/\/+$/, '');
 
+  // PC起動時(ログイン自動起動) または --hidden 付き起動なら、ウィンドウを出さずトレイ常駐で始める
+  const startHidden = app.getLoginItemSettings().wasOpenedAtLogin || process.argv.includes('--hidden');
+
   mainWindow = new BrowserWindow({
     width: 960, height: 540,
     minWidth: 480, minHeight: 270,
@@ -415,7 +418,13 @@ function createWindow() {
       contextIsolation: true,
       webSecurity: false,
     },
-    show: true,
+    show: false, // ready-to-show で手動表示（自動起動時は表示しない）
+  });
+
+  // 通常起動のときだけウィンドウを表示。ログイン自動起動時はトレイに格納したまま。
+  // （ページの読み込み自体は非表示でも進むので、通知の監視は裏で動き続ける）
+  mainWindow.once('ready-to-show', () => {
+    if (!startHidden) mainWindow.show();
   });
 
   mainWindow.webContents.userAgent =
@@ -503,7 +512,7 @@ function updateTrayMenu() {
     { type: 'separator' },
     { type: 'checkbox', label: '自動起動', checked: autoStart, click: () => {
       const next = !app.getLoginItemSettings().openAtLogin;
-      app.setLoginItemSettings({ openAtLogin: next });
+      app.setLoginItemSettings({ openAtLogin: next, args: ['--hidden'] });
       updateTrayMenu();
     }},
     { type: 'separator' },
@@ -540,7 +549,7 @@ ipcMain.handle('set-push-enabled', (event, enabled) => {
 app.whenReady().then(() => {
   ensureAumid();
   setupPermissions();
-  app.setLoginItemSettings({ openAtLogin: true });
+  app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] });
   createWindow();
   createTray();
   app.on('activate', () => { if (mainWindow) mainWindow.show(); });
