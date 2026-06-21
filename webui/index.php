@@ -762,7 +762,12 @@
         if (!sec) return;
         const rList = document.getElementById('histtab-list');
         const rHeat = document.getElementById('histtab-heat');
-        const apply = () => sec.classList.toggle('hist-heat', !!(rHeat && rHeat.checked));
+        // add/remove で冪等に（classList.toggleの第2引数forceは古いWebViewで無視されるため使わない。
+        // click と change の二重発火でも結果が反転しない）
+        const apply = () => {
+          if (rHeat && rHeat.checked) sec.classList.add('hist-heat');
+          else sec.classList.remove('hist-heat');
+        };
         if (rList) rList.addEventListener('change', apply);
         if (rHeat) rHeat.addEventListener('change', apply);
         // ラベルタップでも確実に切替（一部WebViewのlabel→radio不具合対策）
