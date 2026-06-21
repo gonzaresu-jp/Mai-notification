@@ -80,17 +80,30 @@
         .count-page .stat-pair .stat-half .stat-copy-btn { top: 6px; right: 6px; }
       }
 
-      /* 次の予定ウィジェット */
-      #next-event { display: none; position: relative; z-index: 5; margin: 0 0 14px; padding: 13px 16px; border-radius: 12px;
-        background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(251,238,246,.97)); border: 1px solid rgba(177,30,124,.18);
-        box-shadow: 0 3px 12px rgba(177,30,124,.12); backdrop-filter: blur(2px); }
-      #next-event.show { display: block; }
-      #next-event .ne-badge { display:inline-block; background: var(--color-primary,#B11E7C); color:#fff;
-        border-radius: 999px; padding: 2px 12px; font-size: .72rem; font-weight: 700; }
-      #next-event .ne-title { font-size: 1.05rem; font-weight: 800; margin: 7px 0 2px; }
-      #next-event .ne-when { font-size: .95rem; color: var(--color-secondary,#7F2534); font-weight: 700; }
-      #next-event .ne-plat { font-size: .75rem; color: #9a7; margin-left: 6px; }
-      #next-event a.ne-link { display: inline-block; margin-top: 8px; font-size: .82rem; color: var(--color-primary,#B11E7C); text-decoration: none; }
+      /* 次の予定ウィジェット（通知履歴風: 左サムネ・右詳細） */
+      #next-event { display: none; }
+      #next-event.show { display: flex; }
+      #next-event.ne-card {
+        align-items: center; gap: 12px; text-decoration: none; color: var(--color-text, #2c2c3e);
+        margin: 12px auto 4px; padding: 10px 12px; max-width: 760px; border-radius: 12px;
+        background: linear-gradient(135deg, #fff, #fbeef6); border: 1px solid rgba(177,30,124,.18);
+        box-shadow: 0 3px 12px rgba(177,30,124,.12); transition: transform .2s ease, box-shadow .2s ease;
+      }
+      #next-event.ne-card:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(177,30,124,.18); }
+      #next-event .ne-thumb { flex: 0 0 auto; width: 124px; height: 70px; border-radius: 8px; overflow: hidden; background: #eadcef; }
+      #next-event .ne-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      #next-event.no-thumb .ne-thumb { display: none; }
+      #next-event .ne-body { flex: 1 1 auto; min-width: 0; }
+      #next-event .ne-badge { display: inline-block; background: var(--color-primary,#B11E7C); color: #fff;
+        border-radius: 999px; padding: 2px 11px; font-size: .7rem; font-weight: 700; }
+      #next-event .ne-title { font-size: 1.02rem; font-weight: 800; margin: 5px 0 2px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #next-event .ne-when { font-size: .9rem; color: var(--color-secondary,#7F2534); font-weight: 700; }
+      #next-event .ne-plat { font-size: .75rem; color: #9a7; margin-left: 6px; font-weight: 500; }
+      @media (max-width: 768px) {
+        #next-event .ne-thumb { width: 100px; height: 58px; }
+        #next-event .ne-title { font-size: .95rem; }
+      }
     </style>
     <!-- ▲▲ テスト用追加スタイル ▲▲ -->
 </head>
@@ -296,15 +309,6 @@
                 <img src="./3dmai.webp" alt="" class="count-bg-mai" aria-hidden="true" width="384" height="512"
                     loading="lazy" />
 
-                <!-- ▼ 次の予定ウィジェット（予定が無ければ枠ごと非表示） ▼ -->
-                <div id="next-event" aria-live="polite">
-                    <span class="ne-badge">次の予定</span>
-                    <div class="ne-title" id="ne-title">—</div>
-                    <div><span class="ne-when" id="ne-when">—</span><span class="ne-plat" id="ne-plat"></span></div>
-                    <a class="ne-link" id="ne-link" href="#" target="_blank" rel="noopener" style="display:none;">▶ 開く</a>
-                </div>
-                <!-- ▲ 次の予定ウィジェット ▲ -->
-
                 <!-- ✅ カルーセルに role="region" + aria-label、ドットに role="tablist" -->
                 <div class="stats-carousel" role="region" aria-label="情報カルーセル" aria-roledescription="carousel">
                     <div class="stats-carousel-viewport">
@@ -492,6 +496,17 @@
             </div><!-- /.stats-card -->
             <!-- ✅ カルーセルドットに role="group" -->
             <div class="carousel-dots" role="group" aria-label="スライド切り替え"></div>
+
+            <!-- ▼ 次の予定（dotsの下／通知履歴風 左サムネ・右詳細／予定なしは非表示） ▼ -->
+            <a id="next-event" class="ne-card" href="#" target="_blank" rel="noopener" aria-live="polite">
+                <div class="ne-thumb"><img id="ne-img" src="" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
+                <div class="ne-body">
+                    <span class="ne-badge">次の予定</span>
+                    <div class="ne-title" id="ne-title">—</div>
+                    <div class="ne-when"><span id="ne-when">—</span><span class="ne-plat" id="ne-plat"></span></div>
+                </div>
+            </a>
+            <!-- ▲ 次の予定 ▲ -->
             <!-- JavaScript読み込み -->
             <script src="./dist/weekly-schedule.min.js?v=<?= @filemtime(__DIR__ . '/dist/weekly-schedule.min.js') ?: time(); ?>" defer></script>
             <script>
@@ -811,9 +826,12 @@
           document.getElementById('ne-title').textContent = ev.title || '配信予定';
           document.getElementById('ne-when').textContent = fmtWhen(ev);
           document.getElementById('ne-plat').textContent = ev.platform ? `/ ${ev.platform}` : '';
-          const link = document.getElementById('ne-link');
-          if (ev.url) { link.href = ev.url; link.style.display = 'inline-block'; }
-          document.getElementById('next-event').classList.add('show');
+          const card = document.getElementById('next-event');
+          const img = document.getElementById('ne-img');
+          img.src = ev.thumbnail_url || './icon-192.webp'; // サムネ無しはまいアイコンで代替
+          img.alt = ev.title || '';
+          if (ev.url) card.href = ev.url; else card.removeAttribute('href');
+          card.classList.add('show');
         } catch (e) { /* 失敗時は枠を出さない */ }
       }
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadNext);
