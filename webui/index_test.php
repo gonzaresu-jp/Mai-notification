@@ -111,11 +111,12 @@
       .hist-tab { padding: 6px 18px; border-radius: 999px; font-size: .85rem; font-weight: 700; color: #8a6b7d; cursor: pointer; user-select: none; transition: background .15s, color .15s; }
       .log-section:has(#histtab-list:checked) .hist-tab[for="histtab-list"],
       .log-section:has(#histtab-heat:checked) .hist-tab[for="histtab-heat"] { background: var(--color-primary, #B11E7C); color: #fff; }
-      /* パネル表示切替 */
-      .log-section:has(#histtab-list:checked) #notification-heatmap { display: none; }
+      /* パネル表示切替（JSがインラインdisplayを付ける要素があるため !important） */
+      .log-section:has(#histtab-list:checked) #notification-heatmap { display: none !important; }
       .log-section:has(#histtab-heat:checked) #logs,
       .log-section:has(#histtab-heat:checked) #more-logs-button,
-      .log-section:has(#histtab-heat:checked) .controls { display: none; }
+      .log-section:has(#histtab-heat:checked) #status,
+      .log-section:has(#histtab-heat:checked) .controls { display: none !important; }
 
       /* ===== 真っ白バグ対策: カードは既定で表示（アニメ未発火でも消えない） ===== */
       #logs .card { opacity: 1 !important; animation: none !important; transform: none !important; }
