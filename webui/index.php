@@ -278,21 +278,24 @@
                                         </div>
                                     </div>
 
-                                    <div class="stat-item">
-                                        <button type="button" class="stat-copy-btn" data-copy-target="days-to-birthday"
-                                            aria-label="お誕生日までの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
-                                        <div class="label">お誕生日まで</div>
-                                        <div class="value" id="days-to-birthday" aria-live="polite" aria-atomic="true">0
+                                    <!-- お誕生日＋周年記念をペアに（スマホで1セル結合・PCは従来通り） -->
+                                    <div class="stat-pair">
+                                        <div class="stat-item stat-half">
+                                            <button type="button" class="stat-copy-btn" data-copy-target="days-to-birthday"
+                                                aria-label="お誕生日までの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
+                                            <div class="label">お誕生日まで</div>
+                                            <div class="value" id="days-to-birthday" aria-live="polite" aria-atomic="true">0
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    <div class="stat-item">
-                                        <button type="button" class="stat-copy-btn"
-                                            data-copy-target="days-to-anniversary" aria-label="周年記念までの日数をコピー"><i
-                                                class="fa-regular fa-clipboard"></i></button>
-                                        <div class="label">周年記念まで</div>
-                                        <div class="value" id="days-to-anniversary" aria-live="polite"
-                                            aria-atomic="true">0</div>
+                                        <div class="stat-item stat-half">
+                                            <button type="button" class="stat-copy-btn"
+                                                data-copy-target="days-to-anniversary" aria-label="周年記念までの日数をコピー"><i
+                                                    class="fa-regular fa-clipboard"></i></button>
+                                            <div class="label">周年記念まで</div>
+                                            <div class="value" id="days-to-anniversary" aria-live="polite"
+                                                aria-atomic="true">0</div>
+                                        </div>
                                     </div>
 
                                     <div class="stat-item">
@@ -441,6 +444,16 @@
             </div><!-- /.stats-card -->
             <!-- ✅ カルーセルドットに role="group" -->
             <div class="carousel-dots" role="group" aria-label="スライド切り替え"></div>
+
+            <!-- 次の予定（dotsの下／通知履歴風 左サムネ・右詳細／予定なしは非表示） -->
+            <a id="next-event" class="ne-card" href="#" target="_blank" rel="noopener" aria-live="polite">
+                <div class="ne-thumb"><img id="ne-img" src="" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
+                <div class="ne-body">
+                    <span class="ne-badge">次の予定</span>
+                    <div class="ne-title" id="ne-title">—</div>
+                    <div class="ne-when"><span id="ne-when">—</span><span class="ne-plat" id="ne-plat"></span></div>
+                </div>
+            </a>
             <!-- JavaScript読み込み -->
             <script src="./dist/weekly-schedule.min.js?v=<?= @filemtime(__DIR__ . '/dist/weekly-schedule.min.js') ?: time(); ?>" defer></script>
             <script>
@@ -503,6 +516,15 @@
             <!-- ✅ section + aria-labelledby（セマンティック改善） -->
             <section class="log-section" aria-labelledby="log-heading">
                 <h2 class="history fade" id="log-heading">通知履歴</h2>
+
+                <!-- リスト/ヒートマップ タブ（CSS :has で切替） -->
+                <input type="radio" name="histview" id="histtab-list" class="hist-radio" checked>
+                <input type="radio" name="histview" id="histtab-heat" class="hist-radio">
+                <div class="hist-tabs" role="tablist" aria-label="通知履歴の表示切替">
+                    <label class="hist-tab" for="histtab-list">リスト</label>
+                    <label class="hist-tab" for="histtab-heat">ヒートマップ</label>
+                </div>
+
                 <div id="notification-heatmap" class="heatmap-wrapper fade d3" role="region" aria-label="通知貢献グラフ"></div>
 
                 <!-- ✅ role="toolbar" でボタン群の意味を明示 -->
@@ -731,6 +753,47 @@
     <script type="module" src="./dist/main.bundle.min.js?v=<?= @filemtime(__DIR__ . '/dist/main.bundle.min.js') ?: time(); ?>" defer></script>
     <script src="./dist/auth-settings-bridge.min.js?v=<?= @filemtime(__DIR__ . '/dist/auth-settings-bridge.min.js') ?: time(); ?>" defer></script>
     <script src="./dist/heatmap.min.js?v=<?= @filemtime(__DIR__ . '/dist/heatmap.min.js') ?: time(); ?>" defer></script>
+
+    <!-- 次の予定（直近の未来予定をAPIから取得、無ければ枠を出さない） -->
+    <script>
+    (function () {
+      const PERIOD = { MORNING:'朝', NOON:'昼', EVENING:'夕方', NIGHT:'夜', LATE_NIGHT:'深夜' };
+      const pad = n => String(n).padStart(2, '0');
+      function nowNaiveJst() { const d = new Date();
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+      function fmtWhen(ev) {
+        const dt = new Date(String(ev.start_time||'').replace(' ', 'T'));
+        const dstr = Number.isFinite(dt.getTime())
+          ? dt.toLocaleDateString('ja-JP', { month:'long', day:'numeric', weekday:'short' })
+          : (ev.start_time||'');
+        if (ev.time_period && PERIOD[ev.time_period]) return `${dstr} ${PERIOD[ev.time_period]}ごろ`;
+        const t = Number.isFinite(dt.getTime()) ? dt.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', hour12:false }) : '';
+        return t ? `${dstr} ${t}` : dstr;
+      }
+      async function loadNext() {
+        try {
+          const from = encodeURIComponent(nowNaiveJst());
+          const r = await fetch(`/api/events?from=${from}&status=scheduled&limit=10`);
+          if (!r.ok) return;
+          const j = await r.json();
+          const items = (j.items||[]).filter(e => e.start_time && e.event_type!=='memo' && e.status!=='cancelled');
+          if (!items.length) return; // 予定なし → 枠は出さない
+          const ev = items[0];
+          document.getElementById('ne-title').textContent = ev.title || '配信予定';
+          document.getElementById('ne-when').textContent = fmtWhen(ev);
+          document.getElementById('ne-plat').textContent = ev.platform ? `/ ${ev.platform}` : '';
+          const card = document.getElementById('next-event');
+          const img = document.getElementById('ne-img');
+          img.src = ev.thumbnail_url || './icon-192.webp';
+          img.alt = ev.title || '';
+          if (ev.url) card.href = ev.url; else card.removeAttribute('href');
+          card.classList.add('show');
+        } catch (e) { /* 失敗時は枠を出さない */ }
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadNext);
+      else loadNext();
+    })();
+    </script>
 
 </body>
 

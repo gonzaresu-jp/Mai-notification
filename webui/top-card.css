@@ -1854,3 +1854,63 @@
   text-shadow: 0 1px 4px rgba(177, 30, 124, 0.15);
   animation: fadeInUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+/* =========================================================
+   次の予定ウィジェット / カウント結合セル / 通知履歴タブ
+   ========================================================= */
+
+/* --- お誕生日＋周年記念の結合セル（PCは従来の4セル、スマホで1セル左右分割） --- */
+.count-page .stat-pair { display: contents; }
+@media (max-width: 768px) {
+  .count-page .stat-pair {
+    display: flex;
+    background-color: #f4f0f8;
+    border: 1px solid rgba(177, 30, 124, 0.12);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .count-page .stat-pair .stat-half {
+    flex: 1 1 0; min-width: 0; background: transparent; border: none; border-radius: 0;
+    padding: .85rem 1rem; animation: none;
+  }
+  .count-page .stat-pair .stat-half + .stat-half { border-left: 1px solid rgba(177, 30, 124, 0.18); }
+  .count-page .stat-pair .stat-half .value { font-size: clamp(1.15rem, 5.5vw, 1.6rem); }
+  .count-page .stat-pair .stat-half .label { font-size: .8rem; }
+  .count-page .stat-pair .stat-half .stat-copy-btn { top: 6px; right: 6px; }
+}
+
+/* --- 次の予定ウィジェット（通知履歴風: 左サムネ・右詳細／予定なしは非表示） --- */
+#next-event { display: none; }
+#next-event.show { display: flex; }
+#next-event.ne-card {
+  align-items: center; gap: 12px; text-decoration: none; color: var(--color-text, #2c2c3e);
+  margin: 12px auto 4px; padding: 10px 12px; max-width: 760px; border-radius: 12px;
+  background: linear-gradient(135deg, #fff, #fbeef6); border: 1px solid rgba(177,30,124,.18);
+  box-shadow: 0 3px 12px rgba(177,30,124,.12); transition: transform .2s ease, box-shadow .2s ease;
+}
+#next-event.ne-card:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(177,30,124,.18); }
+#next-event .ne-thumb { flex: 0 0 auto; width: 124px; height: 70px; border-radius: 8px; overflow: hidden; background: #eadcef; }
+#next-event .ne-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#next-event.no-thumb .ne-thumb { display: none; }
+#next-event .ne-body { flex: 1 1 auto; min-width: 0; }
+#next-event .ne-badge { display: inline-block; background: var(--color-primary,#B11E7C); color: #fff;
+  border-radius: 999px; padding: 2px 11px; font-size: .7rem; font-weight: 700; }
+#next-event .ne-title { font-size: 1.02rem; font-weight: 800; margin: 5px 0 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#next-event .ne-when { font-size: .9rem; color: var(--color-secondary,#7F2534); font-weight: 700; }
+#next-event .ne-plat { font-size: .75rem; color: #9a7; margin-left: 6px; font-weight: 500; }
+@media (max-width: 768px) {
+  #next-event .ne-thumb { width: 100px; height: 58px; }
+  #next-event .ne-title { font-size: .95rem; }
+}
+
+/* --- 通知履歴: リスト / ヒートマップ タブ切替（CSS :has のみ） --- */
+.hist-radio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.hist-tabs { display: inline-flex; gap: 4px; margin: 4px 0 12px; padding: 4px; border-radius: 999px; background: #efe3f0; }
+.hist-tab { padding: 6px 18px; border-radius: 999px; font-size: .85rem; font-weight: 700; color: #8a6b7d; cursor: pointer; user-select: none; transition: background .15s, color .15s; }
+.log-section:has(#histtab-list:checked) .hist-tab[for="histtab-list"],
+.log-section:has(#histtab-heat:checked) .hist-tab[for="histtab-heat"] { background: var(--color-primary, #B11E7C); color: #fff; }
+.log-section:has(#histtab-list:checked) #notification-heatmap { display: none !important; }
+.log-section:has(#histtab-heat:checked) #logs,
+.log-section:has(#histtab-heat:checked) #more-logs-button,
+.log-section:has(#histtab-heat:checked) #status,
+.log-section:has(#histtab-heat:checked) .controls { display: none !important; }

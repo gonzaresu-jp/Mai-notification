@@ -790,8 +790,10 @@ main {
    ログカード
    ========================= */
 .card {
-  opacity: 0;
-  transform: translateY(18px);
+  /* 既定で表示（登場アニメが未発火でも消えない＝Chromeの真っ白バグ対策）。
+     アニメはあくまで演出。0%→100%(opacity:1) なので発火時はフェードインする。 */
+  opacity: 1;
+  transform: none;
   animation: fadeInUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   display: flex;
   gap: 1rem;
