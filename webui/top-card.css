@@ -1907,10 +1907,11 @@
 .hist-radio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .hist-tabs { display: inline-flex; gap: 4px; margin: 4px 0 12px; padding: 4px; border-radius: 999px; background: #efe3f0; }
 .hist-tab { padding: 6px 18px; border-radius: 999px; font-size: .85rem; font-weight: 700; color: #8a6b7d; cursor: pointer; user-select: none; transition: background .15s, color .15s; }
-.log-section:has(#histtab-list:checked) .hist-tab[for="histtab-list"],
-.log-section:has(#histtab-heat:checked) .hist-tab[for="histtab-heat"] { background: var(--color-primary, #B11E7C); color: #fff; }
-.log-section:has(#histtab-list:checked) #notification-heatmap { display: none !important; }
-.log-section:has(#histtab-heat:checked) #logs,
-.log-section:has(#histtab-heat:checked) #more-logs-button,
-.log-section:has(#histtab-heat:checked) #status,
-.log-section:has(#histtab-heat:checked) .controls { display: none !important; }
+/* radio と各パネルは .log-section 直下の兄弟。:has を使わず ~ で切替（古いWebView対応） */
+#histtab-list:checked ~ .hist-tabs .hist-tab[for="histtab-list"],
+#histtab-heat:checked ~ .hist-tabs .hist-tab[for="histtab-heat"] { background: var(--color-primary, #B11E7C); color: #fff; }
+#histtab-list:checked ~ #notification-heatmap { display: none !important; }
+#histtab-heat:checked ~ #logs,
+#histtab-heat:checked ~ #more-logs-button,
+#histtab-heat:checked ~ #status,
+#histtab-heat:checked ~ .controls { display: none !important; }
