@@ -81,9 +81,9 @@
       }
 
       /* 次の予定ウィジェット */
-      #next-event { display: none; margin: 0 0 14px; padding: 13px 16px; border-radius: 12px;
-        background: linear-gradient(135deg, #fff, #fbeef6); border: 1px solid rgba(177,30,124,.18);
-        box-shadow: 0 3px 12px rgba(177,30,124,.12); }
+      #next-event { display: none; position: relative; z-index: 5; margin: 0 0 14px; padding: 13px 16px; border-radius: 12px;
+        background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(251,238,246,.97)); border: 1px solid rgba(177,30,124,.18);
+        box-shadow: 0 3px 12px rgba(177,30,124,.12); backdrop-filter: blur(2px); }
       #next-event.show { display: block; }
       #next-event .ne-badge { display:inline-block; background: var(--color-primary,#B11E7C); color:#fff;
         border-radius: 999px; padding: 2px 12px; font-size: .72rem; font-weight: 700; }
