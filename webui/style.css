@@ -91,6 +91,8 @@ body {
 body.menu-open {
   overflow: hidden;
   touch-action: none;
+  /* 上から引っ張ってのリロード(pull-to-refresh)を抑止（bodyの値はviewportに伝播する） */
+  overscroll-behavior-y: none;
 }
 
 /* =========================
@@ -1446,5 +1448,3 @@ footer p a {
 body.lightbox-open {
   overflow: hidden !important;
 }
-
-
