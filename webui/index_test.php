@@ -104,6 +104,21 @@
         #next-event .ne-thumb { width: 100px; height: 58px; }
         #next-event .ne-title { font-size: .95rem; }
       }
+
+      /* ===== 通知履歴: リスト / ヒートマップ タブ切替（CSS :has のみ・JS不要） ===== */
+      .hist-radio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+      .hist-tabs { display: inline-flex; gap: 4px; margin: 4px 0 12px; padding: 4px; border-radius: 999px; background: #efe3f0; }
+      .hist-tab { padding: 6px 18px; border-radius: 999px; font-size: .85rem; font-weight: 700; color: #8a6b7d; cursor: pointer; user-select: none; transition: background .15s, color .15s; }
+      .log-section:has(#histtab-list:checked) .hist-tab[for="histtab-list"],
+      .log-section:has(#histtab-heat:checked) .hist-tab[for="histtab-heat"] { background: var(--color-primary, #B11E7C); color: #fff; }
+      /* パネル表示切替 */
+      .log-section:has(#histtab-list:checked) #notification-heatmap { display: none; }
+      .log-section:has(#histtab-heat:checked) #logs,
+      .log-section:has(#histtab-heat:checked) #more-logs-button,
+      .log-section:has(#histtab-heat:checked) .controls { display: none; }
+
+      /* ===== 真っ白バグ対策: カードは既定で表示（アニメ未発火でも消えない） ===== */
+      #logs .card { opacity: 1 !important; animation: none !important; transform: none !important; }
     </style>
     <!-- ▲▲ テスト用追加スタイル ▲▲ -->
 </head>
@@ -569,6 +584,16 @@
             <!-- ✅ section + aria-labelledby（セマンティック改善） -->
             <section class="log-section" aria-labelledby="log-heading">
                 <h2 class="history fade" id="log-heading">通知履歴</h2>
+
+                <!-- ▼ リスト/ヒートマップ タブ（CSS :has のみで切替） ▼ -->
+                <input type="radio" name="histview" id="histtab-list" class="hist-radio" checked>
+                <input type="radio" name="histview" id="histtab-heat" class="hist-radio">
+                <div class="hist-tabs" role="tablist" aria-label="通知履歴の表示切替">
+                    <label class="hist-tab" for="histtab-list">リスト</label>
+                    <label class="hist-tab" for="histtab-heat">ヒートマップ</label>
+                </div>
+                <!-- ▲ タブ ▲ -->
+
                 <div id="notification-heatmap" class="heatmap-wrapper fade d3" role="region" aria-label="通知貢献グラフ"></div>
 
                 <!-- ✅ role="toolbar" でボタン群の意味を明示 -->
