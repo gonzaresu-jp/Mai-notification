@@ -754,6 +754,31 @@
     <script src="./dist/auth-settings-bridge.min.js?v=<?= @filemtime(__DIR__ . '/dist/auth-settings-bridge.min.js') ?: time(); ?>" defer></script>
     <script src="./dist/heatmap.min.js?v=<?= @filemtime(__DIR__ . '/dist/heatmap.min.js') ?: time(); ?>" defer></script>
 
+    <!-- 通知履歴 リスト/ヒートマップ タブ切替（JSでクラス付替＝WebViewでも確実に動作） -->
+    <script>
+    (function () {
+      function init() {
+        const sec = document.querySelector('.log-section');
+        if (!sec) return;
+        const rList = document.getElementById('histtab-list');
+        const rHeat = document.getElementById('histtab-heat');
+        const apply = () => sec.classList.toggle('hist-heat', !!(rHeat && rHeat.checked));
+        if (rList) rList.addEventListener('change', apply);
+        if (rHeat) rHeat.addEventListener('change', apply);
+        // ラベルタップでも確実に切替（一部WebViewのlabel→radio不具合対策）
+        sec.querySelectorAll('.hist-tab').forEach(label => {
+          label.addEventListener('click', () => {
+            const r = document.getElementById(label.getAttribute('for'));
+            if (r) { r.checked = true; apply(); }
+          });
+        });
+        apply();
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+      else init();
+    })();
+    </script>
+
     <!-- 次の予定（直近の未来予定をAPIから取得、無ければ枠を出さない） -->
     <script>
     (function () {

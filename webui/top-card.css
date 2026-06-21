@@ -1907,11 +1907,19 @@
 .hist-radio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .hist-tabs { display: inline-flex; gap: 4px; margin: 4px 0 12px; padding: 4px; border-radius: 999px; background: #efe3f0; }
 .hist-tab { padding: 6px 18px; border-radius: 999px; font-size: .85rem; font-weight: 700; color: #8a6b7d; cursor: pointer; user-select: none; transition: background .15s, color .15s; }
-/* radio と各パネルは .log-section 直下の兄弟。:has を使わず ~ で切替（古いWebView対応） */
-#histtab-list:checked ~ .hist-tabs .hist-tab[for="histtab-list"],
-#histtab-heat:checked ~ .hist-tabs .hist-tab[for="histtab-heat"] { background: var(--color-primary, #B11E7C); color: #fff; }
-#histtab-list:checked ~ #notification-heatmap { display: none !important; }
+/* JSで .log-section に .hist-heat を付け外しして切替（CSSセレクタ依存なし＝全WebViewで確実）。
+   JS未実行時のフォールバックとして ~(兄弟結合子) も併記。 */
+/* --- クラス駆動（主） --- */
+.log-section.hist-heat #logs,
+.log-section.hist-heat #more-logs-button,
+.log-section.hist-heat #status,
+.log-section.hist-heat .controls { display: none !important; }
+.log-section:not(.hist-heat) #notification-heatmap { display: none !important; }
+.log-section.hist-heat .hist-tab[for="histtab-heat"],
+.log-section:not(.hist-heat) .hist-tab[for="histtab-list"] { background: var(--color-primary, #B11E7C); color: #fff; }
+/* --- ~(フォールバック) --- */
 #histtab-heat:checked ~ #logs,
 #histtab-heat:checked ~ #more-logs-button,
 #histtab-heat:checked ~ #status,
 #histtab-heat:checked ~ .controls { display: none !important; }
+#histtab-list:checked ~ #notification-heatmap { display: none !important; }
