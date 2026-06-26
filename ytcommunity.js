@@ -17,6 +17,9 @@ const ICON_URL = './icon.webp';
 
 let sharedPage = null;
 
+// 通知設定。init() は複数回呼ばれる（汎用notifyConfig注入→filePath設定）ため、
+// 丸ごと代入すると後勝ちで notifyFn が消える。必ずマージで保持する。
+let notifyConfig = {};
 
 let stateCache = null;
 let stateDirty = false;
@@ -306,8 +309,9 @@ async function pollAndNotify(handle) {
 ============================= */
 
 function init(cfg = {}) {
-  notifyConfig = cfg;
-  
+  // マージで保持（2回目以降の init で notifyFn を失わないように）
+  notifyConfig = { ...notifyConfig, ...cfg };
+
   if (cfg.filePath) {
     stateFilePath = cfg.filePath;
     ytLogger.log(`[YT] State file path updated to: ${stateFilePath}`);

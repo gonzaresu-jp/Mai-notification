@@ -1903,6 +1903,13 @@
   #next-event .ne-title { font-size: .95rem; }
 }
 
+/* 通知履歴セクションをカルーセルより前面に。
+   カルーセル内側(.stats-carousel-inner)は背の高いページ分の高さを持ち、viewportが
+   overflow-y:visible(キャラ画像が上にはみ出る演出のため)なので、下方向にも数百px
+   はみ出して通知履歴の上に透明な層として被さり、タブ等のタップを奪っていた。
+   log-sectionを前面に出すことでアプリ(WebView)でもタブのタップが確実に届く。 */
+.log-section { position: relative; z-index: 3; }
+
 /* --- 通知履歴: リスト / ヒートマップ タブ切替（CSS :has のみ） --- */
 .hist-radio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .hist-tabs { display: inline-flex; gap: 4px; margin: 4px 0 12px; padding: 4px; border-radius: 999px; background: #efe3f0; }
