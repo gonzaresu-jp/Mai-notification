@@ -767,7 +767,6 @@
         const apply = () => {
           if (rHeat && rHeat.checked) sec.classList.add('hist-heat');
           else sec.classList.remove('hist-heat');
-          console.log('[maitabs] apply heat=' + (rHeat && rHeat.checked) + ' cls=' + sec.className);
         };
         if (rList) rList.addEventListener('change', apply);
         if (rHeat) rHeat.addEventListener('change', apply);
@@ -775,12 +774,10 @@
         const tabs = sec.querySelectorAll('.hist-tab');
         tabs.forEach(label => {
           label.addEventListener('click', () => {
-            console.log('[maitabs] click ' + label.getAttribute('for'));
             const r = document.getElementById(label.getAttribute('for'));
             if (r) { r.checked = true; apply(); }
           });
         });
-        console.log('[maitabs] init tabs=' + tabs.length + ' list=' + !!rList + ' heat=' + !!rHeat);
         apply();
       }
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

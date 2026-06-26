@@ -65,7 +65,7 @@ async function syncEventNotifications() {
   const toIso = new Date(now + EVENT_NOTIFY_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const events = await new Promise((resolve, reject) => {
-    db.all(`SELECT id, title, start_time, url, platform, event_type, status FROM events WHERE start_time IS NOT NULL AND status != 'cancelled' AND event_type != 'memo' AND start_time >= ? AND start_time <= ?`, [fromIso, toIso], (err, rows) => {
+    db.all(`SELECT id, title, start_time, url, platform, event_type, status, time_period FROM events WHERE start_time IS NOT NULL AND status != 'cancelled' AND event_type != 'memo' AND start_time >= ? AND start_time <= ?`, [fromIso, toIso], (err, rows) => {
       if (err) { console.error("[Event Notify Sync] load err:", err.message); resolve([]); } else resolve(rows || []);
     });
   });
@@ -75,6 +75,13 @@ async function syncEventNotifications() {
     const startMs = new Date(event.start_time).getTime();
     if (!Number.isFinite(startMs)) continue;
     if (String(event.event_type || "").toLowerCase() === "video") {
+      await new Promise(r => db.run("DELETE FROM scheduled_notifications WHERE sent = 0 AND ref_id = ?", [event.id], function () { deleted += this.changes || 0; r(); }));
+      continue;
+    }
+    // 曖昧な時間帯指定（time_period あり = 「夜ごろ」等）の予定は、start_time に
+    // 入っているのは内部用の代表時刻（例: 22:00）にすぎず実際の開始時刻は未定。
+    // 開始前アラーム等の時刻ベース通知は誤作動になるため生成しない（既存の未送信分も削除）。
+    if (event.time_period) {
       await new Promise(r => db.run("DELETE FROM scheduled_notifications WHERE sent = 0 AND ref_id = ?", [event.id], function () { deleted += this.changes || 0; r(); }));
       continue;
     }
