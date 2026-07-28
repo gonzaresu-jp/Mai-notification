@@ -109,7 +109,7 @@ class MilestoneScheduler {
         title: milestone.title,
         body: milestone.body,
         url: './',
-        icon: './icon.webp'
+        icon: '/icon.webp'
       };
       
       const today = this.getTodayString();

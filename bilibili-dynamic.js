@@ -285,7 +285,7 @@ async function sendNotify(parsed) {
       title: '【Bilibili】新規投稿',
       body: parsed?.text || '',
       url: parsed?.url || `https://space.bilibili.com/${uid}/dynamic`,
-      icon: './icon.webp'
+      icon: '/icon.webp'
     }
   };
 

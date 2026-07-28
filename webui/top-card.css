@@ -199,8 +199,11 @@
   pointer-events: auto;
   opacity: 1;
   cursor: pointer;
-  will-change: transform, scale, translate, filter;
-  transition: transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 0.3s ease, opacity 0.3s ease, filter 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), scale 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), translate 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* transform は animation(float) が制御するため transition から除外。
+     transform と transition を同時に当てるとブラウザがフレーム毎にイージングを
+     再計算してアニメーションをカクつかせる。will-change は transform のみに絞る。 */
+  will-change: transform;
+  transition: filter 0.3s ease, scale 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), translate 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
   animation: float 4s ease-in-out infinite;
   filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
 }

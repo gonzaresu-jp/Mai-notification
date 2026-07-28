@@ -9,9 +9,9 @@ const urlsToCache = [
   '/',
   './js/main.js',
   './ios-helper.js',
-  './icon.ico',
-  './icon-192.webp',
-  './icon-512.webp'
+  '/icon.ico',
+  '/icon-192.webp',
+  '/icon-512.webp'
 ];
 
 console.log(`[SW ${VERSION}] ========== Service Worker loaded ==========`);
@@ -235,7 +235,7 @@ self.addEventListener('fetch', (event) => {
       if (url.pathname.endsWith('/icon.ico') || url.pathname.endsWith('icon.ico')) {
         try {
           const cache = await caches.open(CACHE_NAME);
-          const fallback = await cache.match('./icon.ico');
+          const fallback = await cache.match('/icon.ico');
           if (fallback) return fallback;
         } catch {
           // ignore
@@ -278,7 +278,7 @@ self.addEventListener('push', event => {
       // title, body, icon, image, url を抽出
       let title = '通知';
       let body = '通知内容';
-      let icon = './icon.ico';
+      let icon = '/icon.ico';
       let image = null;
       let url = null;
 
@@ -312,7 +312,7 @@ self.addEventListener('push', event => {
       // iOS/各ブラウザ差異があるので、オプションは安全側に倒す
       const options = {
         body,
-        icon: icon || './icon-192.webp',
+        icon: icon || '/icon-192.webp',
         image: image || undefined,
         data: { url, timestamp: now, notificationId: uniqueTag, raw: data },
         requireInteraction: false,

@@ -278,7 +278,7 @@ function renderEventCard(event) {
   if (event.__kind === 'user_schedule') {
     const startTime = new Date(event.start_time);
     const timeStr = Number.isFinite(startTime.getTime())
-      ? startTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false })
+      ? startTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone:'Asia/Tokyo' })
       : '日時未定';
     const readonly = !event.editable;
     const safeUrl = toSafeHttpUrl(event.url);
@@ -323,13 +323,14 @@ function renderEventCard(event) {
 
   let timeDisplay = '';
   const periodLabel = timePeriodLabel(event.time_period);
-  if (periodLabel) {
+  const hasSpecificTime = event.start_time && /T\d{2}:\d{2}/.test(event.start_time);
+  if (!hasSpecificTime && periodLabel) {
     // 時間帯のみ判明（具体時刻は未定）→ 「夜」等のラベルを表示
     timeDisplay = `<span class="time-period-label">${periodLabel}ごろ</span>`;
   } else if (event.start_time) {
     const start = new Date(event.start_time);
     const now = new Date();
-    const timeStr = start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const timeStr = start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone:'Asia/Tokyo' });
     if (start > now && Number(event.confirmed) !== 1) {
       timeDisplay = `${timeStr} <span class="unconfirmed-badge">未定</span>`;
     } else {

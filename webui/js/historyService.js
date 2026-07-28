@@ -438,6 +438,11 @@ export const clearHistoryCache = clearJsonCache;
   if (el && el.parentNode !== document.body) {
     document.body.appendChild(el);
   }
+  // Android WebViewはbackdrop-filterのGPU合成が不安定で画像が隠れることがあるため無効化
+  try {
+    const isAndroid = !!(window.MaiApp && typeof window.MaiApp.isAndroidApp === 'function' && window.MaiApp.isAndroidApp());
+    if (el && isAndroid) el.classList.add('no-blur');
+  } catch {}
 })();
 
 document.addEventListener('keydown', (e) => {
@@ -446,8 +451,10 @@ document.addEventListener('keydown', (e) => {
     const ct = document.getElementById('lightbox-content');
     if (lb?.classList.contains('is-open')) {
       lb.classList.remove('is-open');
+      lb.style.touchAction = '';
       document.body.classList.remove('lightbox-open');
       if (ct) ct.innerHTML = '';
+      resetZoomState();
     }
   }
 });
@@ -672,6 +679,7 @@ document.addEventListener('click', (event) => {
   if (lightbox.classList.contains('is-open')) {
     if (event.target === lightbox || event.target.closest('#lightbox-close')) {
       lightbox.classList.remove('is-open');
+      lightbox.style.touchAction = '';
       document.body.classList.remove('lightbox-open');
       if (content) {
         const media = content.querySelector('img, video');
@@ -693,10 +701,22 @@ document.addEventListener('click', (event) => {
     const mediaUrl = thumb.dataset.mediaUrl;
     const mediaType = thumb.dataset.mediaType;
     resetZoomState();
+    // Android WebViewでvh単位が0として計算される既知の不具合があるため、
+    // window.innerHeight/innerWidthから直接pxを計算して指定する
+    const maxW = Math.round(window.innerWidth * 0.9);
+    const maxH = Math.round(window.innerHeight * 0.9);
+    content.style.maxWidth = maxW + 'px';
+    content.style.maxHeight = maxH + 'px';
     if (mediaType === 'video') {
-      content.innerHTML = `<video src="${mediaUrl}" controls autoplay style="max-width:90vw; max-height:90vh;"></video>`;
+      content.innerHTML = `<video src="${mediaUrl}" controls autoplay style="max-width:${maxW}px; max-height:${maxH}px;"></video>`;
     } else {
-      content.innerHTML = `<img src="${mediaUrl}" style="max-width:90vw; max-height:90vh;" loading="lazy" />`;
+      content.innerHTML = `<img src="${mediaUrl}" style="max-width:${maxW}px; max-height:${maxH}px;" />`;
+      const img = content.querySelector('img');
+      if (img) {
+        img.addEventListener('error', () => {
+          content.innerHTML = `<div class="lightbox-error">画像を読み込めませんでした<br><a href="${mediaUrl}" target="_blank" rel="noopener">別タブで開く</a></div>`;
+        }, { once: true });
+      }
     }
     lightbox.classList.add('is-open');
     document.body.classList.add('lightbox-open');

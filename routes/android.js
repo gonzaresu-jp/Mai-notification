@@ -44,6 +44,32 @@ function register(app, db) {
     });
   });
 
+  app.post("/api/android/send-test", (req, res) => {
+    console.log("[android/send-test] Request received");
+    const { fcmToken } = req.body || {};
+    if (!fcmToken || typeof fcmToken !== "string") return res.status(400).json({ error: "fcmToken required" });
+    const trimmedToken = fcmToken.trim();
+    console.log("[android/send-test] token prefix:", trimmedToken.substring(0, 20));
+    const fcm = notif.initFcm();
+    if (!fcm) { console.error("[android/send-test] FCM not configured"); return res.status(500).json({ error: "FCM not configured" }); }
+    console.log("[android/send-test] Sending FCM...");
+    notif.sendFcmNotification(fcm, trimmedToken, {
+      title: "テスト通知",
+      body: "通知テスト成功！タップで確認",
+      url: "/test/",
+      icon: "/icon.webp",
+      image: "/testnotify.webp"
+    }, "test", null, false).then(result => {
+      console.log("[android/send-test] result:", result.sent ? "SENT" : "FAILED", result.error?.message || "");
+      if (result.sent) return res.json({ success: true });
+      console.error("[android/send-test] FCM send failed:", result.error?.message || result.error);
+      res.status(500).json({ error: "FCM send failed", detail: result.error?.message || String(result.error) });
+    }).catch(e => {
+      console.error("[android/send-test] FCM error:", e);
+      res.status(500).json({ error: e.message });
+    });
+  });
+
   app.patch("/api/android/settings", (req, res) => {
     const { clientId, fcmToken, settings } = req.body || {};
     if (!settings || typeof settings !== "object") return res.status(400).json({ error: "settings required" });

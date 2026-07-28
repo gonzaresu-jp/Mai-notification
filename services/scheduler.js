@@ -52,7 +52,7 @@ function buildEventNotificationPayload(event, phase) {
     data: {
       title: event.title || "予定通知",
       body: isPre ? `開始${offsetMin}分前です（${hh}:${mm}予定）` : `予定時刻になりました（${hh}:${mm}）`,
-      url: event.url || "/webui/events.html", icon: "/webui/icon.webp",
+      url: event.url || "/events.html", icon: "/icon.webp",
     },
   };
 }
@@ -103,7 +103,7 @@ async function syncEventNotifications() {
       }
     }
   }
-  await new Promise(r => db.run("DELETE FROM scheduled_notifications WHERE sent = 0 AND (kind LIKE 'event_pre_%' OR kind = 'event_start') AND ref_id NOT IN (SELECT id FROM events WHERE start_time IS NOT NULL AND status != 'cancelled')", [], function (cleanupErr) { if (!cleanupErr) deleted += this.changes || 0; r(); }));
+  await new Promise(r => db.run("DELETE FROM scheduled_notifications WHERE sent = 0 AND (kind LIKE 'event_pre_%' OR kind = 'event_start') AND ref_id NOT IN (SELECT id FROM events WHERE start_time IS NOT NULL AND status = 'scheduled')", [], function (cleanupErr) { if (!cleanupErr) deleted += this.changes || 0; r(); }));
   if (inserted || updated || deleted) console.log(`[Event Notify Sync] inserted=${inserted} updated=${updated} deleted=${deleted}`);
 }
 
@@ -140,7 +140,7 @@ async function sendUserScheduleReminders() {
         await new Promise(r => db.run("UPDATE user_schedules SET reminder_sent_at = NULL WHERE id = ? AND reminder_sent_at = ?", [row.id, lockToken], () => r()));
         continue;
       }
-      const payload = { type: "event", settingKey: "schedule", clientId, data: { title: row.title || "マイスケジュール通知", body: row.note || "予定時刻が近づいています。", url: row.url || "/webui/events.html", icon: row.thumbnail_url || "/webui/icon.webp" } };
+      const payload = { type: "event", settingKey: "schedule", clientId, data: { title: row.title || "マイスケジュール通知", body: row.note || "予定時刻が近づいています。", url: row.url || "/events.html", icon: row.thumbnail_url || "/icon.webp" } };
       const result = await notifier.handleAdminNotify(payload, "user-scheduler");
       if (result?.sentCount > 0) {
         await new Promise(r => db.run("UPDATE user_schedules SET reminder_sent_at = CURRENT_TIMESTAMP WHERE id = ? AND reminder_sent_at = ?", [row.id, lockToken], () => r()));

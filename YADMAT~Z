@@ -23,7 +23,7 @@ let NOTIFY_CONFIG = {
     hmacSecret: null
 };
 
-const ICON_URL = '/icon.webp';
+const ICON_URL = './icon.webp';
 
 // 閾値（使用箇所あり）
 const RECENT_VIDEO_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours (既存値を維持)
@@ -455,88 +455,7 @@ if (require.main === module) {
     startWebhook(3001).catch(err => console.error('Failed to start webhook:', err));
 }
 
-
-
-// ========= ライブ終了ポーリング =========
-const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10分おき
-const POLL_LOOKBACK_HOURS = 24; // 直近24時間のライブに限定
-
-async function pollForEndedLives() {
-    const records = loadSentRecords();
-    const now = Date.now();
-    const lookbackMs = POLL_LOOKBACK_HOURS * 60 * 60 * 1000;
-
-    // liveSent があり newVideoSent がない videoId を抽出
-    const candidates = [];
-    for (const [videoId, rec] of Object.entries(records)) {
-        if (rec.liveSent && !rec.newVideoSent && rec.liveAt) {
-            const liveAtMs = new Date(rec.liveAt).getTime();
-            if (now - liveAtMs < lookbackMs) {
-                candidates.push(videoId);
-            }
-        }
-    }
-
-    if (candidates.length === 0) return;
-
-    // バッチ処理（最大50件ずつ）
-    for (let i = 0; i < candidates.length; i += 50) {
-        const batch = candidates.slice(i, i + 50);
-        try {
-            const resp = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
-                params: {
-                    id: batch.join(','),
-                    part: 'liveStreamingDetails,snippet',
-                    key: API_KEY
-                },
-                timeout: 10000
-            });
-
-            const items = resp.data?.items || [];
-            for (const item of items) {
-                const videoId = item.id;
-                const live = item.liveStreamingDetails;
-                if (!live || !live.actualEndTime) continue;
-
-                // ライブ終了済み → ダウンロード通知を送信
-                const rec = records[videoId] || {};
-                if (rec.newVideoSent) continue;
-
-                const url = `https://www.youtube.com/watch?v=${videoId}`;
-                const title = item.snippet?.title || 'YouTube動画';
-                console.log(`[POLL] Detected ended live: ${videoId} (${title})`);
-
-                const ok = await sendInternalUrl(url);
-                if (ok) {
-                    records[videoId] = {
-                        ...rec,
-                        newVideoSent: true,
-                        newVideoAt: new Date().toISOString(),
-                        archivedFromLive: true,
-                        polledAt: new Date().toISOString()
-                    };
-                    console.log(`[POLL] POST sent for ${videoId}`);
-                } else {
-                    console.error(`[POLL] Failed to POST for ${videoId}`);
-                }
-            }
-            saveSentRecords(records);
-        } catch (e) {
-            console.error(`[POLL] API error:`, e.message || e);
-        }
-    }
-}
-
-function startPolling() {
-    console.log(`[YouTube Poll] Starting live-end poller (interval: ${POLL_INTERVAL_MS / 1000}s)`);
-    setInterval(pollForEndedLives, POLL_INTERVAL_MS);
-    // 起動後初回は少し遅延して実行
-    setTimeout(pollForEndedLives, 30 * 1000);
-}
-
 module.exports = {
-    startPolling,
-    pollForEndedLives,
     init,
     startWebhook,
     subscribeAllChannels

@@ -65,6 +65,13 @@ async function sendPushNotification(subscription, payload, isTest = false) {
   }
 }
 
+const PUBLIC_URL = process.env.PUBLIC_URL || "https://mai.honna-yuzuki.com";
+function normalizeAbsoluteUrl(url) {
+  if (!url) return url;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return PUBLIC_URL.replace(/\/$/, "") + (url.startsWith("/") ? url : "/" + url);
+}
+
 function buildFcmData(payload, type, settingKey) {
   const data = payload || {};
   const out = {};
@@ -89,7 +96,31 @@ function isInvalidFcmError(err) {
 async function sendFcmNotification(messaging, token, payload, type, settingKey, isTest = false) {
   if (!messaging || !token) return { sent: false, reason: "fcm_disabled_or_missing_token" };
   try {
-    await messaging.send({ token, data: buildFcmData(payload, type, settingKey), android: { priority: "high" } }, isTest === true);
+    const data = buildFcmData(payload, type, settingKey);
+    const absoluteImageUrl = payload.image ? normalizeAbsoluteUrl(payload.image) : undefined;
+    if (absoluteImageUrl) data.image = absoluteImageUrl;
+    const message = {
+      token,
+      data,
+      notification: {
+        title: payload.title || "新着通知",
+        body: payload.body || "",
+        image: absoluteImageUrl || undefined
+      },
+      android: {
+        priority: "high",
+        notification: {
+          title: payload.title || "新着通知",
+          body: payload.body || "",
+          image: absoluteImageUrl || undefined,
+          click_action: "OPEN_ACTIVITY_1"
+        }
+      },
+      webpush: {
+        headers: { TTL: "86400" }
+      }
+    };
+    await messaging.send(message, isTest === true);
     return { sent: true };
   } catch (err) {
     return { sent: false, error: err };

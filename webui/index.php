@@ -795,10 +795,11 @@
       function fmtWhen(ev) {
         const dt = new Date(String(ev.start_time||'').replace(' ', 'T'));
         const dstr = Number.isFinite(dt.getTime())
-          ? dt.toLocaleDateString('ja-JP', { month:'long', day:'numeric', weekday:'short' })
+          ? dt.toLocaleDateString('ja-JP', { month:'long', day:'numeric', weekday:'short', timeZone:'Asia/Tokyo' })
           : (ev.start_time||'');
-        if (ev.time_period && PERIOD[ev.time_period]) return `${dstr} ${PERIOD[ev.time_period]}ごろ`;
-        const t = Number.isFinite(dt.getTime()) ? dt.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', hour12:false }) : '';
+        const hasSpecificTime = Number.isFinite(dt.getTime()) && ev.start_time && /T\d{2}:\d{2}/.test(ev.start_time);
+        if (!hasSpecificTime && ev.time_period && PERIOD[ev.time_period]) return `${dstr} ${PERIOD[ev.time_period]}ごろ`;
+        const t = hasSpecificTime ? dt.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'Asia/Tokyo' }) : '';
         return t ? `${dstr} ${t}` : dstr;
       }
       async function loadNext() {
