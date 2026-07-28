@@ -241,6 +241,18 @@ function detectPeriodFromText(text) {
   return null;
 }
 
+// ツイート本文中の「〇曜日」「〇曜」表記から曜日インデックス（0=日〜6=土）を検出する。
+// 「毎週火曜12:00~」のように具体的な時刻と一緒に曜日が明記されているのに、
+// 従来は時刻（HH:MM）しか抽出対象にしておらず、日付は「投稿日 or 翌日」という
+// 機械的なロジックだけで決めていたため、明記された曜日と食い違う日に
+// 予定が登録されてしまう不具合があった（例: 火曜日の告知が月曜日に登録される）。
+const WEEKDAY_INDEX = { 日: 0, 月: 1, 火: 2, 水: 3, 木: 4, 金: 5, 土: 6 };
+function detectWeekdayFromText(text) {
+  if (!text) return null;
+  const m = String(text).match(/([日月火水木金土])曜/);
+  return m ? WEEKDAY_INDEX[m[1]] : null;
+}
+
 // Date → "YYYY-MM-DDTHH:MM:SS"（ローカル=JST、UTC変換なし）。管理画面の保存形式と揃える。
 function formatNaiveLocal(d) {
   const p = n => String(n).padStart(2, '0');
@@ -248,7 +260,8 @@ function formatNaiveLocal(d) {
 }
 
 function extractScheduleFromAnalysis(analysis, tweetDate, urls = [], tweetText = '') {
-  if (analysis.category !== 'LIVE' || analysis.status === 'NONE') return null;
+  // status が配信系（LIVE_NOW/SOON/CHANGE）なら category が NEWS でもスケジュール作成
+  if (analysis.status === 'NONE') return null;
 
   // 具体的な時刻があればそれを使う。無ければ時間帯を解決し、
   // 曜日配置・並び順のための代表時刻（PERIOD_DEFAULT_TIMES）を内部的に当てる。
@@ -256,7 +269,10 @@ function extractScheduleFromAnalysis(analysis, tweetDate, urls = [], tweetText =
   let timeStr = analysis.start_time;
   let resolvedPeriod = null;
   if (!timeStr) {
-    const period = analysis.time_period || detectPeriodFromText(tweetText);
+    // detectPeriodFromText() を最優先（「ごご」→NOON 等の明確なパターン）。
+    // AI の time_period は誤検出が多い（例: ごごまい枠を NIGHT と判定）ため
+    // フォールバックとして扱う。
+    const period = detectPeriodFromText(tweetText) || analysis.time_period;
     if (period && PERIOD_DEFAULT_TIMES[period]) {
       timeStr = PERIOD_DEFAULT_TIMES[period];
       resolvedPeriod = period;
@@ -270,7 +286,29 @@ function extractScheduleFromAnalysis(analysis, tweetDate, urls = [], tweetText =
 
   const scheduleDate = new Date(tweetDate);
   scheduleDate.setHours(hh, mm, 0, 0);
-  if (scheduleDate < tweetDate) scheduleDate.setDate(scheduleDate.getDate() + 1);
+  // 「翌日繰り上げ」は具体的な時刻（analysis.start_time）が明示された場合のみ行う。
+  // time_period からの推定時刻（例: "おはよう"のような挨拶語をMORNINGと誤検出するケース）は
+  // 実際にその時間帯に配信する確約ではないため、繰り上げると「翌日（例: 土曜日）」に
+  // 存在しない予定が生成される。推定時刻の場合は当日のまま登録する。
+  if (!resolvedPeriod && scheduleDate < tweetDate) scheduleDate.setDate(scheduleDate.getDate() + 1);
+
+  // ツイート本文に「〇曜日」の明記があり、上記ロジックで決まった日付の曜日と
+  // 食い違う場合は、明記された曜日を優先して直近の該当日（当日〜6日後）に補正する。
+  // 「毎週火曜12:00~」のような定期告知が、投稿タイミング次第で誤った曜日
+  // （例: 月曜日）に登録されてしまう問題を防ぐ。
+  const mentionedWeekday = detectWeekdayFromText(tweetText);
+  if (mentionedWeekday !== null && scheduleDate.getDay() !== mentionedWeekday) {
+    const base = new Date(tweetDate);
+    base.setHours(hh, mm, 0, 0);
+    for (let i = 0; i < 7; i++) {
+      const candidate = new Date(base);
+      candidate.setDate(base.getDate() + i);
+      if (candidate.getDay() === mentionedWeekday) {
+        scheduleDate.setFullYear(candidate.getFullYear(), candidate.getMonth(), candidate.getDate());
+        break;
+      }
+    }
+  }
 
   const isYouTube = urls.some(u => u.includes('youtube.com') || u.includes('youtu.be')) || 
                     (analysis.title && (analysis.title.toLowerCase().includes('youtube') || analysis.title.includes('待機所')));

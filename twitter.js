@@ -20,7 +20,7 @@ const HEADLESS = true;
 const MAX_AGE_HOURS = 24;
 const CHECK_INTERVAL_MS = 60 * 1000;
 const NOTIFY_ENDPOINT = 'http://localhost:8080/api/notify';
-const ICON_URL = './icon.webp';
+const ICON_URL = '/icon.webp';
 const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
 
 // 🔧 スケジュール自動作成関連
@@ -190,7 +190,7 @@ async function sendNotify(username, tweet, settingKey, sendText) {
       body: notificationBody,
       url: `https://x.com/${username}/status/${tweet.id}`,
       icon: ICON_URL,
-      image: tweet.thumbnail_url || (Array.isArray(tweet.media_urls) ? tweet.media_urls[0] : null) || null,
+      image: (sendText && (tweet.thumbnail_url || (Array.isArray(tweet.media_urls) ? tweet.media_urls[0] : null))) || null,
       tweet_id: tweet.id
     }
   };
@@ -229,7 +229,7 @@ async function sendNotify(username, tweet, settingKey, sendText) {
 }
 
 // --- スケジュール重複検索 ---
-async function findDuplicateSchedule(username, scheduleInfo, tweetId) {
+async function findDuplicateSchedule(username, scheduleInfo, tweetId, urls) {
   if (!scheduleInfo) return null;
 
   let agent;
@@ -243,10 +243,12 @@ async function findDuplicateSchedule(username, scheduleInfo, tweetId) {
 
   try {
     const external_id = tweetId ? `gemma_${tweetId}` : '';
+    const dedupUrl = scheduleInfo.url || (Array.isArray(urls) && urls[0]) || '';
     const queryParams = new URLSearchParams({
       external_id: external_id,
       scheduled_at: scheduleInfo.scheduled_at,
       title: scheduleInfo.title,
+      url: dedupUrl,
       token: SCHEDULE_TOKEN
     });
 
@@ -326,7 +328,10 @@ async function createScheduleFromTweet(username, tweet, analysis) {
   const urls = extractUrlsFromTweet(tweet.text || '');
   
   // スケジュール抽出
-  const scheduleInfo = extractScheduleFromAnalysis(analysis, new Date(), urls, tweet.text || '');
+  // 基準日時はツイートの実投稿時刻を使う（new Date()=解析処理の実行時刻だと、
+  // 取得・解析の遅延分だけ基準がずれ、日付繰り上げ判定を誤らせる原因になる）。
+  const tweetPostedAt = tweet.datetime ? new Date(tweet.datetime) : new Date();
+  const scheduleInfo = extractScheduleFromAnalysis(analysis, tweetPostedAt, urls, tweet.text || '');
   if (!scheduleInfo) {
     console.log(`[${username}] No schedule info extracted from analysis`);
     return;
@@ -338,7 +343,7 @@ async function createScheduleFromTweet(username, tweet, analysis) {
   }
 
   // 重複スケジュール検索
-  const duplicate = await findDuplicateSchedule(username, scheduleInfo, tweet.id);
+  const duplicate = await findDuplicateSchedule(username, scheduleInfo, tweet.id, urls);
   
   if (duplicate) {
     // 既存スケジュールを更新

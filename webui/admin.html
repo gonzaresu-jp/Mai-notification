@@ -975,9 +975,9 @@
             const EV_PERIOD_LABELS = { MORNING: '朝', NOON: '昼', EVENING: '夕方', NIGHT: '夜', LATE_NIGHT: '深夜' };
             const periodLabel = event.time_period ? EV_PERIOD_LABELS[event.time_period] : null;
             const startTimeText = periodLabel
-                ? (event.start_time ? new Date(event.start_time).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' }) : '') + ` ${periodLabel}ごろ`
+                ? (event.start_time ? new Date(event.start_time).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', timeZone:'Asia/Tokyo' }) : '') + ` ${periodLabel}ごろ`
                 : (event.start_time
-                    ? new Date(event.start_time).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    ? new Date(event.start_time).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone:'Asia/Tokyo' })
                     : '日時未定');
 
             return `

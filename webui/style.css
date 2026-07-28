@@ -1413,6 +1413,23 @@ footer p a {
 .media-lightbox.is-open {
   display: flex !important;
 }
+/* Android WebViewはbackdrop-filterのGPU合成が不安定で画像が隠れることがあるため無効化 */
+.media-lightbox.no-blur {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(0,0,0,0.95);
+}
+.lightbox-error {
+  color: #fff;
+  text-align: center;
+  padding: 40px 24px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.lightbox-error a {
+  color: #ffb3d9;
+  text-decoration: underline;
+}
 .media-lightbox-close {
   position: absolute;
   top: 16px;

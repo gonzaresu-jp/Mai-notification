@@ -170,7 +170,7 @@ function register(app, db, authLimiter) {
           title: "テスト通知",
           body: "ここをクリックしてURL飛べるか確認！",
           url: "/test/",
-          icon: "./icon.webp",
+          icon: "/icon.webp",
           image: "/testnotify.webp"
         });
         res.json({ success: true, sent: !!result });

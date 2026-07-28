@@ -1,14 +1,42 @@
 const axios = require('axios');
+const { parseStringPromise } = require('xml2js');
 
 const API_KEY = process.env.YOUTUBE_API_KEY || '';
-const CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID || 'UCxxxxxxxxxxxxxx';
+const CHANNEL_IDS_RAW = process.env.YOUTUBE_CHANNEL_ID || '';
+const CHANNEL_IDS = CHANNEL_IDS_RAW.split(',').map(s => s.trim()).filter(Boolean);
 
 if (!API_KEY) {
     console.warn('[YouTube] YOUTUBE_API_KEY is not set');
 }
+if (!CHANNEL_IDS.length) {
+    console.warn('[YouTube] YOUTUBE_CHANNEL_ID is not set');
+}
+
+const RSS_URL = 'https://www.youtube.com/feeds/videos.xml?channel_id=';
+const MAX_RSS_ITEMS = 15;
 
 /**
- * YouTube Data API から動画詳細取得
+ * RSSフィードから動画ID一覧を取得（クォータ消費なし）
+ */
+async function fetchRssVideoIds(channelId) {
+    try {
+        const resp = await axios.get(`${RSS_URL}${channelId}`, { timeout: 10000 });
+        const parsed = await parseStringPromise(resp.data);
+        const entries = parsed?.feed?.entry || [];
+        const ids = [];
+        for (const entry of entries.slice(0, MAX_RSS_ITEMS)) {
+            const videoId = entry?.['yt:videoId']?.[0];
+            if (videoId) ids.push(videoId);
+        }
+        return ids;
+    } catch (err) {
+        console.error(`[YouTube RSS] Error for ${channelId}:`, err.message || err);
+        return [];
+    }
+}
+
+/**
+ * YouTube Data API から動画詳細取得（videos endpoint, quota 10000/day）
  */
 async function fetchVideoStatus(videoId) {
     if (!API_KEY) return null;
@@ -36,61 +64,66 @@ async function fetchVideoStatus(videoId) {
 
 
 /**
- * チャンネル最新イベント取得
- * ・start_time 重複は上書き
- * ・Mapでユニーク化
+ * チャンネル最新イベント取得（RSS + videos API、Search API不使用）
  */
 async function fetchLatest() {
-    if (!API_KEY || !CHANNEL_ID) {
+    if (!API_KEY || !CHANNEL_IDS.length) {
         console.warn('[YouTube] API_KEY or CHANNEL_ID not configured');
         return [];
     }
 
     try {
-        const resp = await axios.get(
-            'https://www.googleapis.com/youtube/v3/search',
-            {
-                params: {
-                    channelId: CHANNEL_ID,
-                    part: 'snippet',
-                    order: 'date',
-                    maxResults: 10,
-                    type: 'video',
-                    key: API_KEY
-                },
-                timeout: 10000
-            }
-        );
+        // Step 1: RSSから動画IDを取得（クォータ消費なし）
+        const allVideoIds = [];
+        for (const channelId of CHANNEL_IDS) {
+            const ids = await fetchRssVideoIds(channelId);
+            allVideoIds.push(...ids);
+        }
 
-        if (!resp.data?.items?.length) {
-            console.log('[YouTube] No videos found');
+        if (!allVideoIds.length) {
+            console.log('[YouTube] No videos from RSS');
             return [];
         }
 
-        // ★ ここが重要：重複排除用Map
+        // ユニーク化
+        const uniqueIds = [...new Set(allVideoIds)];
+        console.log(`[YouTube RSS] Found ${uniqueIds.length} unique videos`);
+
+        // Step 2: videos APIで詳細取得（quota 1件 = 1 unit）
+        // 50件ずつバッチ処理（APIの上限は1回50件）
         const eventMap = new Map();
 
-        for (const item of resp.data.items) {
-            const videoId = item.id.videoId;
+        for (let i = 0; i < uniqueIds.length; i += 50) {
+            const batch = uniqueIds.slice(i, i + 50);
+            const idsParam = batch.join(',');
 
-            const videoData = await fetchVideoStatus(videoId);
-            if (!videoData) continue;
+            try {
+                const resp = await axios.get(
+                    'https://www.googleapis.com/youtube/v3/videos',
+                    {
+                        params: {
+                            id: idsParam,
+                            part: 'snippet,liveStreamingDetails,status',
+                            key: API_KEY
+                        },
+                        timeout: 15000
+                    }
+                );
 
-            const event = convertToEvent(videoData);
-            if (!event) continue;
+                for (const item of (resp.data?.items || [])) {
+                    const event = convertToEvent(item);
+                    if (!event) continue;
 
-            // ===== 重複対策 =====
-            // 秒ズレ回避のため分単位キー
-            const key = new Date(event.start_time)
-                .toISOString()
-                .slice(0, 16); // YYYY-MM-DDTHH:mm
-
-            eventMap.set(key, event); // 同時刻は自動上書き
+                    const key = event.external_id;
+                    eventMap.set(key, event);
+                }
+            } catch (err) {
+                console.error(`[YouTube] Batch fetch error:`, err.message || err);
+            }
         }
 
         const events = Array.from(eventMap.values());
-
-        console.log(`[YouTube] Fetched ${events.length} unique events`);
+        console.log(`[YouTube] Fetched ${events.length} events (RSS + videos API)`);
         return events;
 
     } catch (err) {
@@ -148,8 +181,7 @@ function convertToEvent(videoData) {
         description: snippet.description || null,
         status,
 
-        // ★ 常に確定
-        confirmed: true,
+        confirmed: status === 'ended' ? true : null,
 
         external_id: videoData.id
     };

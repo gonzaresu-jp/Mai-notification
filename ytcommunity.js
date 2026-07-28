@@ -13,7 +13,7 @@ const { getSharedBrowser, closeSharedBrowser } = require('./browser');
 
 const profileDir = '/var/lib/mai-push/puppeteer-profile';
 
-const ICON_URL = './icon.webp';
+const ICON_URL = '/icon.webp';
 
 let sharedPage = null;
 

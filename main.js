@@ -421,6 +421,13 @@ async function main() {
               );
             }
             // ★★★ 追加ここまで ★★★
+
+            // ★★★ ライブ終了ポーリング開始 ★★★
+            if (typeof youtube.startPolling === "function") {
+              youtube.startPolling();
+              console.log("✅ YouTube ライブ終了ポーリングを開始しました。");
+            }
+            // ★★★ 追加ここまで ★★★
           } catch (e) {
             console.error(
               "YouTube webhook 起動エラー:",
@@ -693,7 +700,7 @@ async function main() {
                   title: "まいちゃん配信開始",
                   body: "",
                   url: `https://live.bilibili.com/${process.env.BILIBILI_ROOM_ID}`,
-                  icon: "./icon.webp",
+                  icon: "/icon.webp",
                 },
               };
               await sendNotifyApi(payload);

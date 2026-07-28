@@ -219,6 +219,26 @@ $extraHead = '
   display: flex;
 }
 
+/* Android WebViewはbackdrop-filterのGPU合成が不安定で画像が隠れることがあるため無効化 */
+.media-lightbox.no-blur {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(0,0,0,0.95);
+}
+
+.lightbox-error {
+  color: #fff;
+  text-align: center;
+  padding: 40px 24px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.lightbox-error a {
+  color: #ffb3d9;
+  text-decoration: underline;
+}
+
 .media-lightbox-close {
   position: absolute;
   top: 16px;
@@ -447,6 +467,12 @@ include __DIR__ . '/head.php';
       const lightbox = document.getElementById('media-lightbox');
       const lightboxContent = document.getElementById('lightbox-content');
       const lightboxClose = document.getElementById('lightbox-close');
+
+      // Android WebViewはbackdrop-filterのGPU合成が不安定で画像が隠れることがあるため無効化
+      try {
+        const isAndroid = !!(window.MaiApp && typeof window.MaiApp.isAndroidApp === 'function' && window.MaiApp.isAndroidApp());
+        if (lightbox && isAndroid) lightbox.classList.add('no-blur');
+      } catch {}
 
       function formatSize(bytes) {
         if (!bytes || bytes === 0) return '0 B';
@@ -788,11 +814,17 @@ include __DIR__ . '/head.php';
 
       function openLightbox(item) {
         const isVideo = item.media_type === 'video';
+        // Android WebViewでvh単位が0として計算される既知の不具合があるため、
+        // window.innerHeight/innerWidthから直接pxを計算して指定する
+        const maxW = Math.round(window.innerWidth * 0.9);
+        const maxH = Math.round(window.innerHeight * 0.85);
+        lightboxContent.style.maxWidth = maxW + 'px';
+        lightboxContent.style.maxHeight = maxH + 'px';
         let html = '';
         if (isVideo) {
-          html = `<video src="${item.file_url}" controls autoplay style="max-width:90vw;max-height:85vh;"></video>`;
+          html = `<video src="${item.file_url}" controls autoplay style="max-width:${maxW}px;max-height:${maxH}px;"></video>`;
         } else {
-          html = `<img src="${item.file_url}" alt="" style="max-width:90vw;max-height:85vh;object-fit:contain;">`;
+          html = `<img src="${item.file_url}" alt="" style="max-width:${maxW}px;max-height:${maxH}px;object-fit:contain;">`;
         }
         html += `
           <div class="media-lightbox-actions">
@@ -801,6 +833,14 @@ include __DIR__ . '/head.php';
           </div>
         `;
         lightboxContent.innerHTML = html;
+        if (!isVideo) {
+          const img = lightboxContent.querySelector('img');
+          if (img) {
+            img.addEventListener('error', () => {
+              lightboxContent.innerHTML = `<div class="lightbox-error">画像を読み込めませんでした<br><a href="${item.file_url}" target="_blank" rel="noopener">別タブで開く</a></div>`;
+            }, { once: true });
+          }
+        }
         resetZoomState();
         lightbox.classList.add('is-open');
         setupZoomPan(lightboxContent.querySelector('img, video'));

@@ -9,6 +9,12 @@ function normalizeTimePeriod(value) {
   return VALID_TIME_PERIODS.includes(v) ? v : null;
 }
 
+function toNaiveJst(d) {
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return `${jst.getUTCFullYear()}-${p(jst.getUTCMonth()+1)}-${p(jst.getUTCDate())}T${p(jst.getUTCHours())}:${p(jst.getUTCMinutes())}:${p(jst.getUTCSeconds())}`;
+}
+
 function register(app, db) {
   function getInternalToken(req) {
     const token = process.env.ADMIN_NOTIFY_TOKEN || null;
@@ -36,6 +42,32 @@ function register(app, db) {
       // （従来は常に NULL = 未定 になっていた）
       const confirmedValue = normalizedPeriod ? null : 1;
 
+      // --- 重複チェック ---
+      // 1) external_id 完全一致  2) URL一致  3) 同日時±4時間以内
+      const targetDate = new Date(scheduled_at);
+      let dupRows = [];
+
+      if (external_id) {
+        dupRows = await dbAll(db,
+          "SELECT id, title, platform, event_type, start_time FROM events WHERE external_id = ? AND status != 'cancelled' LIMIT 5",
+          [external_id]);
+      }
+      if (dupRows.length === 0 && normalizedUrl) {
+        dupRows = await dbAll(db,
+          "SELECT id, title, platform, event_type, start_time FROM events WHERE url = ? AND url IS NOT NULL AND url != '' AND status IN ('scheduled','live') LIMIT 5",
+          [normalizedUrl]);
+      }
+      if (dupRows.length === 0) {
+        const minTime = new Date(targetDate.getTime() - 4 * 60 * 60 * 1000);
+        const maxTime = new Date(targetDate.getTime() + 4 * 60 * 60 * 1000);
+        dupRows = await dbAll(db,
+          "SELECT id, title, platform, event_type, start_time FROM events WHERE start_time BETWEEN ? AND ? AND status IN ('scheduled','live') ORDER BY start_time DESC LIMIT 5",
+          [toNaiveJst(minTime), toNaiveJst(maxTime)]);
+      }
+      if (dupRows.length > 0) {
+        return res.status(409).json({ error: 'duplicate', duplicates: dupRows });
+      }
+
       const result = await dbRun(db,
         `INSERT INTO events (title, start_time, description, url, thumbnail_url, platform, event_type, status, external_id, confirmed, time_period)
          VALUES (?, ?, ?, ?, ?, ?, 'live', 'scheduled', ?, ?, ?)`,
@@ -56,26 +88,42 @@ function register(app, db) {
     if (!auth.authorized) return res.status(auth.error === 'Unauthorized' ? 401 : 503).json({ error: auth.error });
 
     try {
-      const { external_id, scheduled_at, title } = req.query;
+      const { external_id, scheduled_at, title, url } = req.query;
       if (!scheduled_at) return res.status(400).json({ error: 'scheduled_at required' });
 
+      const isLiveRelated = str => /配信|ライブ|生放送|stream|live|🔴|asmr|ASMR|雑談|ごごまい|ホラゲー|游戏|歌枠/i.test(str);
+
       let rows = [];
+
+      // 1) external_id 完全一致（最優先）
       if (external_id) {
-        rows = await dbAll(db, 'SELECT * FROM events WHERE external_id = ?', [external_id]);
+        rows = await dbAll(db,
+          "SELECT * FROM events WHERE external_id = ? AND status != 'cancelled' LIMIT 5",
+          [external_id]);
       }
 
+      // 2) URL一致（URLがある場合、同じ配信の別ツイートを検出）
+      if (rows.length === 0 && url) {
+        rows = await dbAll(db,
+          "SELECT * FROM events WHERE url = ? AND url IS NOT NULL AND url != '' AND status IN ('scheduled','live') LIMIT 5",
+          [url]);
+      }
+
+      // 3) 時間範囲マッチ（±4時間）
       if (rows.length === 0) {
         const targetDate = new Date(scheduled_at);
         const minTime = new Date(targetDate.getTime() - 4 * 60 * 60 * 1000);
         const maxTime = new Date(targetDate.getTime() + 4 * 60 * 60 * 1000);
 
         const timeRows = await dbAll(db,
-          'SELECT * FROM events WHERE start_time BETWEEN ? AND ? ORDER BY start_time DESC',
-          [minTime.toISOString(), maxTime.toISOString()]
+          "SELECT * FROM events WHERE start_time BETWEEN ? AND ? AND status IN ('scheduled','live') ORDER BY start_time DESC",
+          [toNaiveJst(minTime), toNaiveJst(maxTime)]
         );
 
-        const isLiveRelated = str => /配信|ライブ|生放送|stream|live|🔴/i.test(str);
-        rows = timeRows.filter(r => r.platform === 'twitter' || (isLiveRelated(r.title) && isLiveRelated(title || '')));
+        // 既存イベントが event_type = 'live'（配信予定として登録済み）なら、
+        // 新規側のキーワード不一致でも重複扱いにする。
+        // 既存が ended は SQL で除外済み。
+        rows = timeRows.filter(r => r.event_type === 'live' || isLiveRelated(r.title));
       }
 
       res.json({ found: rows.length > 0, duplicates: rows || [], near: rows.length });

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, Notification, session, net, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const { execFile, execFileSync } = require('child_process');
 const sharp = require('sharp');
 
@@ -21,6 +22,7 @@ let isQuitting = false;
 let lastNotifId = 0;
 let sseTimer = null;
 let pushEnabled = false;
+let pendingAuthUrl = null;
 
 function loadSettings() {
   try {
@@ -403,7 +405,13 @@ function createWindow() {
   const baseUrl = settings.url.replace(/\/+$/, '');
 
   // PC起動時(ログイン自動起動) または --hidden 付き起動なら、ウィンドウを出さずトレイ常駐で始める
-  const startHidden = app.getLoginItemSettings().wasOpenedAtLogin || process.argv.includes('--hidden');
+  const startHidden = app.getLoginItemSettings().wasOpenedAtLogin
+    || process.argv.includes('--hidden')
+    || process.env.MAI_START_HIDDEN === '1';
+  console.log('[mai-push] startHidden:', startHidden,
+    '| argv:', process.argv.slice(),
+    '| wasOpenedAtLogin:', app.getLoginItemSettings().wasOpenedAtLogin,
+    '| env.MAI_START_HIDDEN:', process.env.MAI_START_HIDDEN);
 
   mainWindow = new BrowserWindow({
     width: 960, height: 540,
@@ -428,12 +436,34 @@ function createWindow() {
   });
 
   mainWindow.webContents.userAgent =
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+  // Client Hints ヘッダーを設定（Google が Electron を検知しないように）
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+    details.requestHeaders['sec-ch-ua'] = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
+    details.requestHeaders['sec-ch-ua-mobile'] = '?0';
+    details.requestHeaders['sec-ch-ua-platform'] = '"Windows"';
+    callback({ requestHeaders: details.requestHeaders });
+  });
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if ((input.key === 'F5' || (input.key === 'r' && input.control)) && input.type === 'keyDown') {
       const s = loadSettings(); loadURLSafe(mainWindow.webContents, s.url);
       initializeLastId(s.url).then(() => startRealTime(s.url));
+    }
+  });
+
+  // Google/Discord ログインページへのナビゲーションをシステムブラウザに転送
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.includes('/auth/google') || url.includes('/auth/discord')) {
+      console.log('[mai-push] Auth navigation intercepted:', url);
+      event.preventDefault();
+      ensureAuthServer().then(port => {
+        const parsedUrl = new URL(url);
+        parsedUrl.searchParams.set('returnTo', `http://127.0.0.1:${port}/callback`);
+        console.log('[mai-push] Opening auth URL via will-navigate:', parsedUrl.toString());
+        shell.openExternal(parsedUrl.toString());
+      });
     }
   });
 
@@ -463,6 +493,12 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
+    if (pendingAuthUrl) {
+      const token = pendingAuthUrl;
+      pendingAuthUrl = null;
+      handleAuthCallback(token);
+      return;
+    }
     initializeLastId(baseUrl).then(() => startRealTime(baseUrl));
   });
 
@@ -546,10 +582,34 @@ ipcMain.handle('set-push-enabled', (event, enabled) => {
   }
 });
 
+// デスクトップアプリ用 Google/Discord ログイン：システムブラウザで開く
+ipcMain.handle('open-login', async () => {
+  console.log('[mai-push] open-login IPC called');
+  if (!mainWindow || mainWindow.isDestroyed()) { console.error('[mai-push] open-login: no mainWindow'); return; }
+  const settings = loadSettings();
+  const baseUrl = settings.url.replace(/\/+$/, '');
+  const clientId = '';
+  try {
+    const port = await ensureAuthServer();
+    const returnTo = encodeURIComponent(`http://127.0.0.1:${port}/callback`);
+    const loginUrl = `${baseUrl}/auth/google?client_id=${encodeURIComponent(clientId)}&returnTo=${returnTo}`;
+    console.log('[mai-push] Opening login in system browser:', loginUrl);
+    const result = await shell.openExternal(loginUrl);
+    console.log('[mai-push] shell.openExternal result:', result);
+  } catch (e) {
+    console.error('[mai-push] Failed to start auth server or open browser:', e);
+  }
+});
+
 app.whenReady().then(() => {
   ensureAumid();
   setupPermissions();
-  app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] });
+  app.setLoginItemSettings({
+    openAtLogin: true,
+    path: app.getPath('exe'),
+    args: ['--hidden'],
+    env: { MAI_START_HIDDEN: '1' },
+  });
   createWindow();
   createTray();
   app.on('activate', () => { if (mainWindow) mainWindow.show(); });
@@ -558,7 +618,74 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   isQuitting = true;
   if (sseTimer) clearInterval(sseTimer);
+  if (authHttpServer) { try { authHttpServer.close(); } catch {} }
 });
+
+// ── ローカルHTTPサーバー：Google/Discord ログインコールバック受信用 ──
+let authHttpServer = null;
+let authHttpPort = 0;
+
+function ensureAuthServer() {
+  if (authHttpServer) return Promise.resolve(authHttpPort);
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url, 'http://127.0.0.1');
+      if (url.pathname === '/callback') {
+        const token = url.searchParams.get('token');
+        console.log('[mai-push] Auth callback received, token:', token ? token.substring(0, 20) + '...' : 'null');
+        if (token) {
+          handleAuthCallback(token);
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end('<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#1a1a2e;color:#fff">'
+            + '<h2>ログイン完了</h2><p>このウィンドウを閉じて、アプリに戻ってください。</p>'
+            + '<script>setTimeout(function(){window.close()},2000)</script></body></html>');
+        } else {
+          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end('<html><body><h2>エラー：トークンがありません</h2></body></html>');
+        }
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    server.listen(0, '127.0.0.1', () => {
+      authHttpPort = server.address().port;
+      authHttpServer = server;
+      console.log('[mai-push] Auth callback server on port', authHttpPort);
+      resolve(authHttpPort);
+    });
+    server.on('error', reject);
+  });
+}
+
+function handleAuthCallback(token) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    console.error('[mai-push] mainWindow not ready, storing pending token');
+    pendingAuthUrl = token;
+    return;
+  }
+  const settings = loadSettings();
+  const baseUrl = settings.url.replace(/\/+$/, '');
+  const hostname = new URL(baseUrl).hostname;
+  console.log('[mai-push] Setting cookie for domain:', hostname);
+  mainWindow.webContents.session.cookies.set({
+    name: 'session',
+    value: token,
+    domain: hostname,
+    path: '/',
+    httpOnly: true,
+    secure: baseUrl.startsWith('https'),
+    sameSite: 'lax',
+    expirationDate: Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60,
+  }).then(() => {
+    console.log('[mai-push] Auth cookie set, reloading page');
+    mainWindow.show();
+    mainWindow.focus();
+    loadURLSafe(mainWindow.webContents, baseUrl);
+  }).catch((e) => {
+    console.error('[mai-push] Failed to set auth cookie:', e);
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

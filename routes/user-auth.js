@@ -23,9 +23,16 @@ function register(app, db, authLimiter) {
       const user = await upsertUser(db, googleUser);
       if (stateData.clientId) await migrateSubscription(db, stateData.clientId, user.id);
       const token = auth.signToken({ userId: user.id, email: user.email || user.google_id || user.discord_id });
-      res.cookie(auth.COOKIE_NAME, token, auth.COOKIE_OPTIONS);
       console.log(`[auth] Google login: user_id=${user.id} email=${user.email}`);
-      safeRedirect(res, stateData.returnTo);
+      // デスクトップアプリ用：returnTo が http://127.0.0.1 や mai-push:// の場合、token を URL に含めてリダイレクト
+      if (stateData.returnTo && (stateData.returnTo.startsWith('mai-push://') || stateData.returnTo.startsWith('http://127.0.0.1') || stateData.returnTo.startsWith('http://localhost'))) {
+        const url = new URL(stateData.returnTo);
+        url.searchParams.set('token', token);
+        res.redirect(url.toString());
+      } else {
+        res.cookie(auth.COOKIE_NAME, token, auth.COOKIE_OPTIONS);
+        safeRedirect(res, stateData.returnTo);
+      }
     } catch (e) {
       console.error('[auth/google/callback]', e.message || e);
       res.status(500).send('Authentication failed.');
@@ -52,9 +59,15 @@ function register(app, db, authLimiter) {
       const user = await upsertDiscordUser(db, discordUser);
       if (stateData.clientId) await migrateSubscription(db, stateData.clientId, user.id);
       const token = auth.signToken({ userId: user.id, email: user.email || user.discord_id || user.google_id });
-      res.cookie(auth.COOKIE_NAME, token, auth.COOKIE_OPTIONS);
       console.log(`[auth] Discord login: user_id=${user.id} email=${user.email}`);
-      safeRedirect(res, stateData.returnTo);
+      if (stateData.returnTo && (stateData.returnTo.startsWith('mai-push://') || stateData.returnTo.startsWith('http://127.0.0.1') || stateData.returnTo.startsWith('http://localhost'))) {
+        const url = new URL(stateData.returnTo);
+        url.searchParams.set('token', token);
+        res.redirect(url.toString());
+      } else {
+        res.cookie(auth.COOKIE_NAME, token, auth.COOKIE_OPTIONS);
+        safeRedirect(res, stateData.returnTo);
+      }
     } catch (e) {
       console.error('[auth/discord/callback] Exchange error:', e.message || (e.response ? JSON.stringify(e.response.data) : e));
       res.status(500).send('Authentication failed during token exchange.');

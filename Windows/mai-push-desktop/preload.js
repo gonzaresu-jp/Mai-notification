@@ -1,5 +1,38 @@
 const { contextBridge, webFrame, ipcRenderer } = require('electron');
 
+// Electron 検出回避：Google が Electron を「安全でない」と判定しないようにする
+try {
+  webFrame.executeJavaScript(`
+    (function() {
+      // navigator.webdriver を完全に削除
+      try {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined, configurable: true });
+      } catch(e) {}
+
+      // window.chrome オブジェクトを追加（本物の Chrome にあるもの）
+      if (!window.chrome) {
+        window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
+      }
+
+      // permissions API を正規化
+      var origQuery = window.Notification && Notification.permission;
+      try {
+        var origPermQuery = navigator.permissions && navigator.permissions.query;
+        if (origPermQuery) {
+          navigator.permissions.query = function(desc) {
+            if (desc && desc.name === 'notifications') {
+              return Promise.resolve({ state: origQuery || 'default', onchange: null });
+            }
+            return origPermQuery.call(navigator.permissions, desc);
+          };
+        }
+      } catch(e) {}
+    })();
+  `);
+} catch(e) {
+  console.error('[preload] anti-detect injection failed:', e);
+}
+
 // PushManager override をメインワールドに注入（ページスクリプトより先に実行される）
 try {
   webFrame.executeJavaScript(`
@@ -115,6 +148,30 @@ try {
         return origFetch.call(this, input, init);
       };
       console.log('[Electron] fetch override OK');
+
+      // headerLoginWithGoogle を上書き：システムブラウザで開く（Google の Electron 検出回避）
+      var _origLoginInterval = setInterval(function() {
+        if (typeof window.headerLoginWithGoogle === 'function') {
+          clearInterval(_origLoginInterval);
+          window.headerLoginWithGoogle = function() {
+            console.log('[Electron] headerLoginWithGoogle intercepted → system browser');
+            if (window.electronAPI && window.electronAPI.openLogin) {
+              window.electronAPI.openLogin();
+            }
+          };
+          console.log('[Electron] headerLoginWithGoogle overridden');
+        }
+      }, 200);
+
+      // ナビメニュー内のログインボタン（直接 onclick で headerLoginWithGoogle を呼ぶもの）も監視
+      document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.nav-auth-btn.google, .auth-login-btn.google');
+        if (btn && window.electronAPI && window.electronAPI.openLogin) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.electronAPI.openLogin();
+        }
+      }, true);
     })();
   `);
 } catch(e) {
@@ -126,4 +183,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   isDesktop: true,
   showNotification: (opts) => ipcRenderer.invoke('show-notification', opts),
   setPushEnabled: (enabled) => ipcRenderer.invoke('set-push-enabled', enabled),
+  openLogin: () => ipcRenderer.invoke('open-login'),
 });
