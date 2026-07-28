@@ -469,8 +469,14 @@ async function checkOneUser(page, username, seenState) {
                          !!article.querySelector('video');
 
         // リポスト判定
+        // 1) socialContext ラベルによる判定
         const socialContext = article.querySelector('[data-testid="socialContext"]');
-        const isRepost = socialContext ? (socialContext.innerText.includes('リポスト') || socialContext.innerText.includes('Reposted') || socialContext.innerText.toLowerCase().includes('reposted')) : false;
+        const isRepostByContext = socialContext ? (socialContext.innerText.includes('リポスト') || socialContext.innerText.includes('Reposted') || socialContext.innerText.toLowerCase().includes('reposted')) : false;
+
+        // 2) 本文が "RT @" で始まる場合はリポスト確定（旧形式リツイート）
+        const isRepostByText = /^\s*RT\s+@/.test(text || '');
+
+        const isRepost = isRepostByContext || isRepostByText;
 
         out.push({ id, text, datetime, thumbnail_url: mediaImages[0] || null, media_urls: mediaImages, hasVideo, isRepost });
       }
