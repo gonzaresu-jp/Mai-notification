@@ -114,16 +114,13 @@ async function upsertEvent(ev) {
                 ];
                 db.run(sqlUpdate, params, err => err ? reject(err) : resolve());
 
-            } else if (ev.platform === 'youtube') {
-                // YouTube かつ external_id 不一致 → ±10分以内の近似重複を検索。
-                // 候補はSQLで広めに取得し、実際の時刻一致判定はJS側で
-                // Date（実ミリ秒）として比較する。start_time はソースにより
-                // ナイーブJST文字列（"2026-07-17T22:30:00"）だったりUTC ISO文字列
-                // （"2026-07-17T13:30:18Z"）だったりするため、SQLの文字列比較
-                // （BETWEEN等）では同一時刻でも一致判定できないことがあるため。
+            } else {
+                // external_id 不一致 → ±10分以内の近似重複を検索（全プラットフォーム共通）。
+                // Twitter/Gemma解析で先に作られた同一配信の予定（platform='twitter'等）を
+                // 発見し、上書き更新することで重複を防止する。
                 const startMs = new Date(ev.start_time).getTime();
 
-                db.all(sqlNearDuplicateCandidates, [ev.external_id], (err, candidates) => {
+                db.all(sqlNearDuplicateCandidates, [ev.external_id || ''], (err, candidates) => {
                     if (err) return reject(err);
 
                     const nearRow = (candidates || []).find(c => {
@@ -133,7 +130,7 @@ async function upsertEvent(ev) {
 
                     if (nearRow) {
                         // 近似重複が見つかった → external_id ごと上書き UPDATE
-                        console.log(`[upsertEvent] Near-duplicate found (id=${nearRow.id}), overwriting with YouTube event: ${ev.title}`);
+                        console.log(`[upsertEvent] Near-duplicate found (id=${nearRow.id}), overwriting: ${ev.title}`);
                         const params = [
                             ev.title,
                             ev.start_time,
@@ -167,23 +164,6 @@ async function upsertEvent(ev) {
                         db.run(sqlInsert, params, err => err ? reject(err) : resolve());
                     }
                 });
-
-            } else {
-                // YouTube 以外の新規登録 → そのまま INSERT
-                const params = [
-                    ev.title,
-                    ev.start_time,
-                    ev.end_time || null,
-                    ev.url || null,
-                    ev.thumbnail_url || null,
-                    ev.platform || 'other',
-                    ev.event_type || 'live',
-                    ev.description || null,
-                    ev.status || 'scheduled',
-                    ev.external_id || null,
-                    confirmed
-                ];
-                db.run(sqlInsert, params, err => err ? reject(err) : resolve());
             }
         });
     });
