@@ -417,14 +417,17 @@ async function checkOneUser(page, username, seenState) {
         console.warn(`[${username}] ⚠️ ログイン画面が検出されました。セッションが切れている可能性があります。`);
       }
 
-      // ページ安定待ち
-      await new Promise(r => setTimeout(r, 4000));
+      // article 要素が出現するのを待つ（最大20秒）
+      try {
+        await page.waitForSelector('article', { timeout: 20000 });
+      } catch {
+        console.warn(`[${username}] ⚠️ article要素が見つかりません（エラーページ・レート制限の可能性）`);
+      }
       
       // スクロールして追加読み込みを誘発
       await page.evaluate(() => {
         window.scrollBy(0, 2000);
       });
-      // 追加読み込み完了まで少し待機（2秒）
       await new Promise(r => setTimeout(r, 2000));
 
     }, 3, 500);
@@ -530,10 +533,12 @@ async function check(username, isRetry = false) {
     await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
 
     // 不要なリソースをブロックしてメモリと通信量を節約
+    // ★ stylesheet はブロックしない: X.com(React SPA) が正しくレンダリングされず
+    // アンチボット判定やエラーページ表示の原因になるため。
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const resourceType = request.resourceType();
-      if (['image', 'font', 'media', 'stylesheet'].includes(resourceType)) {
+      if (['image', 'font', 'media'].includes(resourceType)) {
         request.abort();
       } else {
         request.continue();
