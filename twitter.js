@@ -541,7 +541,7 @@ async function check(username, isRetry = false) {
           console.log(`[${username}] ⚠️ 0件取得のため5秒後に再チェックします...`);
           // リスナーを削除してからページを閉じる
           if (typeof requestHandler === 'function' && page && !page.isClosed()) {
-            page.removeListener('request', requestHandler);
+            page.off('request', requestHandler);
           }
           if (page && !page.isClosed()) {
             try { await page.close(); } catch (e) {
@@ -645,7 +645,7 @@ async function check(username, isRetry = false) {
       try {
         // リスナーを削除してからページを閉じる（メモリリーク防止）
         if (typeof requestHandler === 'function') {
-          page.removeListener('request', requestHandler);
+          page.off('request', requestHandler);
         }
         await page.close();
       } catch (e) {
