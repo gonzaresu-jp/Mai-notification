@@ -1,6 +1,19 @@
 <?php
 $updateLogs = [
     [
+        "date" => "2026-08-06",
+        "details" => [
+            "fix" => [
+                "Twitterスクレイパーのメモリリーク修正（page.on('request')リスナーの削除追加、再帰リトライ時のページクリーンアップ強化、HTTP Agentの再利用）",
+                "discord-alert.jsのalertLimits Mapが無限に成長する問題を定期クリーンアップで修正",
+                "スケジュール重複問題の修正（Gemma推定時刻とYouTube確定時刻が大きく異なる場合の重複検出を強化）",
+                "FANBOX APIレスポンスの配列パス修正（body → body.posts）导致通知が一切送られていなかった問題を修正",
+                "Twitterスクレイピング間隔を60秒→120秒に変更しレート制限対策",
+                "管理者パネルにホームに戻るボタンを追加",
+            ],
+        ],
+    ],
+    [
         "date" => "2026-07-17",
         "details" => [
             "fix" => [
