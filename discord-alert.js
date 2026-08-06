@@ -7,6 +7,14 @@ const alertLimits = new Map();
 // 同じキーでの通知を制限する期間 (ミリ秒) - 1時間
 const LIMIT_DURATION_MS = 60 * 60 * 1000;
 
+// 定期的に古いエントリをクリーンアップ（5分ごと）
+setInterval(() => {
+  const cutoff = Date.now() - LIMIT_DURATION_MS;
+  for (const [key, timestamp] of alertLimits.entries()) {
+    if (timestamp < cutoff) alertLimits.delete(key);
+  }
+}, 5 * 60 * 1000).unref();
+
 /**
  * Discord Webhook へメッセージを送信する
  * @param {string} title - 通知の太字タイトル

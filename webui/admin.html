@@ -436,10 +436,27 @@
             border-color: #B11E7C;
             box-shadow: 0 0 0 2px #B11E7C33;
         }
+
+        .back-home {
+            display: inline-block;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: background 0.2s;
+            backdrop-filter: blur(6px);
+        }
+        .back-home:hover {
+            background: rgba(255,255,255,0.3);
+        }
     </style>
 </head>
 <body>
     <div class="admin-shell">
+    <a href="/" class="back-home">← ホームに戻る</a>
     <section class="container">
         <h1>📢 管理者通知パネル</h1>
         

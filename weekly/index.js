@@ -79,6 +79,18 @@ async function upsertEvent(ev) {
           AND (external_id IS NULL OR external_id != ?)
     `;
 
+    // time_period 付きの推定イベント検索（±10分の近似重複が見つからなかった場合のフォールバック）。
+    // Gemma が「夜ごろ」等の時間帯推定で作成した予定は start_time が仮置き（例: 22:00）のため、
+    // YouTube の実際の時刻（例: 21:00）と±10分を超える場合がある。这种情况下は time_period が
+    // 設定されている既存イベントを重複候補として扱い、確定時刻で上書きする。
+    const sqlEstimatedCandidates = `
+        SELECT id, start_time, time_period FROM events
+        WHERE event_type = 'live'
+          AND status = 'scheduled'
+          AND time_period IS NOT NULL
+          AND (external_id IS NULL OR external_id != ?)
+    `;
+
     // confirmed の判定：具体的な時刻がある予定は確認定は確認済み扱い。
     // 時間帯のみ（time_period）で時刻未定のもののみ null（未定）。
     let confirmed = null;
@@ -88,10 +100,13 @@ async function upsertEvent(ev) {
         confirmed = 1;
     }
 
-    // UPDATE時に external_id も更新するクエリ（近似重複の上書き用）
+    // UPDATE時に external_id も更新するクエリ（近似重複の上書き用）。
+    // time_period を null にクリアし、confirmed を 1 に設定することで、
+    // Gemma の推定「未定」イベントが YouTube の確定時刻で上書きされたことを反映する。
     const sqlUpdateFull = `
         UPDATE events SET title=?, start_time=?, end_time=?, url=?, thumbnail_url=?,
-                          event_type=?, description=?, status=?, external_id=?, confirmed=COALESCE(confirmed, ?)
+                          event_type=?, description=?, status=?, external_id=?,
+                          time_period=null, confirmed=?
         WHERE id=?
     `;
 
@@ -115,22 +130,25 @@ async function upsertEvent(ev) {
                 db.run(sqlUpdate, params, err => err ? reject(err) : resolve());
 
             } else {
-                // external_id 不一致 → ±10分以内の近似重複を検索（全プラットフォーム共通）。
-                // Twitter/Gemma解析で先に作られた同一配信の予定（platform='twitter'等）を
-                // 発見し、上書き更新することで重複を防止する。
+                // external_id 不一致 → URL一致チェック（同じ配信の別プラットフォームからの登録を検出）。
+                // Gemma がツイートURLで、YouTube が動画URLで作成している場合でも重複を防止する。
                 const startMs = new Date(ev.start_time).getTime();
 
-                db.all(sqlNearDuplicateCandidates, [ev.external_id || ''], (err, candidates) => {
+                const checkUrlMatch = (callback) => {
+                    if (!ev.url) return callback(null);
+                    db.get(
+                        "SELECT id FROM events WHERE url = ? AND url IS NOT NULL AND url != '' AND event_type = 'live' AND status = 'scheduled'",
+                        [ev.url],
+                        callback
+                    );
+                };
+
+                checkUrlMatch((err, urlRow) => {
                     if (err) return reject(err);
 
-                    const nearRow = (candidates || []).find(c => {
-                        const cMs = new Date(c.start_time).getTime();
-                        return Number.isFinite(cMs) && Math.abs(cMs - startMs) <= NEAR_DUPLICATE_WINDOW_MS;
-                    });
-
-                    if (nearRow) {
-                        // 近似重複が見つかった → external_id ごと上書き UPDATE
-                        console.log(`[upsertEvent] Near-duplicate found (id=${nearRow.id}), overwriting: ${ev.title}`);
+                    if (urlRow) {
+                        // URL 一致 → 重複として上書き UPDATE
+                        console.log(`[upsertEvent] URL-duplicate found (id=${urlRow.id}), overwriting: ${ev.title}`);
                         const params = [
                             ev.title,
                             ev.start_time,
@@ -142,26 +160,90 @@ async function upsertEvent(ev) {
                             ev.status || 'scheduled',
                             ev.external_id || null,
                             confirmed,
-                            nearRow.id
+                            urlRow.id
                         ];
                         db.run(sqlUpdateFull, params, err => err ? reject(err) : resolve());
 
                     } else {
-                        // 近似重複なし → 新規 INSERT
-                        const params = [
-                            ev.title,
-                            ev.start_time,
-                            ev.end_time || null,
-                            ev.url || null,
-                            ev.thumbnail_url || null,
-                            ev.platform || 'other',
-                            ev.event_type || 'live',
-                            ev.description || null,
-                            ev.status || 'scheduled',
-                            ev.external_id || null,
-                            confirmed
-                        ];
-                        db.run(sqlInsert, params, err => err ? reject(err) : resolve());
+                        // ±10分以内の近似重複を検索（全プラットフォーム共通）。
+                        db.all(sqlNearDuplicateCandidates, [ev.external_id || ''], (err, candidates) => {
+                            if (err) return reject(err);
+
+                            const nearRow = (candidates || []).find(c => {
+                                const cMs = new Date(c.start_time).getTime();
+                                return Number.isFinite(cMs) && Math.abs(cMs - startMs) <= NEAR_DUPLICATE_WINDOW_MS;
+                            });
+
+                            if (nearRow) {
+                                // 近似重複が見つかった → external_id ごと上書き UPDATE
+                                console.log(`[upsertEvent] Near-duplicate found (id=${nearRow.id}), overwriting: ${ev.title}`);
+                                const params = [
+                                    ev.title,
+                                    ev.start_time,
+                                    ev.end_time || null,
+                                    ev.url || null,
+                                    ev.thumbnail_url || null,
+                                    ev.event_type || 'live',
+                                    ev.description || null,
+                                    ev.status || 'scheduled',
+                                    ev.external_id || null,
+                                    confirmed,
+                                    nearRow.id
+                                ];
+                                db.run(sqlUpdateFull, params, err => err ? reject(err) : resolve());
+
+                            } else {
+                                // ±10分以内に近似重複なし → time_period 付きの推定イベントを検索。
+                                db.all(sqlEstimatedCandidates, [ev.external_id || ''], (err, estimatedCandidates) => {
+                                    if (err) return reject(err);
+
+                                    const sameDayPeriodRow = (estimatedCandidates || []).find(c => {
+                                        const cDate = c.start_time ? c.start_time.substring(0, 10) : '';
+                                        const evDate = ev.start_time ? ev.start_time.substring(0, 10) : '';
+                                        return cDate === evDate;
+                                    });
+                                    const nearbyRow = sameDayPeriodRow || (estimatedCandidates || []).find(c => {
+                                        const cMs = new Date(c.start_time).getTime();
+                                        return Number.isFinite(cMs) && Math.abs(cMs - startMs) <= 6 * 60 * 60 * 1000;
+                                    });
+
+                                    if (nearbyRow) {
+                                        console.log(`[upsertEvent] Estimated-event duplicate found (id=${nearbyRow.id}, time_period=${nearbyRow.time_period}), overwriting with confirmed time: ${ev.title}`);
+                                        const params = [
+                                            ev.title,
+                                            ev.start_time,
+                                            ev.end_time || null,
+                                            ev.url || null,
+                                            ev.thumbnail_url || null,
+                                            ev.event_type || 'live',
+                                            ev.description || null,
+                                            ev.status || 'scheduled',
+                                            ev.external_id || null,
+                                            confirmed,
+                                            nearbyRow.id
+                                        ];
+                                        db.run(sqlUpdateFull, params, err => err ? reject(err) : resolve());
+
+                                    } else {
+                                        // 近似重複なし → 新規 INSERT
+                                        const params = [
+                                            ev.title,
+                                            ev.start_time,
+                                            ev.end_time || null,
+                                            ev.url || null,
+                                            ev.thumbnail_url || null,
+                                            ev.platform || 'other',
+                                            ev.event_type || 'live',
+                                            ev.description || null,
+                                            ev.status || 'scheduled',
+                                            ev.external_id || null,
+                                            confirmed
+                                        ];
+                                        db.run(sqlInsert, params, err => err ? reject(err) : resolve());
+                                    }
+                                });
+                            }
+                        });
                     }
                 });
             }

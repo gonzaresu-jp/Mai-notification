@@ -588,7 +588,7 @@ async function main() {
 
             // 起動直後に1回 + その後は intervalMs ごとに繰り返す
             await poll();
-            const t = setInterval(poll, 60 * 1000);
+            const t = setInterval(poll, 120 * 1000);
             if (t && typeof t.unref === "function") t.unref();
 
             results.push({ user: u, status: "ok" });

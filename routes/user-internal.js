@@ -64,6 +64,18 @@ function register(app, db) {
           "SELECT id, title, platform, event_type, start_time FROM events WHERE start_time BETWEEN ? AND ? AND status IN ('scheduled','live') ORDER BY start_time DESC LIMIT 5",
           [toNaiveJst(minTime), toNaiveJst(maxTime)]);
       }
+
+      // 4) time_period 付きの推定イベントとの同日重複チェック。
+      // Gemma の推定時刻（例: 22:00 仮置き）と YouTube の確定時刻（例: 21:00）が
+      // ±4時間を超える場合でも、同日に time_period 付きの配信予定があれば重複扱いにする。
+      if (dupRows.length === 0) {
+        const dayStart = toNaiveJst(new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()));
+        const dayEnd = toNaiveJst(new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1));
+        dupRows = await dbAll(db,
+          "SELECT id, title, platform, event_type, start_time FROM events WHERE start_time BETWEEN ? AND ? AND event_type = 'live' AND status IN ('scheduled','live') AND time_period IS NOT NULL LIMIT 5",
+          [dayStart, dayEnd]);
+      }
+
       if (dupRows.length > 0) {
         return res.status(409).json({ error: 'duplicate', duplicates: dupRows });
       }
@@ -124,6 +136,20 @@ function register(app, db) {
         // 新規側のキーワード不一致でも重複扱いにする。
         // 既存が ended は SQL で除外済み。
         rows = timeRows.filter(r => r.event_type === 'live' || isLiveRelated(r.title));
+      }
+
+      // 4) タイトル一致 + 同日マッチ（Gemma推定時刻とYouTube確定時刻が大きく異なる場合のフォールバック）。
+      // time_period 付きの「未定」イベントが同日に同一タイトルで存在する場合、重複扱いにする。
+      if (rows.length === 0 && normalizedTitle) {
+        const targetDate = new Date(scheduled_at);
+        const dayStart = toNaiveJst(new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()));
+        const dayEnd = toNaiveJst(new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1));
+
+        const titleRows = await dbAll(db,
+          "SELECT * FROM events WHERE title = ? AND start_time BETWEEN ? AND ? AND event_type = 'live' AND status IN ('scheduled','live') AND time_period IS NOT NULL",
+          [normalizedTitle, dayStart, dayEnd]
+        );
+        rows = titleRows;
       }
 
       res.json({ found: rows.length > 0, duplicates: rows || [], near: rows.length });
