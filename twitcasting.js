@@ -188,7 +188,7 @@ const browser = await getSharedBrowser({
         if (page) {
             try {
                 if (typeof requestHandler === 'function') {
-                    page.removeListener('request', requestHandler);
+                    page.off('request', requestHandler);
                 }
                 await page.close();
             } catch (e) {
