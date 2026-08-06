@@ -50,12 +50,12 @@ async function checkFanboxPosts() {
       timeout: 10000
     });
 
-    if (!res.data || !Array.isArray(res.data.body)) {
+    if (!res.data || !res.data.body || !Array.isArray(res.data.body.posts)) {
       console.warn('Fanbox: APIレスポンスが不正です', res.data);
       return;
     }
 
-    const items = res.data.body;
+    const items = res.data.body.posts;
     if (items.length === 0) {
       console.warn('Fanbox: 投稿が0件です');
       return;

@@ -18,7 +18,7 @@ const TMP_DB = path.join(os.tmpdir(), 'cookies_temp_twitter.sqlite');
 const SEEN_PATH = path.join(__dirname, 'seen.json');
 const HEADLESS = true;
 const MAX_AGE_HOURS = 24;
-const CHECK_INTERVAL_MS = 60 * 1000;
+const CHECK_INTERVAL_MS = 120 * 1000;
 const NOTIFY_ENDPOINT = 'http://localhost:8080/api/notify';
 const ICON_URL = '/icon.webp';
 const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
@@ -28,6 +28,10 @@ const SCHEDULE_ENDPOINT = 'http://localhost:8080/api/internal/events/create';
 const SCHEDULE_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
 const ENABLE_SCHEDULE_AUTO_CREATE = process.env.ENABLE_SCHEDULE_AUTO_CREATE !== 'false'; // デフォルト: 有効
 const DEFAULT_SCHEDULE_USER_ID = process.env.SCHEDULE_USER_ID || 1; // デフォルト: user_id=1
+
+// 🔧 HTTP Agent を再利用（リクエストごとの生成を防止）
+const _httpAgent = new http.Agent({ keepAlive: true, maxSockets: 5 });
+const _httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 5 });
 
 // 🔧 Cookie キャッシュ（メモリ上に保持）
 let cachedCookies = null;
@@ -195,15 +199,7 @@ async function sendNotify(username, tweet, settingKey, sendText) {
     }
   };
 
-  let agent;
-  try {
-    const parsed = new URL(NOTIFY_ENDPOINT);
-    if (parsed.protocol === 'https:') agent = new https.Agent({ keepAlive: false });
-    else if (parsed.protocol === 'http:') agent = new http.Agent({ keepAlive: false });
-  } catch (e) {
-    console.warn('sendNotify: failed to parse NOTIFY_ENDPOINT, proceeding without custom agent', e && e.message);
-    agent = undefined;
-  }
+  const agent = (new URL(NOTIFY_ENDPOINT).protocol === 'https:') ? _httpsAgent : _httpAgent;
 
   try {
     const res = await retryAsync(() => fetch(NOTIFY_ENDPOINT, {
@@ -232,14 +228,7 @@ async function sendNotify(username, tweet, settingKey, sendText) {
 async function findDuplicateSchedule(username, scheduleInfo, tweetId, urls) {
   if (!scheduleInfo) return null;
 
-  let agent;
-  try {
-    const parsed = new URL('http://localhost:8080/api/internal/events/find-duplicate');
-    if (parsed.protocol === 'https:') agent = new https.Agent({ keepAlive: false });
-    else if (parsed.protocol === 'http:') agent = new http.Agent({ keepAlive: false });
-  } catch (e) {
-    return null;
-  }
+  const agent = _httpAgent;
 
   try {
     const external_id = tweetId ? `gemma_${tweetId}` : '';
@@ -273,14 +262,7 @@ async function findDuplicateSchedule(username, scheduleInfo, tweetId, urls) {
 
 // --- スケジュール更新 ---
 async function updateSchedule(username, scheduleId, scheduleInfo, urls) {
-  let agent;
-  try {
-    const parsed = new URL('http://localhost:8080/api/internal/events/update');
-    if (parsed.protocol === 'https:') agent = new https.Agent({ keepAlive: false });
-    else if (parsed.protocol === 'http:') agent = new http.Agent({ keepAlive: false });
-  } catch (e) {
-    return false;
-  }
+  const agent = _httpAgent;
 
   const payload = {
     schedule_id: scheduleId,
@@ -347,21 +329,14 @@ async function createScheduleFromTweet(username, tweet, analysis) {
   
   if (duplicate) {
     // 既存スケジュールを更新
+    // time_period は既存のものを維持（YouTube等で確定済みの場合、Gemmaの推定で上書きしない）
     console.log(`[${username}] Found duplicate: id=${duplicate.id}, updating...`);
-    await updateSchedule(username, duplicate.id, scheduleInfo, urls);
+    await updateSchedule(username, duplicate.id, { ...scheduleInfo, time_period: duplicate.time_period || scheduleInfo.time_period }, urls);
     return;
   }
 
   // 新規作成
-  let agent;
-  try {
-    const parsed = new URL(SCHEDULE_ENDPOINT);
-    if (parsed.protocol === 'https:') agent = new https.Agent({ keepAlive: false });
-    else if (parsed.protocol === 'http:') agent = new http.Agent({ keepAlive: false });
-  } catch (e) {
-    console.warn('createScheduleFromTweet: failed to parse SCHEDULE_ENDPOINT', e && e.message);
-    agent = undefined;
-  }
+  const agent = (new URL(SCHEDULE_ENDPOINT).protocol === 'https:') ? _httpsAgent : _httpAgent;
 
   const payload = {
     title: scheduleInfo.title,
@@ -510,6 +485,7 @@ async function check(username, isRetry = false) {
   const seenState = loadSeen();
   
   let page;
+  let requestHandler;
   try {
     // 🔧 ブラウザを再利用（新しいページだけ開く）
     // ytcommunity等とのプロファイル競合(The browser is already running)を防ぐため独立したディレクトリを使用
@@ -536,14 +512,15 @@ async function check(username, isRetry = false) {
     // ★ stylesheet はブロックしない: X.com(React SPA) が正しくレンダリングされず
     // アンチボット判定やエラーページ表示の原因になるため。
     await page.setRequestInterception(true);
-    page.on('request', (request) => {
+    requestHandler = (request) => {
       const resourceType = request.resourceType();
       if (['image', 'font', 'media'].includes(resourceType)) {
         request.abort();
       } else {
         request.continue();
       }
-    });
+    };
+    page.on('request', requestHandler);
 
     // (Cookieは userDataDir: PROFILE_PATH からネイティブに読み込まれ、自動更新されるため手動注入は削除)
 
@@ -562,7 +539,16 @@ async function check(username, isRetry = false) {
         // ✅ 0件取得かつ初回チェックの場合、5秒後に再チェック
         if (!isRetry) {
           console.log(`[${username}] ⚠️ 0件取得のため5秒後に再チェックします...`);
-          if (page && !page.isClosed()) await page.close();
+          // リスナーを削除してからページを閉じる
+          if (typeof requestHandler === 'function' && page && !page.isClosed()) {
+            page.removeListener('request', requestHandler);
+          }
+          if (page && !page.isClosed()) {
+            try { await page.close(); } catch (e) {
+              console.warn(`[${username}] Failed to close page before retry:`, e.message);
+            }
+          }
+          page = null; // finally ブロックで二重クローズしないよう null 化
           await new Promise(r => setTimeout(r, 5000));
           return await check(username, true); // 再帰呼び出し（再チェック）
         } else {
@@ -657,6 +643,10 @@ async function check(username, isRetry = false) {
     // 🔧 ブラウザは閉じず、ページだけ閉じる
     if (page && !page.isClosed()) {
       try {
+        // リスナーを削除してからページを閉じる（メモリリーク防止）
+        if (typeof requestHandler === 'function') {
+          page.removeListener('request', requestHandler);
+        }
         await page.close();
       } catch (e) {
         console.warn(`[${username}] Failed to close page:`, e.message);
