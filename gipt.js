@@ -120,6 +120,7 @@ async function fetchGipts(opts = {}) {
   } = opts;
 
   let page;
+  let requestHandler;
   const now = Date.now();
   const outDir = path.resolve(debugDir);
   mkdirp(outDir);
@@ -154,13 +155,14 @@ async function fetchGipts(opts = {}) {
 
     // 軽量化：不要リソースブロック（JSは必要なのでブロックしない）
     await page.setRequestInterception(true);
-    page.on('request', (req) => {
+    requestHandler = (req) => {
       const type = req.resourceType();
       // font/media は確実に不要。image は「DOMにsrcがある」前提なら不要なのでブロック。
       // img が空になるなら image ブロックを外す。
       if (type === 'font' || type === 'media' || type === 'image') return req.abort();
       return req.continue();
-    });
+    };
+    page.on('request', requestHandler);
 
     console.log(`[Gipt] Fetching: ${TARGET_URL}`);
 
@@ -274,7 +276,12 @@ async function fetchGipts(opts = {}) {
 
   } finally {
     if (page) {
-      try { await page.close(); } catch (e) {
+      try {
+        if (typeof requestHandler === 'function') {
+          page.removeListener('request', requestHandler);
+        }
+        await page.close();
+      } catch (e) {
         console.warn('[Gipt] Failed to close page:', e.message);
       }
     }

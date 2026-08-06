@@ -24,7 +24,14 @@ function scheduleIdleClose(key) {
 
   entry.idleTimer = setTimeout(async () => {
     const e = _pool.get(key);
-    if (!e || !e.browser || !e.browser.isConnected()) return;
+    if (!e || !e.browser || !e.browser.isConnected()) {
+      // ブラウザが既に切れているならプールから削除だけする
+      if (e) {
+        if (e.idleTimer) clearTimeout(e.idleTimer);
+        _pool.delete(key);
+      }
+      return;
+    }
     try {
       // Puppeteer は起動時に空白ページを1枚持つため、>1 を「利用中」とみなす
       const pages = await e.browser.pages();
@@ -35,10 +42,22 @@ function scheduleIdleClose(key) {
         return;
       }
       console.log(`[browser.js] idle ${IDLE_MS}ms, closing browser to free memory: ${key}`);
+      // close() を await してプロセスが確実に終了してからプールを削除する
       await e.browser.close().catch(() => {});
-      _pool.delete(key);
+      // disconnected イベントで既に削除されている可能性があるので念のため
+      if (_pool.has(key)) {
+        const current = _pool.get(key);
+        if (current && current.idleTimer) clearTimeout(current.idleTimer);
+        _pool.delete(key);
+      }
     } catch (err) {
       console.warn('[browser.js] idle close failed:', err && err.message ? err.message : err);
+      // エラー時もプールから削除（ゾンビ防止）
+      if (_pool.has(key)) {
+        const current = _pool.get(key);
+        if (current && current.idleTimer) clearTimeout(current.idleTimer);
+        _pool.delete(key);
+      }
     }
   }, IDLE_MS);
 
@@ -194,7 +213,12 @@ async function closeSharedBrowser(options = {}) {
       }
     }
   }
-  _pool.delete(key);
+  // disconnected イベントで既に削除されている可能性があるので has チェック
+  if (_pool.has(key)) {
+    const current = _pool.get(key);
+    if (current && current.idleTimer) clearTimeout(current.idleTimer);
+    _pool.delete(key);
+  }
 }
 
 /**
