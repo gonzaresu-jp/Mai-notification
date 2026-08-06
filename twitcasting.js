@@ -145,6 +145,7 @@ async function syncEventToSchedule(screenId, movieId, title, thumbnailUrl) {
 async function checkPrivateLive(screenId){
     const url = `https://twitcasting.tv/${screenId}/movie/latest`;
     let page;
+    let requestHandler;
     try{
 const browser = await getSharedBrowser({
       userDataDir: process.platform === 'linux'
@@ -159,7 +160,7 @@ const browser = await getSharedBrowser({
         
         // リクエストをフィルタリング（不要なリソースをブロック）
         await page.setRequestInterception(true);
-        page.on('request', (req) => {
+        requestHandler = (req) => {
             const resourceType = req.resourceType();
             // 画像、CSS、フォント、メディアをブロック（HTMLとJSのみ許可）
             if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
@@ -167,7 +168,8 @@ const browser = await getSharedBrowser({
             } else {
                 req.continue();
             }
-        });
+        };
+        page.on('request', requestHandler);
         
         await retryAsync(async()=>{ 
             await page.goto(url, {waitUntil:'domcontentloaded', timeout:60000}); 
@@ -185,6 +187,9 @@ const browser = await getSharedBrowser({
         // ブラウザは閉じず、ページだけ閉じる
         if (page) {
             try {
+                if (typeof requestHandler === 'function') {
+                    page.removeListener('request', requestHandler);
+                }
                 await page.close();
             } catch (e) {
                 console.warn(`[${screenId}] Failed to close page:`, e.message);

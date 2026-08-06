@@ -71,8 +71,21 @@ async function getBrowser() {
 async function getPage() {
   const browser = await getBrowser();
 
+  // ブラウザが切断されている場合、sharedPage参照をリセット
+  if (!browser.isConnected()) {
+    sharedPage = null;
+  }
+
   if (sharedPage && !sharedPage.isClosed()) {
     return sharedPage;
+  }
+
+  // 古いページのリスナーをクリーンアップ
+  if (sharedPage) {
+    try {
+      sharedPage.removeAllListeners('request');
+      sharedPage.removeAllListeners('response');
+    } catch (_) {}
   }
 
   sharedPage = await browser.newPage();
