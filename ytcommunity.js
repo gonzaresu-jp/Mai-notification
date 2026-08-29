@@ -295,6 +295,9 @@ async function pollAndNotify(handle) {
       if (notifyConfig?.notifyFn) {
         await notifyConfig.notifyFn({
           type: 'ytcommunity',
+          // settingKey が無いと notify 側の設定チェック自体がスキップされ、
+          // 「YouTubeコミュニティ OFF」が効かなくなる。設定の正規キーを渡すこと。
+          settingKey: 'youtubeCommunity',
           data: {
             title: '【コミュニティ投稿】',
             body: p.content.slice(0, 200),

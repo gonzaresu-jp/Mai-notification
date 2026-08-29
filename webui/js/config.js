@@ -34,8 +34,10 @@ export function getClientId() {
 export function normalizePlatformName(platform) {
   const normalized = platform.toLowerCase().trim();
   
-  if (normalized.includes('twitcasting')) return 'twitcasting';
+  // ツイキャスは settingKey に screenId ("c:koinoya_mai") が保存されていた時期があるため両対応
+  if (normalized.includes('twitcasting') || normalized.startsWith('c:')) return 'twitcasting';
   if (normalized.includes('youtube') && normalized.includes('community')) return 'youtube-community';
+  if (normalized.includes('ytcommunity')) return 'youtube-community';
   if (normalized.includes('youtube')) return 'youtube';
   if (normalized.includes('fanbox') || normalized.includes('pixiv')) return 'fanbox';
   if (normalized.includes('twitter') || normalized.includes('x.com')) {
