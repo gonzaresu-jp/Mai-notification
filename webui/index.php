@@ -517,7 +517,7 @@
             <section class="log-section" aria-labelledby="log-heading">
                 <h2 class="history fade" id="log-heading">通知履歴</h2>
 
-                <!-- リスト/ヒートマップ タブ（CSS :has で切替） -->
+                <!-- リスト/ヒートマップ タブ（ヒートマップ側に詳細統計を内包） -->
                 <input type="radio" name="histview" id="histtab-list" class="hist-radio" checked>
                 <input type="radio" name="histview" id="histtab-heat" class="hist-radio">
                 <div class="hist-tabs" role="tablist" aria-label="通知履歴の表示切替">
@@ -526,6 +526,7 @@
                 </div>
 
                 <div id="notification-heatmap" class="heatmap-wrapper fade d3" role="region" aria-label="通知貢献グラフ"></div>
+                <div id="notification-stats" class="ns-wrapper fade d3" role="region" aria-label="通知の詳細統計"></div>
 
                 <!-- ✅ role="toolbar" でボタン群の意味を明示 -->
                 <div class="controls" role="toolbar" aria-label="ログ操作">
@@ -753,6 +754,7 @@
     <script type="module" src="./dist/main.bundle.min.js?v=<?= @filemtime(__DIR__ . '/dist/main.bundle.min.js') ?: time(); ?>" defer></script>
     <script src="./dist/auth-settings-bridge.min.js?v=<?= @filemtime(__DIR__ . '/dist/auth-settings-bridge.min.js') ?: time(); ?>" defer></script>
     <script src="./dist/heatmap.min.js?v=<?= @filemtime(__DIR__ . '/dist/heatmap.min.js') ?: time(); ?>" defer></script>
+    <script src="./dist/notification-stats.min.js?v=<?= @filemtime(__DIR__ . '/dist/notification-stats.min.js') ?: time(); ?>" defer></script>
 
     <!-- 通知履歴 リスト/ヒートマップ タブ切替（JSでクラス付替＝WebViewでも確実に動作） -->
     <script>
@@ -765,11 +767,18 @@
         // add/remove で冪等に（classList.toggleの第2引数forceは古いWebViewで無視されるため使わない。
         // click と change の二重発火でも結果が反転しない）
         const apply = () => {
-          if (rHeat && rHeat.checked) sec.classList.add('hist-heat');
-          else sec.classList.remove('hist-heat');
+          if (rHeat && rHeat.checked) {
+            sec.classList.add('hist-heat');
+            // 詳細統計はヒートマップタブを開いた時に初回だけ取得。
+            // 表示直後に幅が確定してから描画（非表示中はcanvas幅0のため）
+            if (typeof loadNotificationStats === 'function') {
+              requestAnimationFrame(() => loadNotificationStats('notification-stats'));
+            }
+          } else {
+            sec.classList.remove('hist-heat');
+          }
         };
-        if (rList) rList.addEventListener('change', apply);
-        if (rHeat) rHeat.addEventListener('change', apply);
+        [rList, rHeat].forEach(r => { if (r) r.addEventListener('change', apply); });
         // ラベルタップでも確実に切替（一部WebViewのlabel→radio不具合対策）
         const tabs = sec.querySelectorAll('.hist-tab');
         tabs.forEach(label => {
