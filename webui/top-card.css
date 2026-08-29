@@ -1913,7 +1913,7 @@
    log-sectionを前面に出すことでアプリ(WebView)でもタブのタップが確実に届く。 */
 .log-section { position: relative; z-index: 3; }
 
-/* --- 通知履歴: リスト / ヒートマップ タブ切替（CSS :has のみ） --- */
+/* --- 通知履歴: リスト / ヒートマップ タブ切替（ヒートマップ側に詳細統計を内包） --- */
 .hist-radio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .hist-tabs { display: inline-flex; gap: 4px; margin: 4px 0 12px; padding: 4px; border-radius: 999px; background: #efe3f0; }
 .hist-tab { padding: 6px 18px; border-radius: 999px; font-size: .85rem; font-weight: 700; color: #8a6b7d; cursor: pointer; user-select: none; transition: background .15s, color .15s; }
@@ -1924,7 +1924,8 @@
 .log-section.hist-heat #more-logs-button,
 .log-section.hist-heat #status,
 .log-section.hist-heat .controls { display: none !important; }
-.log-section:not(.hist-heat) #notification-heatmap { display: none !important; }
+.log-section:not(.hist-heat) #notification-heatmap,
+.log-section:not(.hist-heat) #notification-stats { display: none !important; }
 .log-section.hist-heat .hist-tab[for="histtab-heat"],
 .log-section:not(.hist-heat) .hist-tab[for="histtab-list"] { background: var(--color-primary, #B11E7C); color: #fff; }
 /* --- ~(フォールバック) --- */
@@ -1932,4 +1933,5 @@
 #histtab-heat:checked ~ #more-logs-button,
 #histtab-heat:checked ~ #status,
 #histtab-heat:checked ~ .controls { display: none !important; }
-#histtab-list:checked ~ #notification-heatmap { display: none !important; }
+#histtab-list:checked ~ #notification-heatmap,
+#histtab-list:checked ~ #notification-stats { display: none !important; }

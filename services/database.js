@@ -202,6 +202,7 @@ function ensureIndexes() {
   db.run("CREATE INDEX IF NOT EXISTS idx_android_devices_client_id ON android_devices (client_id)");
   db.run("CREATE INDEX IF NOT EXISTS idx_android_devices_user_id ON android_devices (user_id)");
   db.run("CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC)");
+  db.run("CREATE INDEX IF NOT EXISTS idx_notifications_platform_created ON notifications (platform, created_at)");
   db.run("CREATE INDEX IF NOT EXISTS idx_scheduled_notifications_due ON scheduled_notifications (sent, run_at)");
   db.run("CREATE INDEX IF NOT EXISTS idx_scheduled_notifications_event_ref ON scheduled_notifications (kind, ref_id, sent)");
   console.log("indexes ensured");
