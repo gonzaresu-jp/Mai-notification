@@ -74,7 +74,10 @@ async function sendNotify(screenId, movieId, title = '【ツイキャス】ラ�
             image: image || null
         },
         type: 'twitcasting',
-        settingKey: screenId
+        // settingKey は購読者の通知ON/OFF設定・履歴のplatform列・カスタムリンク変換の
+        // キーになる。screenId を入れると settings['c:koinoya_mai'] を見に行ってしまい
+        // ツイキャスのOFF設定が一切効かなくなるため、固定キーを渡す。
+        settingKey: 'twitcasting'
     };
 
     let agent;
