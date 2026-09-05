@@ -23,7 +23,7 @@ await esbuild.build({
 // ── 2. スタンドアロンJSを個別にminify（グローバル関数を維持） ────
 const standalone = [
   'weekly-schedule', 'heatmap', 'notification-stats', 'carousel', 'count-days',
-  'panel', 'mai-voice', 'ui-misc', 'subscribers', 'auth-settings-bridge'
+  'panel', 'mai-voice', 'ui-misc', 'subscribers', 'auth-settings-bridge', 'archive'
 ];
 for (const name of standalone) {
   const src = join(JS, name + '.js');
