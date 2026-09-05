@@ -574,11 +574,15 @@
     const html = '<ul class="ns-buzzwords-list" role="list">' + list.map(item => {
       const pct = Math.max(8, (item.score / maxScore) * 100);
       const href = `/archive.php?q=${encodeURIComponent(item.word)}`;
-      return `<li class="ns-buzzwords-item">`
+      const ex = item.examples && item.examples.length
+        ? `<span class="ns-bw-ex">${item.examples.map(e => `<a href="${esc(e.url)}" target="_blank" rel="noopener" title="${esc(e.title)}">${esc(e.title.slice(0, 22))}${e.title.length > 22 ? '…' : ''}</a>`).join('<span class="ns-bw-ex-sep"> / </span>')}</span>`
+        : '';
+      return `<li class="ns-buzzwords-item${ex ? ' has-ex' : ''}">`
         + `<span class="ns-bw-rank">${item.rank}</span>`
         + `<a class="ns-bw-word" href="${href}" target="_blank" rel="noopener">${esc(item.word)}</a>`
         + `<span class="ns-bw-bar"><i style="width:${pct.toFixed(1)}%"></i></span>`
         + `<span class="ns-bw-count">${num(item.count)}<em>回</em></span>`
+        + ex
         + `</li>`;
     }).join('') + '</ul>';
     const meta = `<div class="ns-buzzwords-meta">${y}年 ${bw.total_videos}本の動画から抽出${bw.updated_at ? ` · 更新 ${bw.updated_at.slice(0,10)}` : ''}</div>`;
@@ -598,7 +602,7 @@
     const body = document.getElementById('ns-buzzwords-body');
     if (body) body.innerHTML = buzzwordsBodyHtml();
     try {
-      const res = await fetch(`/api/buzzwords?year=${y}&top=20`);
+      const res = await fetch(`/api/buzzwords?year=${y}&top=100`);
       if (!res.ok) throw new Error('buzzwords ' + res.status);
       const data = await res.json();
       // yearが単年の場合と全年分の場合で形が違うので正規化

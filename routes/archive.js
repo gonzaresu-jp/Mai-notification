@@ -132,14 +132,14 @@ function register(app) {
 
   app.get("/api/archive/buzzwords", async (req, res) => {
     await proxyJson(res, "/api/buzzwords" + pickQuery(req, ["year", "top"]), {
-      timeoutMs: 30000,
+      timeoutMs: 90000,
     });
   });
 
   // 公開エイリアス: /api/buzzwords は /api/archive/buzzwords と同じ
   app.get("/api/buzzwords", async (req, res) => {
     await proxyJson(res, "/api/buzzwords" + pickQuery(req, ["year", "top"]), {
-      timeoutMs: 30000,
+      timeoutMs: 90000,
     });
   });
 
