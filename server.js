@@ -100,6 +100,7 @@ require("./routes/history").register(app, db);
 require("./routes/notify").register(app, db);
 require("./routes/twitter-media").register(app, db);
 require("./routes/rag").register(app, db);
+require("./routes/archive").register(app);
 // --- Milestone Scheduler ---
 if (ctx.vapidConfig.vapidPublicKey !== "test-key") {
   ctx.milestoneScheduler = new MilestoneScheduler(dbPath, ctx.vapidConfig);
