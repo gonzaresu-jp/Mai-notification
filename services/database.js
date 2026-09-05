@@ -71,6 +71,33 @@ function initDatabase() {
     )`, (err) => { if (err) console.error("weekly_messages create err:", err.message); });
     db.run(`CREATE INDEX IF NOT EXISTS idx_weekly_messages_week_start ON weekly_messages (week_start)`);
 
+    // YT字幕原文キャッシュ（1動画1行）
+    db.run(`CREATE TABLE IF NOT EXISTS video_transcripts (
+      video_id TEXT PRIMARY KEY,
+      channel_id TEXT,
+      title TEXT,
+      lang TEXT DEFAULT 'ja',
+      transcript TEXT NOT NULL,
+      raw_json TEXT,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => { if (err) console.error("video_transcripts create err:", err.message); });
+    db.run(`CREATE INDEX IF NOT EXISTS idx_video_transcripts_fetched_at ON video_transcripts (fetched_at)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_video_transcripts_channel ON video_transcripts (channel_id)`);
+
+    // 年別流行語キャッシュ（再計算で置き換え）
+    db.run(`CREATE TABLE IF NOT EXISTS yearly_buzzwords (
+      year INTEGER NOT NULL,
+      rank INTEGER NOT NULL,
+      word TEXT NOT NULL,
+      score REAL NOT NULL,
+      count INTEGER NOT NULL,
+      total_count INTEGER NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (year, rank)
+    )`, (err) => { if (err) console.error("yearly_buzzwords create err:", err.message); });
+    db.run(`CREATE INDEX IF NOT EXISTS idx_yearly_buzzwords_year ON yearly_buzzwords (year)`);
+
     // ベクトルDB同期の進捗（source 毎に最後に同期した行ID）
     db.run(`CREATE TABLE IF NOT EXISTS vector_sync_state (
       source TEXT PRIMARY KEY,

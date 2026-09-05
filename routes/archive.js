@@ -10,6 +10,7 @@
  *   GET /api/archive/video/:id
  *   GET /api/archive/stats
  *   GET /api/archive/thumbnail/:id
+ *   GET /api/archive/buzzwords?year=&top=  →  GET /api/buzzwords?year=&top= (公開プロキシ)
  */
 
 const ARCHIVE_API_BASE = (process.env.ARCHIVE_API_BASE || "http://192.168.1.70:8766").replace(/\/+$/, "");
@@ -127,6 +128,19 @@ function register(app) {
     const id = req.params.id;
     if (!VIDEO_ID_RE.test(id)) return res.status(400).json({ error: "invalid video_id" });
     await proxyJson(res, `/api/video/${id}`);
+  });
+
+  app.get("/api/archive/buzzwords", async (req, res) => {
+    await proxyJson(res, "/api/buzzwords" + pickQuery(req, ["year", "top"]), {
+      timeoutMs: 30000,
+    });
+  });
+
+  // 公開エイリアス: /api/buzzwords は /api/archive/buzzwords と同じ
+  app.get("/api/buzzwords", async (req, res) => {
+    await proxyJson(res, "/api/buzzwords" + pickQuery(req, ["year", "top"]), {
+      timeoutMs: 30000,
+    });
   });
 
   app.get("/api/archive/thumbnail/:id", async (req, res) => {

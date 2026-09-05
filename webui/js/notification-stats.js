@@ -57,6 +57,9 @@
     data: null,
     loading: false,
     reqId: 0,
+    buzzwords: null,
+    buzzwordsLoading: false,
+    buzzwordsExpanded: false,
   };
 
   const isActiveRange = (r) => (
@@ -65,8 +68,15 @@
       : (r.mode === 'rolling' && r.years === state.range.years)
   );
 
+  function buzzwordsYear() {
+    if (state.range.mode === 'year') return state.range.year;
+    // rolling(直近N年)では最新年を採用（例: 直近1年(2025-08-30〜2026-08-29)なら2026年）
+    return state.availableYears[0] || new Date().getFullYear();
+  }
+
   /* ===== ユーティリティ ===== */
   const num = n => Number(n || 0).toLocaleString('ja-JP');
+  const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   function normalizePlatform(platform) {
     const s = String(platform || '').toLowerCase().trim();
@@ -548,6 +558,72 @@
     attachHover(canvas);
   }
 
+  /* ===== 流行語 ===== */
+  function buzzwordsBodyHtml() {
+    if (state.buzzwordsLoading) {
+      return '<div class="ns-buzzwords-loading"><span class="ns-skel ns-skel-title" style="width:160px"></span><div class="ns-buzzwords-skel">' + '<span class="ns-skel" style="height:18px"></span>'.repeat(5) + '</div></div>';
+    }
+    const bw = state.buzzwords;
+    if (!bw) return '<p class="ns-buzzwords-empty">読み込み中…</p>';
+    if (!bw.buzzwords || !bw.buzzwords.length) {
+      return `<p class="ns-buzzwords-empty">この年はまだ十分な字幕データがありません<br><small>${bw.total_videos || 0}本の動画</small></p>`;
+    }
+    const y = bw.year;
+    const list = state.buzzwordsExpanded ? bw.buzzwords : bw.buzzwords.slice(0, 10);
+    const maxScore = list[0]?.score || 100;
+    const html = '<ul class="ns-buzzwords-list" role="list">' + list.map(item => {
+      const pct = Math.max(8, (item.score / maxScore) * 100);
+      const href = `/archive.php?q=${encodeURIComponent(item.word)}`;
+      return `<li class="ns-buzzwords-item">`
+        + `<span class="ns-bw-rank">${item.rank}</span>`
+        + `<a class="ns-bw-word" href="${href}" target="_blank" rel="noopener">${esc(item.word)}</a>`
+        + `<span class="ns-bw-bar"><i style="width:${pct.toFixed(1)}%"></i></span>`
+        + `<span class="ns-bw-count">${num(item.count)}<em>回</em></span>`
+        + `</li>`;
+    }).join('') + '</ul>';
+    const meta = `<div class="ns-buzzwords-meta">${y}年 ${bw.total_videos}本の動画から抽出${bw.updated_at ? ` · 更新 ${bw.updated_at.slice(0,10)}` : ''}</div>`;
+    const more = bw.buzzwords.length > 10
+      ? `<button type="button" class="ns-buzzwords-more" data-expand="${state.buzzwordsExpanded ? '0' : '1'}">${state.buzzwordsExpanded ? '閉じる' : `もっと見る（あと${bw.buzzwords.length - 10}語）`}</button>`
+      : '';
+    return meta + html + more;
+  }
+
+  async function loadBuzzwords() {
+    const y = buzzwordsYear();
+    if (!y) return;
+    // キャッシュが同じ年なら再取得しない
+    if (state.buzzwords && state.buzzwords.year === y && !state.buzzwordsLoading) return;
+    state.buzzwordsLoading = true;
+    // 既に描画済みならローディング表示を差し込む
+    const body = document.getElementById('ns-buzzwords-body');
+    if (body) body.innerHTML = buzzwordsBodyHtml();
+    try {
+      const res = await fetch(`/api/buzzwords?year=${y}&top=20`);
+      if (!res.ok) throw new Error('buzzwords ' + res.status);
+      const data = await res.json();
+      // yearが単年の場合と全年分の場合で形が違うので正規化
+      if (data.buzzwords) {
+        state.buzzwords = data;
+      } else if (data.by_year) {
+        const arr = data.by_year[String(y)] || [];
+        state.buzzwords = { year: y, buzzwords: arr, total_videos: data.total_videos_by_year?.[String(y)] || 0, updated_at: data.updated_at, available_years: data.available_years };
+      } else {
+        state.buzzwords = data;
+      }
+    } catch (e) {
+      console.error('Failed to load buzzwords:', e);
+      state.buzzwords = { year: y, buzzwords: [], total_videos: 0, error: String(e) };
+    } finally {
+      state.buzzwordsLoading = false;
+      const body2 = document.getElementById('ns-buzzwords-body');
+      if (body2) {
+        body2.innerHTML = buzzwordsBodyHtml();
+        const container = document.getElementById(state.containerId);
+        if (container) bindBuzzwords(container);
+      }
+    }
+  }
+
   /* ===== HTML 組み立て ===== */
   function summaryHtml() {
     const s = state.data.summary || {};
@@ -658,11 +734,19 @@
           <div class="ns-card-head"><h3 class="ns-card-title">時間帯ごとの傾向<span class="ns-card-note">（時・JST）</span></h3></div>
           <div class="ns-canvas-wrap"><canvas id="ns-chart-hour" role="img" aria-label="時間帯別の通知件数グラフ"></canvas></div>
         </section>
+
+        <section class="ns-card ns-buzzwords-card">
+          <div class="ns-card-head"><h3 class="ns-card-title">年間流行語<span class="ns-card-note">（字幕から抽出）</span></h3></div>
+          <div id="ns-buzzwords-body">${buzzwordsBodyHtml()}</div>
+        </section>
       </div>`;
 
     bindRange(container);
     bindSeg(container);
+    bindBuzzwords(container);
     drawAll();
+    // 流行語は年が確定してから非同期で取得（統計の availableYears が必要）
+    loadBuzzwords();
   }
 
   function bindRange(container) {
@@ -673,7 +757,20 @@
           : { mode: 'rolling', years: parseInt(btn.dataset.years, 10), year: null };
         if (isActiveRange(next)) return;
         state.range = next;
+        state.buzzwordsExpanded = false;
         load(container, true);
+      });
+    });
+  }
+
+  function bindBuzzwords(container) {
+    const body = container.querySelector('#ns-buzzwords-body');
+    if (!body) return;
+    body.querySelectorAll('.ns-buzzwords-more').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.buzzwordsExpanded = !state.buzzwordsExpanded;
+        body.innerHTML = buzzwordsBodyHtml();
+        bindBuzzwords(container);
       });
     });
   }
@@ -706,7 +803,7 @@
       <div class="ns-root is-loading">
         <div class="ns-toolbar">${rangeHtml()}</div>
         <div class="ns-summary">${'<div class="ns-stat"><span class="ns-skel ns-skel-val"></span><span class="ns-skel ns-skel-label"></span></div>'.repeat(6)}</div>
-        ${'<section class="ns-card"><div class="ns-card-head"><span class="ns-skel ns-skel-title"></span></div><div class="ns-skel ns-skel-chart"></div></section>'.repeat(3)}
+        ${'<section class="ns-card"><div class="ns-card-head"><span class="ns-skel ns-skel-title"></span></div><div class="ns-skel ns-skel-chart"></div></section>'.repeat(4)}
       </div>`;
     bindRange(container);
   }
