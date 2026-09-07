@@ -24,6 +24,11 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 300;
 const cache = new Map();
 
+// --- ヘルスチェック / サーキットブレーカー ---
+// 上流がダウンしていると検知したら、毎回のフルタイムアウト待ちを避けて即座にフォールバックする
+const HEALTH_TTL_MS = 15000; // ヘルス状態を保持する時間
+const upstreamState = { healthy: null, checkedAt: 0 };
+
 function cacheGet(key) {
   const hit = cache.get(key);
   if (!hit) return null;
@@ -37,12 +42,43 @@ function cacheGet(key) {
   return hit.value;
 }
 
+/** 期限切れでも古い値を返す（上流ダウン時のフォールバック用） */
+function cacheGetStale(key) {
+  const hit = cache.get(key);
+  if (!hit) return null;
+  cache.delete(key);
+  cache.set(key, hit);
+  return hit.value;
+}
+
 function cacheSet(key, value) {
   if (cache.size >= CACHE_MAX_ENTRIES) {
     const oldest = cache.keys().next().value;
     if (oldest !== undefined) cache.delete(oldest);
   }
   cache.set(key, { value, expires: Date.now() + CACHE_TTL_MS });
+}
+
+/** 上流が「直近にダウンと判定された」状態か（cooldown 中なら true） */
+function isUpstreamDown() {
+  if (upstreamState.healthy === false && Date.now() - upstreamState.checkedAt < HEALTH_TTL_MS) return true;
+  return false;
+}
+
+function markUpstream(healthy, err) {
+  upstreamState.healthy = healthy;
+  upstreamState.checkedAt = Date.now();
+  if (!healthy) upstreamState.lastError = String((err && err.message) || err);
+}
+
+/** 上流の /api/health を短タイムアウトで確認し状態を更新する */
+async function refreshHealth() {
+  try {
+    const res = await fetchUpstream("/api/health", 3000);
+    markUpstream(res.ok, res.ok ? null : new Error(`HTTP ${res.status}`));
+  } catch (err) {
+    markUpstream(false, err);
+  }
 }
 
 async function fetchUpstream(pathWithQuery, timeoutMs) {
@@ -55,6 +91,16 @@ async function fetchUpstream(pathWithQuery, timeoutMs) {
   }
 }
 
+/** 上流がダウンしている場合に、利用可能なら stale キャッシュ、なければ null を返す */
+function serveStaleOrNull(res, cacheKey) {
+  const stale = cacheGetStale(cacheKey);
+  if (stale) {
+    res.set("X-Archive-Cache", "STALE");
+    return res.status(stale.status).json(stale.body);
+  }
+  return null;
+}
+
 /** 上流の JSON をキャッシュ付きで中継する */
 async function proxyJson(res, pathWithQuery, { timeoutMs = JSON_TIMEOUT_MS, useCache = true } = {}) {
   if (useCache) {
@@ -65,16 +111,30 @@ async function proxyJson(res, pathWithQuery, { timeoutMs = JSON_TIMEOUT_MS, useC
     }
   }
 
+  // ダウン cooldown 中はフルタイムアウトを避けて即座にフォールバック
+  if (useCache && isUpstreamDown()) {
+    const stale = serveStaleOrNull(res, pathWithQuery);
+    if (stale) return stale;
+    return res.status(503).json({ error: "アーカイブAPIが現在利用できません（前回の接続失敗から復旧待ち）" });
+  }
+
   let upstream;
   try {
     upstream = await fetchUpstream(pathWithQuery, timeoutMs);
   } catch (err) {
+    markUpstream(false, err);
     const aborted = err && err.name === "AbortError";
+    // ダウン時は stale があればそれを返す
+    const stale = useCache ? serveStaleOrNull(res, pathWithQuery) : null;
+    if (stale) return stale;
     return res.status(aborted ? 504 : 502).json({
       error: aborted ? "アーカイブAPIがタイムアウトしました" : "アーカイブAPIに接続できません",
       detail: String((err && err.message) || err),
     });
   }
+
+  // 成功したらヘルス状態を復旧させる
+  markUpstream(true, null);
 
   let body;
   try {
@@ -104,7 +164,11 @@ const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 
 function register(app) {
   app.get("/api/archive/health", async (req, res) => {
-    await proxyJson(res, "/api/health", { useCache: false });
+    await refreshHealth();
+    const body = { status: upstreamState.healthy ? "ok" : "down", upstream: upstreamState.healthy ? "ok" : "down", checkedAt: upstreamState.checkedAt };
+    const status = upstreamState.healthy ? 200 : 503;
+    res.set("Access-Control-Allow-Origin", "*");
+    return res.status(status).json(body);
   });
 
   app.get("/api/archive/stats", async (req, res) => {
@@ -172,4 +236,4 @@ function register(app) {
   });
 }
 
-module.exports = { register, ARCHIVE_API_BASE };
+module.exports = { register, ARCHIVE_API_BASE, refreshHealth, isUpstreamDown };
