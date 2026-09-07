@@ -72,10 +72,13 @@ async function upsertEvent(ev) {
     // 経由で先に作られた同一配信の予定（platform = 'twitter' 等）が対象外になり、
     // 重複が作られていた。ここでは event_type = 'live' の行を広く候補にする。
     // ※ ended の行は対象外（古い動画が未来の予定を誤上書き防止）
+    // ※ status は scheduled だけでなく live も対象。ライブ開始後に別プラットフォーム
+    //    経由で登録された同行程（platform='twitter' 等）が published 済みのまま残ると、
+    //    YouTube版が重複INSERTされていたため。
     const sqlNearDuplicateCandidates = `
         SELECT id, start_time FROM events
         WHERE event_type = 'live'
-          AND status = 'scheduled'
+          AND status IN ('scheduled', 'live')
           AND (external_id IS NULL OR external_id != ?)
     `;
 
@@ -86,7 +89,7 @@ async function upsertEvent(ev) {
     const sqlEstimatedCandidates = `
         SELECT id, start_time, time_period FROM events
         WHERE event_type = 'live'
-          AND status = 'scheduled'
+          AND status IN ('scheduled', 'live')
           AND time_period IS NOT NULL
           AND (external_id IS NULL OR external_id != ?)
     `;
@@ -137,7 +140,7 @@ async function upsertEvent(ev) {
                 const checkUrlMatch = (callback) => {
                     if (!ev.url) return callback(null);
                     db.get(
-                        "SELECT id FROM events WHERE url = ? AND url IS NOT NULL AND url != '' AND event_type = 'live' AND status = 'scheduled'",
+                        "SELECT id FROM events WHERE url = ? AND url IS NOT NULL AND url != '' AND event_type = 'live' AND status IN ('scheduled', 'live')",
                         [ev.url],
                         callback
                     );
