@@ -26,7 +26,7 @@ const LEGACY_COOKIE_NAME = 'auth_token';
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
+  sameSite: 'strict',
   path: '/',
   maxAge: 365 * 24 * 60 * 60 * 1000, // 365日
 };

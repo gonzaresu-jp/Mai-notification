@@ -46,11 +46,28 @@ const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 150, standardHeaders: t
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
+// 同一オリジンの Web UI / デスクトップアプリ / ローカル開発のみ許可する、オリジン制限付き CORS。
+// ブラウザは credentials 付きリクエストに `*` を許さないため、実際の送信元を echo する形にし、
+// 許可外のオリジンにはヘッダーを付与しない（= ブラウザがブロックする）。
+const allowedCorsOrigins = [
+  (process.env.PUBLIC_URL || "").replace(/\/+$/, ""),
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+  "http://localhost:3008",
+  "http://127.0.0.1:3008",
+].filter(Boolean);
+
 app.use((req, res, next) => {
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  const origin = req.headers.origin;
+  const host = req.get("host");
+  const sameOrigin = !!origin && !!host && (origin === `http://${host}` || origin === `https://${host}`);
+  const allowed = sameOrigin || allowedCorsOrigins.some((o) => !!o && origin === o);
+  if (allowed) {
+    res.set("Access-Control-Allow-Origin", origin || "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(allowed ? 204 : 403);
   next();
 });
 app.use("/pushweb", express.static(path.join(__dirname, "pushweb")));
@@ -79,7 +96,12 @@ app.use("/api/", apiLimiter);
 
 // --- SSE endpoint (must be before /api/events/:id) ---
 app.get("/api/events/stream", (req, res) => {
-  res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive", "Access-Control-Allow-Origin": "*" });
+  const sseOrigin = req.headers.origin;
+  const sseHost = req.get("host");
+  const sseSameOrigin = !!sseOrigin && !!sseHost && (sseOrigin === `http://${sseHost}` || sseOrigin === `https://${sseHost}`);
+  const sseAllowed = sseSameOrigin || allowedCorsOrigins.some((o) => !!o && sseOrigin === o);
+  const acao = sseAllowed ? (sseOrigin || "*") : undefined;
+  res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive", ...(acao ? { "Access-Control-Allow-Origin": acao } : {}) });
   res.write(": connected\n\n");
   ctx.sseClients.add(res);
   req.on("close", () => { ctx.sseClients.delete(res); try { res.end(); } catch {} });
@@ -111,6 +133,10 @@ if (ctx.vapidConfig.vapidPublicKey !== "test-key") {
 
 // --- Periodic Tasks ---
 startPeriodicTasks();
+
+// --- アーカイブ上流(.70:8766)のヘルスを定期監視（サーキットブレーカー用） ---
+const archiveRoutes = require("./routes/archive");
+setInterval(() => { archiveRoutes.refreshHealth().catch(() => {}); }, 20000);
 
 // --- ベクトルDB同期（VECTOR_DB_URL / EMBEDDING_ENDPOINT 設定時のみ稼働） ---
 require("./services/vector-sync").startVectorSync();
