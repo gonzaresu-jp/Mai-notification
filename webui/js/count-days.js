@@ -50,6 +50,7 @@ function parseYMD(ymd) {
   const DEBUT_DATE  = new Date(2021, 2, 21);
   const BIRTHDAY    = { month: 0, day: 7  };
   const ANNIVERSARY = { month: 2, day: 21 };
+  const LOVE_ANNIVERSARY = { month: 7, day: 17 }; // 付き合った記念日（8月17日）
   const UPDATE_INTERVAL = 60 * 1000;
 
   function nextOccurrence(monthZeroBased, day) {
@@ -77,6 +78,7 @@ function parseYMD(ymd) {
     setValue('days-since-debut',    Math.max(0, daysSince(DEBUT_DATE)), DEBUT_DATE);
     setValue('days-to-birthday',    daysDiff(nextOccurrence(BIRTHDAY.month,    BIRTHDAY.day),    now));
     setValue('days-to-anniversary', daysDiff(nextOccurrence(ANNIVERSARY.month, ANNIVERSARY.day), now));
+    setValue('days-to-love-anniversary', daysDiff(nextOccurrence(LOVE_ANNIVERSARY.month, LOVE_ANNIVERSARY.day), now));
   }
 
   if (document.readyState === 'loading') {
