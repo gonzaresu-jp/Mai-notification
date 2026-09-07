@@ -543,6 +543,11 @@
 .ns-buzzwords-more { display: block; width: 100%; margin-top: 10px; padding: 7px; border: 1px solid rgba(177,30,124,.18); border-radius: 8px; background: #fff; color: #b11e7c; font-size: .78rem; font-weight: 700; cursor: pointer; }
 .ns-buzzwords-more:hover { background: #fbeef6; }
 .ns-buzzwords-loading .ns-buzzwords-skel { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.ns-buzzwords-item.has-ex { flex-wrap: wrap; }
+.ns-bw-ex { flex: 1 0 100%; margin: 2px 0 2px 30px; font-size: .66rem; color: #8a7b83; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ns-bw-ex a { color: #7a5a6a; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; border-bottom: 1px dotted rgba(177,30,124,.22); padding-bottom: 1px; }
+.ns-bw-ex a:hover { color: #b11e7c; border-bottom-color: #b11e7c; }
+.ns-bw-ex-sep { color: #d6c2d0; font-size: .6rem; }
 
 @media (max-width: 560px) {
     .ns-wrapper { padding: 12px 10px; }
