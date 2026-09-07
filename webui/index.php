@@ -270,7 +270,7 @@
                                 <h2 class="marker">カウント</h2>
 
                                 <div class="stats-grid">
-                                    <div class="stat-item">
+                                    <div class="stat-item stat-wide">
                                         <button type="button" class="stat-copy-btn" data-copy-target="days-since-debut"
                                             aria-label="デビューからの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
                                         <div class="label">デビューから</div>
@@ -279,11 +279,12 @@
                                     </div>
 
                                     <!-- お誕生日＋周年記念をペアに（スマホで1セル結合・PCは従来通り） -->
-                                    <div class="stat-pair">
+<!-- 付き合った記念日＋推してからをペアに（PCで偶数維持・スマホは従来通り個別セル） -->
+                                    <div class="stat-pair stat-pair-keep">
                                         <div class="stat-item stat-half">
                                             <button type="button" class="stat-copy-btn" data-copy-target="days-to-birthday"
                                                 aria-label="お誕生日までの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
-                                            <div class="label">お誕生日まで</div>
+                                            <div class="label">お誕生日まで <span class="label-date">1月7日</span></div>
                                             <div class="value" id="days-to-birthday" aria-live="polite" aria-atomic="true">0
                                             </div>
                                         </div>
@@ -292,17 +293,29 @@
                                             <button type="button" class="stat-copy-btn"
                                                 data-copy-target="days-to-anniversary" aria-label="周年記念までの日数をコピー"><i
                                                     class="fa-regular fa-clipboard"></i></button>
-                                            <div class="label">周年記念まで</div>
+                                            <div class="label">周年記念まで <span class="label-date">3月21日</span></div>
                                             <div class="value" id="days-to-anniversary" aria-live="polite"
                                                 aria-atomic="true">0</div>
                                         </div>
                                     </div>
 
-                                    <div class="stat-item">
-                                        <button type="button" class="stat-copy-btn" data-copy-target="days-to-meet"
-                                            aria-label="推してからの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
-                                        <div class="label">推してから</div>
-                                        <div class="value" id="days-to-meet" aria-live="polite" aria-atomic="true">0
+<div class="stat-pair">
+                                        <div class="stat-item stat-half">
+                                            <button type="button" class="stat-copy-btn"
+                                                data-copy-target="days-to-love-anniversary"
+                                                aria-label="付き合った記念日までの日数をコピー"><i
+                                                    class="fa-regular fa-clipboard"></i></button>
+                                            <div class="label">付き合った記念日まで <span class="label-date">8月17日</span></div>
+                                            <div class="value" id="days-to-love-anniversary" aria-live="polite"
+                                                aria-atomic="true">0</div>
+                                        </div>
+
+                                        <div class="stat-item stat-half">
+                                            <button type="button" class="stat-copy-btn" data-copy-target="days-to-meet"
+                                                aria-label="推してからの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
+                                            <div class="label">推してから</div>
+                                            <div class="value" id="days-to-meet" aria-live="polite" aria-atomic="true">0
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

@@ -179,9 +179,9 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* 1項目でも非表示（=実質3件表示）なら1行3列で横並び */
-.count-page .stats-grid:has(.stat-item[style*="display: none"]) {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+/* デビュー行を全幅にして、下段のペアと組み合わせで必ず偶数個に揃える */
+.count-page .stat-wide {
+  grid-column: 1 / -1;
 }
 
 .count-page .stat-item {
@@ -338,6 +338,14 @@
   color: var(--color-text);
   margin-top: 0.25rem;
   font-weight: 500;
+}
+
+.stat-item .label-date {
+  font-size: 0.78em;
+  font-weight: 600;
+  color: #b11e7c;
+  margin-left: 0.35em;
+  white-space: nowrap;
 }
 
 /* ===== カルーセル親 ===== */
@@ -1863,6 +1871,12 @@
 
 /* --- お誕生日＋周年記念の結合セル（PCは従来の4セル、スマホで1セル左右分割） --- */
 .count-page .stat-pair { display: contents; }
+
+/* ペアの片方が非表示（推してから未設定）でも、残ったセルを全幅に伸ばして偶数構成を維持 */
+.count-page .stat-pair:has(.stat-item[style*="display: none"]) .stat-half {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 768px) {
   .count-page .stat-pair {
     display: flex;
@@ -1871,6 +1885,12 @@
     border-radius: 10px;
     overflow: hidden;
   }
+
+  /* このペアは結合しない（スマホでは従来通り個別セル表示） */
+  .count-page .stat-pair.stat-pair-keep {
+    display: contents;
+  }
+
   .count-page .stat-pair .stat-half {
     flex: 1 1 0; min-width: 0; background: transparent; border: none; border-radius: 0;
     padding: .85rem 1rem; animation: none;
