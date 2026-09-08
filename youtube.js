@@ -200,6 +200,21 @@ async function subscribeAllChannels() {
     console.log('[YouTube Sub] 完了');
 }
 
+// 購読リース(hub.lease_seconds=5日)を考慮し、3日ごとに再購読
+// 503等の一時失敗があっても次の周期で再試行される
+const RESUBSCRIBE_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000; // 3日
+
+function startAutomaticResubscribe() {
+    setInterval(async () => {
+        try {
+            await subscribeAllChannels();
+        } catch (e) {
+            console.error('[YouTube Sub] 定期再購読エラー:', e.message || e);
+        }
+    }, RESUBSCRIBE_INTERVAL_MS);
+    console.log(`[YouTube Sub] 定期再購読を開始（間隔: ${RESUBSCRIBE_INTERVAL_MS / (24*60*60*1000)}日）`);
+}
+
 /** Webhook server start */
 function startWebhook(port = 3001) {
     const app = express();
@@ -539,5 +554,6 @@ module.exports = {
     pollForEndedLives,
     init,
     startWebhook,
-    subscribeAllChannels
+    subscribeAllChannels,
+    startAutomaticResubscribe
 };

@@ -428,6 +428,12 @@ async function main() {
               console.log("✅ YouTube ライブ終了ポーリングを開始しました。");
             }
             // ★★★ 追加ここまで ★★★
+
+            // ★★★ 定期再購読開始（PubSubHubbub リース更新） ★★★
+            if (typeof youtube.startAutomaticResubscribe === "function") {
+              youtube.startAutomaticResubscribe();
+              console.log("✅ YouTube 購読の定期更新を開始しました。");
+            }
           } catch (e) {
             console.error(
               "YouTube webhook 起動エラー:",
