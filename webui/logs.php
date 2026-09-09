@@ -11,8 +11,11 @@ $updateLogs = [
             "change" => [
                 "robots meta を条件分岐化（$robotsNoindex で noindex,follow に切替）。?q= 付き検索URLは noindex 化し canonical は /archive/ に集約",
             ],
+            "fix" => [
+                "全ページの空/欠落した <img alt> を修正 — フッターのプラットフォームアイコン・ヘッダーの通知トグル/アバター・アーカイブのサムネイル/立ち絵・メディア/次回予定サムネイル等に説明的な代替テキストを付与（Bingの画像Alt指摘13件対応）",
+            ],
         ],
-        "lines" => "27,151",
+        "lines" => "27,168",
     ],
 
     [

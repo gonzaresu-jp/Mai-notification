@@ -9,7 +9,7 @@
       aria-label="YouTube (main)" data-tooltip="YouTube (main)">
       <picture>
         <source srcset="/logo/yt-main.webp" type="image/webp">
-        <img src="/assets/icons/youtube-sub.svg" alt="">
+        <img src="/assets/icons/youtube-sub.svg" alt="YouTube">
       </picture>
     </a>
 
@@ -18,7 +18,7 @@
       aria-label="YouTube (sub)" data-tooltip="YouTube (sub)">
       <picture>
         <source srcset="/logo/yt-sub.webp" type="image/webp">
-        <img src="/assets/icons/youtube-sub.svg" alt="">
+        <img src="/assets/icons/youtube-sub.svg" alt="YouTube">
       </picture>
     </a>
 
@@ -35,7 +35,7 @@
       aria-label="Pixiv Fanbox" data-tooltip="Pixiv Fanbox">
       <picture>
         <source srcset="/logo/fanbox.webp" type="image/webp">
-        <img src="/assets/icons/fanbox.svg" alt="">
+        <img src="/assets/icons/fanbox.svg" alt="Pixiv Fanbox">
       </picture>
     </a>
 
@@ -44,7 +44,7 @@
       aria-label="TwitCasting" data-tooltip="TwitCasting">
       <picture>
         <source srcset="https://twitcasting.tv/img/top/icon_application02.png" type="image/png">
-        <img src="https://twitcasting.tv/img/top/icon_application02.png" alt="">
+        <img src="https://twitcasting.tv/img/top/icon_application02.png" alt="TwitCasting">
       </picture>
     </a>
 
@@ -53,7 +53,7 @@
       aria-label="Twitch" data-tooltip="Twitch">
       <picture>
         <source srcset="https://assets.twitch.tv/assets/favicon-32-e29e246c157142c94346.png" type="image/png">
-        <img src="https://assets.twitch.tv/assets/favicon-32-e29e246c157142c94346.png" alt="">
+        <img src="https://assets.twitch.tv/assets/favicon-32-e29e246c157142c94346.png" alt="Twitch">
       </picture>
     </a>
 
@@ -62,7 +62,7 @@
       aria-label="bilibili" data-tooltip="bilibili">
       <picture>
         <source srcset="https://www.bilibili.com/favicon.ico" type="image/ico">
-        <img src="https://www.bilibili.com/favicon.ico" alt="">
+        <img src="https://www.bilibili.com/favicon.ico" alt="bilibili">
       </picture>
     </a>
 
@@ -71,7 +71,7 @@
       rel="noopener noreferrer" aria-label="マシュマロ" data-tooltip="マシュマロ">
       <picture>
         <source srcset="/logo/mashumaro.webp" type="image/webp">
-        <img src="/logo/mashumaro.svg" alt="">
+        <img src="/logo/mashumaro.svg" alt="マシュマロ">
       </picture>
     </a>
 
@@ -80,7 +80,7 @@
       aria-label="booth" data-tooltip="booth">
       <picture>
         <source srcset="https://asset.booth.pm/favicon.ico" type="image/ico">
-        <img src="https://asset.booth.pm/favicon.ico" alt="">
+        <img src="https://asset.booth.pm/favicon.ico" alt="booth">
       </picture>
     </a>
 
@@ -89,7 +89,7 @@
       target="_blank" rel="noopener noreferrer" aria-label="Gipt" data-tooltip="Gipt">
       <picture>
         <source srcset="/logo/gipt.ico" type="image/ico">
-        <img src="/logo/gipt.ico" alt="">
+        <img src="/logo/gipt.ico" alt="Gipt">
       </picture>
     </a>
 
@@ -98,7 +98,7 @@
       rel="noopener noreferrer" aria-label="DLsite" data-tooltip="DLsite">
       <picture>
         <source srcset="https://www.dlsite.com/images/web/common/favicon.ico" type="image/ico">
-        <img src="https://www.dlsite.com/images/web/common/favicon.ico" alt="">
+        <img src="https://www.dlsite.com/images/web/common/favicon.ico" alt="DLsite">
       </picture>
     </a>
 

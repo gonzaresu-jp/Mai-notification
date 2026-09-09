@@ -936,10 +936,10 @@
 
     <!-- 左右の立ち絵（装飾。スクロール量に応じて archive.js が transform を更新する） -->
     <div class="ar-deco ar-deco-left" data-speed="0.8" aria-hidden="true">
-        <img src="/archive01.webp" alt="" width="512" height="512" decoding="async" fetchpriority="low" />
+        <img src="/archive01.webp" alt="まいちゃんの立ち絵" width="512" height="512" decoding="async" fetchpriority="low" />
     </div>
     <div class="ar-deco ar-deco-right" data-speed="0.8" aria-hidden="true">
-        <img src="/archive02.webp" alt="" width="512" height="512" decoding="async" fetchpriority="low" />
+        <img src="/archive02.webp" alt="まいちゃんの立ち絵" width="512" height="512" decoding="async" fetchpriority="low" />
     </div>
 
     <main>
@@ -977,7 +977,7 @@
                 <li>
                     <a href="<?= htmlspecialchars(isset($row['url']) ? $row['url'] : '#') ?>" rel="noopener noreferrer" target="_blank">
                         <span class="ar-seo-thumb"><img src="/api/thumbnail/<?= htmlspecialchars($row['video_id'] ?? '') ?>"
-                                alt="" width="96" height="54" loading="lazy" decoding="async" /></span>
+                                alt="<?= htmlspecialchars(($row['title'] ?? '') . ' のサムネイル') ?>" width="96" height="54" loading="lazy" decoding="async" /></span>
                         <span class="ar-seo-meta">
                             <span class="ar-seo-title"><?= htmlspecialchars($row['title'] ?? '') ?></span>
                             <span class="ar-seo-date"><?= htmlspecialchars($row['stream_date_jst'] ?? '') ?> 公開</span>

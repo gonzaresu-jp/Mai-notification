@@ -520,7 +520,7 @@ include __DIR__ . '/head.php';
         const thumbHtml = isVideo
           ? `<video src="${item.file_url}" preload="metadata" muted></video>
              <div class="video-badge"><i class="fa-solid fa-play"></i> 動画</div>`
-          : `<img src="${item.file_url}" alt="" loading="lazy">`;
+          : `<img src="${item.file_url}" alt="${escapeHtml((item.tweet_text || '恋乃夜まい メディア').slice(0, 80))}" loading="lazy">`;
 
         card.innerHTML = `
           <div class="media-card-thumb" style="--bg-url: url('${item.file_url}')">${thumbHtml}</div>
@@ -824,7 +824,7 @@ include __DIR__ . '/head.php';
         if (isVideo) {
           html = `<video src="${item.file_url}" controls autoplay style="max-width:${maxW}px;max-height:${maxH}px;"></video>`;
         } else {
-          html = `<img src="${item.file_url}" alt="" style="max-width:${maxW}px;max-height:${maxH}px;object-fit:contain;">`;
+          html = `<img src="${item.file_url}" alt="${escapeHtml((item.tweet_text || '恋乃夜まい メディア').slice(0, 80))}" style="max-width:${maxW}px;max-height:${maxH}px;object-fit:contain;">`;
         }
         html += `
           <div class="media-lightbox-actions">
