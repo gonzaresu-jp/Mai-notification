@@ -103,7 +103,7 @@ async function loadRSS(){
                     </div>
                     <div class="date">${date}</div>
                     <div>${desc}</div>
-                    ${img ? `<img src="${img}">` : ""}
+                    ${img ? `<img src="${img}" alt="${title}">` : ""}
                 </div>
             `;
         }).join("");
