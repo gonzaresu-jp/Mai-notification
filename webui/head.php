@@ -50,8 +50,8 @@ $image = isset($pageImage) ? $pageImage : $defaultImage;
 <!-- canonical：重複URLペナルティ防止 -->
 <link rel="canonical" href="<?= htmlspecialchars($currentUrl) ?>" />
 
-<!-- robots -->
-<meta name="robots" content="index, follow" />
+<!-- robots: 検索結果ページ等は $robotsNoindex で noindex,follow に切り替え -->
+<meta name="robots" content="<?= isset($robotsNoindex) && $robotsNoindex ? 'noindex, follow' : 'index, follow' ?>" />
 
 <!-- =====================================================
      OGP（Open Graph）

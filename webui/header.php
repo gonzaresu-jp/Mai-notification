@@ -206,6 +206,7 @@
             <li><a href="https://github.com/gonzaresu-jp/Mai-notification" target="_blank"
                     rel="noopener noreferrer">GitHubページ(使用方法)</a></li>
             <li><a href="/info/" rel="noopener noreferrer">このサービスについて</a></li>
+            <li><a href="/guide.php" rel="noopener noreferrer">使い方・対応一覧</a></li>
             <li><a href="/future/" rel="noopener noreferrer">今後の開発予定</a></li>
             <li><a href="/download/" rel="noopener noreferrer">Androidアプリをダウンロード</a></li>
             <li><a href="/logs/" rel="noopener noreferrer">Update logs</a></li>

@@ -1,6 +1,21 @@
 <?php
 $updateLogs = [
     [
+        "date" => "2026-09-10",
+        "details" => [
+            "add" => [
+                "配信アーカイブページ（/archive）のSEO対応 — H1化、検索エンジン向けに「カテゴリから探す」「最新の配信アーカイブ」をサーバーサイド描画（カテゴリURL対応）、CollectionPage/ItemList（VideoObject×12件）の構造化データを追加",
+                "使い方・対応一覧ページを新設（/guide.php）— サービス概要・対応プラットフォーム・設定の3ステップ・FAQ（FAQPage構造化データ）を提供。SEO用の本文テキストは新規ページでまかなう方針（index.php は見た目維持のため非変更）",
+                "ヘッダーナビに「使い方・対応一覧」リンクを追加、sitemap.xml を刷新（/archive・/guide.php・/twitter-media/ 等を追加し lastmod を更新）",
+            ],
+            "change" => [
+                "robots meta を条件分岐化（$robotsNoindex で noindex,follow に切替）。?q= 付き検索URLは noindex 化し canonical は /archive/ に集約",
+            ],
+        ],
+        "lines" => "27,151",
+    ],
+
+    [
         "date" => "2026-09-08",
         "details" => [
             "add" => [

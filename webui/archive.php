@@ -5,6 +5,67 @@
     <?php
     $pageTitle = "配信アーカイブ検索";
     $pageDesc = "恋乃夜まいの配信アーカイブを横断検索できるページ。タイトル・文字起こし・コメント・ライブチャットを全文検索し、該当箇所のタイムスタンプ付きURLからYouTubeへ直接ジャンプできます。";
+
+    // ---- SEO: 検索クエリ付きページはインデックスしない（アーカイブ本文のみインデックス） ----
+    $robotsNoindex = !empty($_GET['q']) && trim((string)$_GET['q']) !== '';
+
+    // ---- SEO: サーバーサイドで直近アーカイブを描画（検索エンジン向け本文） ----
+    $seoArchives = array();
+    $seoCategories = array();
+    $seoArchiveTotal = 0;
+    $seoJsonLd = '';
+
+    function mai_archive_fetch($path, $timeoutSec = 6)
+    {
+        $url = 'https://mai.honna-yuzuki.com' . $path;
+        $ctx = stream_context_create(array(
+            'http' => array('timeout' => $timeoutSec, 'ignore_errors' => true),
+            'ssl'  => array('verify_peer' => false, 'verify_peer_name' => false),
+        ));
+        $body = @file_get_contents($url, false, $ctx);
+        if ($body === false) return null;
+        $data = json_decode($body, true);
+        return is_array($data) ? $data : null;
+    }
+
+    $arCategory = (isset($_GET['category']) && trim((string)$_GET['category']) !== '')
+        ? rawurlencode(trim((string)$_GET['category'])) : '';
+    $arList = mai_archive_fetch('/api/archive/videos?limit=12&sort=stream_at_desc'
+        . ($arCategory !== '' ? '&category=' . $arCategory : ''));
+    if ($arList !== null) {
+        $seoArchives = (isset($arList['videos']) && is_array($arList['videos'])) ? $arList['videos'] : array();
+        $seoArchiveTotal = isset($arList['total']) ? (int)$arList['total'] : count($seoArchives);
+    }
+    $arStats = mai_archive_fetch('/api/archive/stats');
+    if ($arStats !== null && isset($arStats['categories']) && is_array($arStats['categories'])) {
+        arsort($arStats['categories']);
+        $seoCategories = array_keys($arStats['categories']);
+    }
+
+    if (!empty($seoArchives)) {
+        $itemList = array();
+        foreach ($seoArchives as $row) {
+            $uploadDate = isset($row['stream_date_jst']) ? str_replace(' ', 'T', $row['stream_date_jst']) . '+09:00' : '';
+            $itemList[] = array(
+                '@type' => 'VideoObject',
+                'name' => isset($row['title']) ? $row['title'] : '',
+                'url' => isset($row['url']) ? $row['url'] : '',
+                'thumbnailUrl' => 'https://mai.honna-yuzuki.com' . (isset($row['thumbnail']) ? $row['thumbnail'] : ''),
+                'uploadDate' => $uploadDate,
+            );
+        }
+        $seoJsonLd = json_encode(array(
+            '@context' => 'https://schema.org',
+            '@type' => 'CollectionPage',
+            'name' => '恋乃夜まい 配信アーカイブ一覧',
+            'description' => '恋乃夜まい（まいちゃん）の配信アーカイブ。YouTubeで公開されたアーカイブを一覧掲載。タイトル・文字起こし・コメント検索にも対応。',
+            'url' => 'https://mai.honna-yuzuki.com/archive',
+            'mainEntity' => array(
+                '@type' => 'ItemList',
+                'itemListElement' => $itemList,
+            ),
+        ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
     $extraHead = '
     <style type="text/css">
         /* display:flex を持つ要素は UA の [hidden] より詳細度が高いので明示的に打ち消す */
@@ -70,6 +131,7 @@
             line-height: 1.7;
         }
 
+        .ar-intro h1,
         .ar-intro h2 {
             font-size: 1.3rem;
             color: var(--color-primary);
@@ -735,14 +797,135 @@
                 transform: none;
             }
 
-            .ar-skeleton .sk,
-            .ar-skeleton .ar-thumb {
-                animation: none;
+.ar-skeleton .sk,
+                .ar-skeleton .ar-thumb {
+                    animation: none;
+                }
             }
+
+        /* ---------- SEO向けサーバーサイド描画（検索エンジン用） ---------- */
+        .ar-seo-recent,
+        .ar-seo-cats-sec {
+            background: rgba(250, 250, 250, 0.9);
+            color: #000;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 14px;
+        }
+
+        .ar-seo-recent h2,
+        .ar-seo-cats-sec h2 {
+            font-size: 1.05rem;
+            color: var(--color-primary);
+            margin: 0 0 6px;
+        }
+
+        .ar-seo-desc {
+            margin: 0 0 10px;
+            font-size: 0.85rem;
+            color: #444;
+        }
+
+        .ar-seo-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 10px;
+        }
+
+        .ar-seo-list li {
+            margin: 0;
+        }
+
+        .ar-seo-list a {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            text-decoration: none;
+            color: #1a1a1a;
+            padding: 8px;
+            border-radius: 10px;
+            background: #fff;
+            transition: background 0.18s ease;
+        }
+
+        .ar-seo-list a:hover {
+            background: #f6e8f0;
+        }
+
+        .ar-seo-thumb img {
+            width: 96px;
+            height: 54px;
+            object-fit: cover;
+            border-radius: 6px;
+            display: block;
+            background: #ddd;
+        }
+
+        .ar-seo-meta {
+            display: block;
+            min-width: 0;
+            line-height: 1.45;
+        }
+
+        .ar-seo-title {
+            display: block;
+            font-weight: 700;
+            font-size: 0.85rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ar-seo-date,
+        .ar-seo-cats {
+            display: block;
+            font-size: 0.72rem;
+            color: #666;
+        }
+
+        .ar-seo-more {
+            margin: 10px 0 0;
+            font-size: 0.85rem;
+            text-align: right;
+        }
+
+        .ar-seo-more a {
+            color: var(--color-primary);
+            font-weight: 700;
+        }
+
+        .ar-cat-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 4px 0 0;
+        }
+
+        .ar-cat-links a {
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: #fff;
+            border: 1px solid rgba(177, 30, 124, 0.4);
+            color: var(--color-primary);
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-decoration: none;
+            transition: background 0.18s ease, color 0.18s ease;
+        }
+
+        .ar-cat-links a:hover {
+            background: var(--color-primary);
+            color: #fff;
         }
     </style>
     ';
     include __DIR__ . '/head.php';
+    if (!empty($seoJsonLd)) {
+        echo "<script type=\"application/ld+json\">" . $seoJsonLd . "</script>\n";
+    }
     ?>
 </head>
 
@@ -761,12 +944,52 @@
 
     <main>
         <section class="ar-intro">
-            <h2>配信アーカイブ検索</h2>
+            <h1>配信アーカイブ検索</h1>
             <p>
                 恋乃夜まいの配信アーカイブを検索できます。サムネイルまたはカード内のURLからYouTubeの該当動画が開きます。<br>
                 キーワード検索では<strong>タイトル・文字起こし・コメント・ライブチャット</strong>を検索し、該当箇所のタイムスタンプ付きURLを表示します（「かわいい / 可愛い / カワイイ」のような表記ゆれも同じ結果になります）。
+</p>
+            </section>
+
+        <?php if (!empty($seoCategories)): ?>
+        <section class="ar-seo-cats-sec" aria-label="カテゴリから探す">
+            <h2>カテゴリから探す</h2>
+            <p class="ar-cat-links">
+                <?php foreach ($seoCategories as $cat): ?>
+                <a href="/archive?category=<?= rawurlencode($cat) ?>"><?= htmlspecialchars($cat) ?></a>
+                <?php endforeach; ?>
             </p>
         </section>
+        <?php endif; ?>
+
+        <?php if (!empty($seoArchives)): ?>
+        <section class="ar-seo-recent" aria-label="最新の配信アーカイブ一覧">
+            <h2><?= $arCategory !== '' ? '「' . htmlspecialchars(urldecode($arCategory)) . '」のアーカイブ' : '最新の配信アーカイブ' ?></h2>
+            <p class="ar-seo-desc">
+                <?php if ($arCategory !== ''): ?>
+                恋乃夜まいの「<?= htmlspecialchars(urldecode($arCategory)) ?>」カテゴリの配信アーカイブです（全<?= (int)$seoArchiveTotal ?>件）。
+                <?php else: ?>
+                恋乃夜まいの最新の配信アーカイブを新しい順に掲載しています（全<?= (int)$seoArchiveTotal ?>件）。配信タイトルからYouTubeの該当動画へジャンプできます。
+                <?php endif; ?>
+            </p>
+            <ul class="ar-seo-list">
+                <?php foreach ($seoArchives as $row): ?>
+                <li>
+                    <a href="<?= htmlspecialchars(isset($row['url']) ? $row['url'] : '#') ?>" rel="noopener noreferrer" target="_blank">
+                        <span class="ar-seo-thumb"><img src="/api/thumbnail/<?= htmlspecialchars($row['video_id'] ?? '') ?>"
+                                alt="" width="96" height="54" loading="lazy" decoding="async" /></span>
+                        <span class="ar-seo-meta">
+                            <span class="ar-seo-title"><?= htmlspecialchars($row['title'] ?? '') ?></span>
+                            <span class="ar-seo-date"><?= htmlspecialchars($row['stream_date_jst'] ?? '') ?> 公開</span>
+                            <span class="ar-seo-cats"><?= htmlspecialchars(implode(' / ', $row['categories'] ?? array())) ?></span>
+                        </span>
+                    </a>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+            <p class="ar-seo-more"><a href="/archive">もっと見る（アーカイブ検索）</a></p>
+        </section>
+        <?php endif; ?>
 
         <form class="ar-form" id="ar-form" role="search">
             <div class="ar-field grow">
