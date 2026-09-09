@@ -4,25 +4,73 @@
   <!-- トップ（通知ダッシュボード） -->
   <url>
     <loc>https://mai.honna-yuzuki.com/</loc>
-    <lastmod>2026-04-06</lastmod>
-    <changefreq>weekly</changefreq>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>daily</changefreq>
     <priority>1.0</priority>
+  </url>
+
+  <!-- 配信アーカイブ検索（独自コンテンツ） -->
+  <url>
+    <loc>https://mai.honna-yuzuki.com/archive</loc>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- 使い方・対応一覧（SEO用コンテンツページ） -->
+  <url>
+    <loc>https://mai.honna-yuzuki.com/guide.php</loc>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- メディアアーカイブ -->
+  <url>
+    <loc>https://mai.honna-yuzuki.com/twitter-media/</loc>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
   </url>
 
   <!-- 通知ログ一覧 -->
   <url>
     <loc>https://mai.honna-yuzuki.com/logs/</loc>
-    <lastmod>2026-04-06</lastmod>
-    <changefreq>weekly</changefreq>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
 
-  <!-- サービス情報 -->
+  <!-- このサービスについて -->
   <url>
     <loc>https://mai.honna-yuzuki.com/info/</loc>
-    <lastmod>2026-04-06</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
+  </url>
+
+  <!-- 今後の開発予定 -->
+  <url>
+    <loc>https://mai.honna-yuzuki.com/future/</loc>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
+  </url>
+
+  <!-- システム稼働状況 -->
+  <url>
+    <loc>https://mai.honna-yuzuki.com/status</loc>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+  <!-- Androidアプリダウンロード -->
+  <url>
+    <loc>https://mai.honna-yuzuki.com/download/</loc>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
   </url>
 
 </urlset>
