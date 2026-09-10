@@ -1,5 +1,5 @@
 // rag.js - ベクトル検索(/api/search) と RAG Q&A(/api/ask)
-// 既存の回答用 llama-server(:8081, Gemma) を流用して、Piのベクトル検索結果を根拠に回答する。
+// RAG_CHAT_ENDPOINT(Ollama等) を流用して、Piのベクトル検索結果とYT配信字幕を根拠に、まいの口調で回答する。
 // VECTOR_DB_URL / EMBEDDING_ENDPOINT 未設定時は 503 を返す（機能オフ）。
 
 const fs = require("fs");
@@ -21,6 +21,18 @@ const CHAT_MODEL = process.env.RAG_CHAT_MODEL || process.env.LLAMA_CHAT_MODEL ||
 const ASK_TOPK = parseInt(process.env.RAG_TOPK || "6", 10);
 const CHAT_TIMEOUT_MS = parseInt(process.env.RAG_CHAT_TIMEOUT_MS || "120000", 10);
 const CHAT_MAX_TOKENS = parseInt(process.env.RAG_MAX_TOKENS || "384", 10);
+
+// YT配信字幕(FTS on .70)を質問時に参照して文脈へ注入する
+const ARCHIVE_API_BASE = (process.env.ARCHIVE_API_BASE || "http://192.168.1.70:8766").replace(/\/+$/, "");
+const TRANSCRIPT_ENABLED = process.env.RAG_TRANSCRIPT_ENABLED !== "0";
+const TRANSCRIPT_TOPK = parseInt(process.env.RAG_TRANSCRIPT_TOPK || "4", 10);
+const TRANSCRIPT_TIMEOUT_MS = parseInt(process.env.RAG_TRANSCRIPT_TIMEOUT_MS || "8000", 10);
+
+const KANJI = /[\u4e00-\u9fff]/;
+const KATAKANA = /[\u30a0-\u30ff]/;
+const STOP_WORDS = new Set(["まいちゃん", "恋乃夜まい", "まい", "アシスタント", "配信"]);
+const PARTICLE = /[はがをにのへとでやもかねよだたらけどでもなどだけまでままってん]/;
+const FILLER_RE = /(教えて|知りたい|どういう|どうやって|どうして|なんで|なんて|について|ください|知ってる|どんな|なんですか|ですか|とか)/g;
 
 function ready() {
   return vectordb.isEnabled() && embeddings.isEnabled();
@@ -88,6 +100,101 @@ function fmtUpcoming(e) {
   return `- ${e.title || "配信予定"}（${when}${e.platform ? "/" + e.platform : ""}）${e.url || ""}`;
 }
 
+// 質問文から字幕検索用のキーワードを抽出する（.70のFTSは文章のままではヒットしないため）
+function contentScore(s) {
+  let n = 0;
+  for (const ch of s) if (KANJI.test(ch) || KATAKANA.test(ch) || /[A-Za-z0-9]/.test(ch)) n++;
+  return n;
+}
+
+function splitFragments(seg) {
+  const parts = [];
+  let cur = "";
+  for (const ch of seg) {
+    if (PARTICLE.test(ch)) { if (cur) parts.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  if (cur) parts.push(cur);
+  return parts;
+}
+
+function buildTranscriptQuery(question) {
+  const s0 = String(question || "")
+    .replace(/\s+/g, " ")
+    .replace(/[?!？！。、」』「『（）()・：:〜~]+/g, " ")
+    .replace(FILLER_RE, " ");
+  const tokens = new Map();
+  const add = (t) => {
+    t = String(t || "").trim();
+    if (t.length < 2) return;
+    if (!(KANJI.test(t) || KATAKANA.test(t))) return;
+    if (STOP_WORDS.has(t)) return;
+    if (!tokens.has(t)) tokens.set(t, contentScore(t));
+  };
+  for (const seg of s0.split(/\s+/).filter(Boolean)) {
+    if (seg.length <= 6) add(seg);
+    const stripped = seg.replace(/[\u3040-\u309f]+$/, "");
+    if (stripped !== seg && stripped.length <= 6) add(stripped);
+    for (const frag of splitFragments(seg)) {
+      if (frag.length <= 6) add(frag);
+      else add(frag.slice(0, 4));
+      const runs = frag.match(/[\u3400-\u9fff]{2,4}/g) || [];
+      for (const r of runs) add(r);
+    }
+  }
+  const out = [...tokens.entries()]
+    .sort((a, b) => (b[1] - a[1]) || (b[0].length - a[0].length))
+    .map(([t]) => t);
+  return out.slice(0, 8);
+}
+
+function candidateQueries(question) {
+  const toks = buildTranscriptQuery(question);
+  const qs = [];
+  for (let n = Math.min(3, toks.length); n >= 1; n--) {
+    const j = toks.slice(0, n).join(" ");
+    if (j) qs.push(j);
+  }
+  const orig = String(question || "").trim();
+  if (orig && qs.indexOf(orig) === -1) qs.push(orig);
+  return qs;
+}
+
+async function fetchTranscriptOnce(q) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TRANSCRIPT_TIMEOUT_MS);
+  try {
+    const params = new URLSearchParams({ q, kind: "transcript", limit: String(TRANSCRIPT_TOPK) });
+    const res = await fetch(`${ARCHIVE_API_BASE}/api/search?${params}`, { signal: controller.signal });
+    if (!res.ok) throw new Error(`archive search ${res.status}`);
+    const data = await res.json();
+    return { hits: Array.isArray(data?.transcript) ? data.transcript.slice(0, TRANSCRIPT_TOPK) : [] };
+  } catch (e) {
+    console.warn("[rag] transcript search failed:", e?.message || e);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchTranscriptHits(question) {
+  if (!TRANSCRIPT_ENABLED) return { query: "", hits: [] };
+  for (const q of candidateQueries(question)) {
+    const res = await fetchTranscriptOnce(q);
+    if (res === null) return { query: "", hits: [] };
+    if (res.hits.length) return { query: q, hits: res.hits };
+  }
+  return { query: "", hits: [] };
+}
+
+function fmtTranscript(h) {
+  const text = (h.text || "").replace(/\s+/g, " ").trim();
+  const title = (h.title || "").replace(/\s+/g, " ").trim();
+  const t = text.length > 130 ? text.slice(0, 130) + "…" : text;
+  const ti = title.length > 40 ? title.slice(0, 40) + "…" : title;
+  return `- [${h.stream_date_jst || ""} | ${ti}] (${h.start || ""}) ${t} ${h.url || ""}`;
+}
+
 // 検索結果ペイロード → 表示/コンテキスト用の1行テキスト
 function sourceLine(hit) {
   const p = hit.payload || {};
@@ -148,10 +255,11 @@ function register(app, db) {
     if (!question) return res.status(400).json({ error: "question required" });
     try {
       const nowStr = nowJst();
-      const [vec, upcoming, temporal] = await Promise.all([
+      const [vec, upcoming, temporal, trResult] = await Promise.all([
         embeddings.embedQuery(question),
         getUpcomingEvents(db, nowStr, 5),
         getTemporalTweets(db, question),
+        fetchTranscriptHits(question),
       ]);
       const hits = await vectordb.search(vec, ASK_TOPK);
       const hitLines = hits.map((h, i) => `${i + 1}. ${sourceLine(h)}`).join("\n");
@@ -161,16 +269,20 @@ function register(app, db) {
       const temporalBlock = (temporal && temporal.rows.length)
         ? `■ 該当ツイート（${temporal.label}・DBから正確に取得）:\n${temporal.rows.map(fmtTweet).join("\n")}\n\n`
         : (temporal ? `■ 該当ツイート（${temporal.label}）: 見つかりませんでした\n\n` : "");
+      const transcriptHits = (trResult && trResult.hits) || [];
+      const trLines = transcriptHits.map(fmtTranscript).join("\n");
+      const transcriptBlock = trLines ? `■ 配信アーカイブ（字幕）からのまいの発言:\n${trLines}\n\n` : "";
 
       const messages = [
         {
           role: "system",
           content:
-            "あなたはVTuber「恋乃夜まい」の情報アシスタントです。日本語で、前置き・思考過程・引用番号は書かず結論から簡潔に答えてください。" +
+            "あなたはVTuber「恋乃夜まい」本人です。下のプロフィールと『配信アーカイブ（字幕）』を参考に、まいの性格・口調を再現して答えてください。まいの喋り方は、やわらかく甘えん坊で、一人称は「私」、語尾は「〜だよ」「〜だね」「〜なの」「〜なんだ」、相槌は「スンスン」「ぷりぷり」、挨拶は「おはスン！」「おやすスン」のような、可愛らしく親しみのある口調です。ただし情報の正確さは崩さないこと。" +
+            "日本語で、前置き・思考過程・引用番号は書かず結論から簡潔に答えてください。" +
             "「次の配信」「今後の予定」を聞かれたら必ず『今後の配信予定』欄のみを根拠にし、『過去の通知・ツイート』を未来の予定として答えないこと。" +
-            "「最も古い/最新/特定の日付のツイート」を聞かれたら、『該当ツイート』欄があればそれだけを根拠に答えること（『関連する過去の通知・ツイート』欄は順不同なので最古/最新の判断に使わない）。" +
-            "「どんな人/どんな子/性格/雰囲気」など人物像の質問は、過去のツイート・通知から読み取れる範囲で要約してよい。" +
-            "日時・数値・固有名などの事実は与えられた情報にあるものだけを使い、無い情報は創作しないこと。本当に手がかりが無いときだけ「わかりません」と答える。",
+            "「最も古い/最新/特定の日付のツイート」を聞かれたら、『該当ツイート』欄があればそれだけを根拠に答えること。" +
+            "「どんな人/どんな子/性格/雰囲気」などの人物像や「配信で話したこと/言ってた発言」の質問は、『配信アーカイブ（字幕）』に載っているまい本人の発言を根拠に、自分の言葉として語ってよい。" +
+            "日時・数値・固有名などの事実は与えられた情報にあるものだけを使い、無い情報は創作しないこと。本当に手がかりが無いときだけ「わからない」とだけ答える。",
         },
         {
           role: "user",
@@ -178,6 +290,7 @@ function register(app, db) {
             `現在日時: ${nowStr}（JST）\n\n` +
             `■ 恋乃夜まいの基本情報（プロフィール）:\n${kLines}\n\n` +
             temporalBlock +
+            transcriptBlock +
             `■ 今後の配信予定（時間順）:\n${upLines}\n\n` +
             `■ 関連する過去の通知・ツイート:\n${hitLines || "(なし)"}\n\n` +
             `質問: ${question}`,
@@ -190,6 +303,7 @@ function register(app, db) {
         answer,
         upcoming: upcoming.map(e => ({ title: e.title, start_time: e.start_time, time_period: e.time_period, url: e.url })),
         sources: hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, url: h.payload?.url })),
+        transcripts: transcriptHits.map(h => ({ title: h.title, stream_date_jst: h.stream_date_jst, start: h.start, url: h.url, text: (h.text || "").slice(0, 200) })),
       });
     } catch (e) {
       console.error("[/api/ask] error:", e?.message);
