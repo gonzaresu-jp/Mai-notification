@@ -963,32 +963,7 @@
         <?php endif; ?>
 
         <?php if (!empty($seoArchives)): ?>
-        <section class="ar-seo-recent" aria-label="最新の配信アーカイブ一覧">
-            <h2><?= $arCategory !== '' ? '「' . htmlspecialchars(urldecode($arCategory)) . '」のアーカイブ' : '最新の配信アーカイブ' ?></h2>
-            <p class="ar-seo-desc">
-                <?php if ($arCategory !== ''): ?>
-                恋乃夜まいの「<?= htmlspecialchars(urldecode($arCategory)) ?>」カテゴリの配信アーカイブです（全<?= (int)$seoArchiveTotal ?>件）。
-                <?php else: ?>
-                恋乃夜まいの最新の配信アーカイブを新しい順に掲載しています（全<?= (int)$seoArchiveTotal ?>件）。配信タイトルからYouTubeの該当動画へジャンプできます。
-                <?php endif; ?>
-            </p>
-            <ul class="ar-seo-list">
-                <?php foreach ($seoArchives as $row): ?>
-                <li>
-                    <a href="<?= htmlspecialchars(isset($row['url']) ? $row['url'] : '#') ?>" rel="noopener noreferrer" target="_blank">
-                        <span class="ar-seo-thumb"><img src="/api/thumbnail/<?= htmlspecialchars($row['video_id'] ?? '') ?>"
-                                alt="<?= htmlspecialchars(($row['title'] ?? '') . ' のサムネイル') ?>" width="96" height="54" loading="lazy" decoding="async" /></span>
-                        <span class="ar-seo-meta">
-                            <span class="ar-seo-title"><?= htmlspecialchars($row['title'] ?? '') ?></span>
-                            <span class="ar-seo-date"><?= htmlspecialchars($row['stream_date_jst'] ?? '') ?> 公開</span>
-                            <span class="ar-seo-cats"><?= htmlspecialchars(implode(' / ', $row['categories'] ?? array())) ?></span>
-                        </span>
-                    </a>
-                </li>
-                <?php endforeach; ?>
-            </ul>
-            <p class="ar-seo-more"><a href="/archive">もっと見る（アーカイブ検索）</a></p>
-        </section>
+
         <?php endif; ?>
 
         <form class="ar-form" id="ar-form" role="search">

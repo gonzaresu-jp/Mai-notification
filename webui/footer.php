@@ -1,3 +1,12 @@
+<?php
+require __DIR__ . "/updatelogs.php";
+$lastUpdatedDate = "";
+foreach ($updateLogs as $log) {
+    if (!empty($log["date"]) && strcmp($log["date"], $lastUpdatedDate) > 0) {
+        $lastUpdatedDate = $log["date"];
+    }
+}
+?>
 <footer id="siteFooter">
 
   <p>Mai's Platform</p>
@@ -103,5 +112,5 @@
     </a>
 
   </div>
-  <p><a href="/logs">Last updated 2026-09-08</a></p>
+  <p><a href="/logs">Last updated <?= htmlspecialchars($lastUpdatedDate) ?></a></p>
 </footer>

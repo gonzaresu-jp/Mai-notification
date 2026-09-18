@@ -105,6 +105,22 @@ function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => { if (err) console.error("vector_sync_state create err:", err.message); });
 
+    // 配信ごとの議事録（字幕チャンク要約）。source='minutes' としてベクトルDBへ埋め込まれる。
+    db.run(`CREATE TABLE IF NOT EXISTS video_minutes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      video_id TEXT NOT NULL,
+      start_ms INTEGER NOT NULL,
+      end_ms INTEGER NOT NULL,
+      summary TEXT,
+      topics TEXT,
+      facts TEXT,
+      title TEXT,
+      stream_date_jst TEXT,
+      url TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => { if (err) console.error("video_minutes create err:", err.message); });
+    db.run(`CREATE INDEX IF NOT EXISTS idx_video_minutes_video_id ON video_minutes (video_id)`);
+
     ensureNotificationsSchema();
     ensureScheduledSchema();
     ensureEventsSchema();
