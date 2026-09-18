@@ -17,6 +17,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@img/sharp-linux-x64": "^0.35.4",
+    "@simplewebauthn/server": "^10.0.1",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "bilibili-live-ws": "^6.3.1",
@@ -40,7 +42,7 @@
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "querystring": "^0.2.1",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.4",
     "sqlite3": "^5.1.7",
     "web-push": "^3.6.7",
     "xml2js": "^0.6.2"

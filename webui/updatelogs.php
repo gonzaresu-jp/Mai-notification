@@ -1,11 +1,30 @@
 <?php
 $updateLogs = [
     [
+        "date" => "2026-09-19",
+        "details" => [
+            "add" => [
+                "管理者パスキー（WebAuthn）認証を追加 — Windows Hello / TouchID / セキュリティキーでパスワードなしログイン。登録はログイン状態の管理画面「セキュリティ (パスキー)」から行い、ログイン画面に「パスキーでログイン」ボタンを表示（@simplewebauthn/server）",
+            ],
+            "change" => [
+                "管理者セッションをメモリMapから data.db（admin_sessions）永続化に移行 — pm2再起動でログアウトされなくなった。有効期限も1時間から30日スライド式に延長（DB書込は5分間隔にスロットル）",
+                "mai-push-api の実行Nodeを v22.12.0 に固定（ecosystem.config.js に interpreter 指定＋pm2 save）— sharp@0.35 が Node 18 で起動クラッシュするため",
+            ],
+            "fix" => [
+                "sharp の Linux バインディング（@img/sharp-linux-x64）欠落を修復 — APIサーバーの起動クラッシュループ（pm2再起動194→252回・全APIが503）を解消",
+                "管理画面の認証チェックが未定義変数 token 参照で停止し、未ログイン時のログイン画面リダイレクトが動いていなかった問題を修正",
+                "サーバーがHTMLエラーページを返した際に JSON.parse エラーで落ちていたのを「サーバーエラー (HTTP N)」表示に改善（ログイン・パスキー登録画面）",
+            ],
+        ],
+        "lines" => "28,920",
+    ],
+
+    [
         "date" => "2026-09-18",
         "details" => [
             "add" => [
-                "配信の議事録を自動生成する機能を追加 — YouTube字幕をチャンク分割し Cloudflare Workers AI（@cf/qwen/qwen3-30b-a3b-fp8）で要約を生成し video_minutes テーブルに保存。毎朝9:30に未処理分を自動処理する cron を追加（無料枠1日10,000 Neurons の範囲でチャンク数を自動調整し、枠が尽きれば翌日自動再開）",
-                "議事録をベクトルDBへ自動同期（services/minutes-sync.js）— AIまいちゃんの回答時に該当配信の要約を引用できるように。議事録ヒットからは親字幕を引用（引用判定スコア0.58以上）",
+                "配信の要約を自動生成する機能を追加 — YouTube字幕をチャンク分割し Cloudflare Workers AI（@cf/qwen/qwen3-30b-a3b-fp8）で要約を生成し video_minutes テーブルに保存。毎朝9:30に未処理分を自動処理する cron を追加（無料枠1日10,000 Neurons の範囲でチャンク数を自動調整し、枠が尽きれば翌日自動再開）",
+                "要約をベクトルDBへ自動同期（services/minutes-sync.js）— AIまいちゃんの回答時に該当配信の要約を引用できるように。要約ヒットからは親字幕を引用（引用判定スコア0.58以上）",
                 "非公開配信や字幕の長い動画にも対応できるようチャプター密度を配信時間から自動算出（min=span/360、max=span/240）",
             ],
             "change" => [
