@@ -13,6 +13,8 @@
  *   GET /api/archive/buzzwords?year=&top=  →  GET /api/buzzwords?year=&top= (公開プロキシ)
  */
 
+const ctx = require("../services/context");
+
 const ARCHIVE_API_BASE = (process.env.ARCHIVE_API_BASE || "http://192.168.1.70:8766").replace(/\/+$/, "");
 
 const JSON_TIMEOUT_MS = 12000;
@@ -181,17 +183,69 @@ function register(app) {
 
   app.get("/api/archive/search", async (req, res) => {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-    if (!q) return res.status(400).json({ error: "検索キーワード (q) が必要です" });
+    const author = typeof req.query.author === "string" ? req.query.author.trim() : "";
+    if (!q && !author) return res.status(400).json({ error: "検索キーワード (q) がありません (author でも可)" });
     if (q.length > 100) return res.status(400).json({ error: "検索キーワードが長すぎます" });
-    await proxyJson(res, "/api/search" + pickQuery(req, ["q", "kind", "category", "limit", "offset"]), {
+    if (author.length > 200) return res.status(400).json({ error: "ユーザー名が長すぎます" });
+    await proxyJson(res, "/api/search" + pickQuery(req, ["q", "author", "kind", "category", "limit", "offset"]), {
       timeoutMs: SEARCH_TIMEOUT_MS,
     });
+  });
+
+  app.get("/api/archive/authors", async (req, res) => {
+    const prefix = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    if (prefix.length > 100) return res.status(400).json({ error: "ユーザー名が長すぎます" });
+    await proxyJson(res, "/api/authors" + pickQuery(req, ["q", "limit"]));
   });
 
   app.get("/api/archive/video/:id", async (req, res) => {
     const id = req.params.id;
     if (!VIDEO_ID_RE.test(id)) return res.status(400).json({ error: "invalid video_id" });
     await proxyJson(res, `/api/video/${id}`);
+  });
+
+  // 字幕の有無を判定（バッジ表示用）。上流が 404 を返したら {has_transcript:false} を返す。
+  // 一覧の各カードで表示対象だけをチェックするため、ビデオ単体の有無判定に特化する。
+  app.get("/api/archive/transcript/:id", async (req, res) => {
+    const id = req.params.id;
+    if (!VIDEO_ID_RE.test(id)) return res.status(400).json({ error: "invalid video_id" });
+    let upstream;
+    try {
+      upstream = await fetchUpstream(`/api/transcript/${id}`, JSON_TIMEOUT_MS);
+    } catch (err) {
+      markUpstream(false, err);
+      return res.status(504).json({ error: "アーカイブAPIに接続できません", has_transcript: null });
+    }
+    return res.json({ video_id: id, has_transcript: upstream.status === 200 });
+  });
+
+  // チャプター（タイムスタンプ txt）を取得する。上流が 404 ならそのまま 404 を返す。
+  // チャプターの有無判定は /api/archive/videos 等では行わず、カードごとにこのエンドポイントを叩く。
+  app.get("/api/archive/chapters/:id", async (req, res) => {
+    const id = req.params.id;
+    if (!VIDEO_ID_RE.test(id)) return res.status(400).json({ error: "invalid video_id" });
+    await proxyJson(res, `/api/chapters/${id}`);
+  });
+
+  // 議事録（minutes）の有無を、与えられた video_ids から判定して返す（バッジ表示用）
+  // data: { flags: { <video_id>: { has_minutes: true } , ... } }
+  app.get("/api/archive/minutes", async (req, res) => {
+    const ids = String(req.query.ids || "")
+      .split(",")
+      .map((s) => String(s).trim())
+      .filter((s) => VIDEO_ID_RE.test(s));
+    const flags = {};
+    if (!ids.length) return res.json({ flags });
+    if (!ctx.db) return res.json({ flags });
+    ctx.db.all(
+      `SELECT DISTINCT video_id FROM video_minutes WHERE video_id IN (${ids.map(() => "?").join(",")})`,
+      ids,
+      (err, rows) => {
+        if (err) return res.json({ flags });
+        (rows || []).forEach((r) => { flags[r.video_id] = { has_minutes: true }; });
+        return res.json({ flags });
+      }
+    );
   });
 
   app.get("/api/archive/buzzwords", async (req, res) => {
