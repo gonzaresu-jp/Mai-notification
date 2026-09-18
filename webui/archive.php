@@ -372,6 +372,156 @@
             font-weight: 700;
         }
 
+        .ar-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin: 4px 0 2px;
+        }
+        .ar-badges:empty { display: none; }
+        .ar-badges .ar-badge {
+            font-size: 0.66rem;
+            padding: 1px 7px;
+            border-radius: 999px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            line-height: 1.5;
+        }
+        .ar-badge-minutes {
+            background: rgba(122,131,247,.12);
+            color: #5a5ee0;
+        }
+        .ar-badge-transcript {
+            background: rgba(34,187,106,.12);
+            color: #17a05e;
+        }
+        .ar-badge-chapters {
+            background: rgba(240,166,33,.14);
+            color: #c77d0a;
+            cursor: pointer;
+        }
+        .ar-badge-chapters:hover {
+            background: rgba(240,166,33,.25);
+        }
+
+        /* タイムスタンプ ポップアップ */
+        .ar-chap-lock {
+            overflow: hidden !important;
+        }
+        .ar-chap-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(10, 12, 24, .55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .ar-chap {
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 18px 50px rgba(0,0,0,.35);
+            overflow: auto;
+            max-height: min(82vh, 720px);
+            width: min(480px, 100%);
+            display: flex;
+            flex-direction: column;
+            font-size: 0.82rem;
+            overscroll-behavior: contain;
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch;
+        }
+        .ar-chap-scene {
+            position: relative;
+            aspect-ratio: 16 / 9;
+            width: 100%;
+            height: auto;
+            background: #111;
+            overflow: hidden;
+            flex: none;
+        }
+        .ar-chap-scene img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .ar-chap-scene-veil {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(0deg, rgba(10,12,24,.45), transparent 60%);
+            pointer-events: none;
+        }
+        .ar-chap-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 9px 14px;
+            background: #f8f8f8;
+            border-bottom: 1px solid #ededed;
+        }
+        .ar-chap-title {
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        .ar-chap-title i { color: #c77d0a; margin-right: 3px; }
+        .ar-chap-close {
+            border: 0;
+            background: transparent;
+            font-size: 1.3rem;
+            line-height: 1;
+            color: #777;
+            cursor: pointer;
+            padding: 2px 6px;
+        }
+        .ar-chap-close:hover { color: #1a1a1a; }
+        .ar-chap-video {
+            padding: 7px 14px;
+            border-bottom: 1px solid #f0f0f0;
+            font-weight: 600;
+        }
+        .ar-chap-video a {
+            color: #1a6fd6;
+            text-decoration: none;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .ar-chap-body {
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+        .ar-chap-list {
+            display: block;
+        }
+        .ar-chap-item {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            padding: 7px 14px;
+            color: #1a1a1a;
+            text-decoration: none;
+        }
+        .ar-chap-item:hover { background: #f2f6ff; }
+        .ar-chap-time {
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            color: #1a6fd6;
+            white-space: nowrap;
+        }
+        .ar-chap-label {
+            color: #333;
+        }
+        .ar-chap-loading, .ar-chap-empty {
+            padding: 18px 12px;
+            color: #888;
+            text-align: center;
+        }
+
         .ar-title {
             font-size: 0.95rem;
             line-height: 1.45;
@@ -469,6 +619,11 @@
             margin-bottom: 6px;
         }
 
+        .ar-hits-total {
+            font-weight: 500;
+            color: #9a9a9a;
+        }
+
         .ar-hit-list {
             list-style: none;
             margin: 0;
@@ -511,7 +666,49 @@
             background: #d67b1e;
         }
 
+        .ar-hit-extras {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ar-hit-sc {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.66rem;
+            font-weight: 700;
+            background: #ffd54a;
+            color: #6b4e00;
+            border: 1px solid #e0ab0a;
+            padding: 1px 6px;
+            border-radius: 999px;
+            line-height: 1.4;
+        }
+
+        .ar-hit-sc b {
+            font-weight: 800;
+            color: #b8860b;
+        }
+
+        .ar-hit-member {
+            font-size: 0.66rem;
+            font-weight: 700;
+            color: #6b6be0;
+            border: 1px solid #9f9fe8;
+            padding: 1px 6px;
+            border-radius: 999px;
+            line-height: 1.4;
+        }
+
+        .ar-hit-author {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #335;
+        }
+
         .ar-hit-at {
+            margin-left: auto;
             font-size: 0.7rem;
             color: #666;
             font-variant-numeric: tabular-nums;
@@ -754,7 +951,8 @@
                 padding: 14px;
             }
 
-            .ar-field.grow {
+            .ar-field.grow,
+            #ar-author-wrap {
                 flex-basis: 100%;
             }
 
@@ -952,14 +1150,6 @@
             </section>
 
         <?php if (!empty($seoCategories)): ?>
-        <section class="ar-seo-cats-sec" aria-label="カテゴリから探す">
-            <h2>カテゴリから探す</h2>
-            <p class="ar-cat-links">
-                <?php foreach ($seoCategories as $cat): ?>
-                <a href="/archive?category=<?= rawurlencode($cat) ?>"><?= htmlspecialchars($cat) ?></a>
-                <?php endforeach; ?>
-            </p>
-        </section>
         <?php endif; ?>
 
         <?php if (!empty($seoArchives)): ?>
@@ -970,6 +1160,11 @@
             <div class="ar-field grow">
                 <label for="ar-q">キーワード</label>
                 <input type="search" id="ar-q" name="q" placeholder="例: かわいい / ホラー / おはよう" autocomplete="off" />
+            </div>
+
+            <div class="ar-field" id="ar-author-wrap">
+                <label for="ar-author">ユーザー名 (チャット)</label>
+                <input type="search" id="ar-author" name="author" placeholder="例: @koinoyamaich" autocomplete="off" />
             </div>
 
             <div class="ar-field" id="ar-kind-wrap" hidden>
