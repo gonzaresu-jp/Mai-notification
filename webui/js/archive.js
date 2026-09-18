@@ -223,7 +223,7 @@
     applyBadges();
   }
 
-  // 議事録・字幕などの付加情報バッジ
+  // 要約・字幕などの付加情報バッジ
   // minutes はローカルDB一括、transcript はアーカイブAPIから動画単位で判定する。
   var badgeCache = {}; // video_id -> { has_minutes, has_transcript }
   var badgeRendered = {}; // video_id -> true（バッジ描画済み）
@@ -233,7 +233,7 @@
     badgeCache[videoId][key] = value;
   }
 
-  /** 議事録・字幕の両方が確定したか（表示すべきバッジが無いときも確定扱いにする） */
+  /** 要約・字幕の両方が確定したか（表示すべきバッジが無いときも確定扱いにする） */
   function badgeDecided(id) {
     var info = badgeCache[id];
     if (!info) return false;
@@ -249,7 +249,7 @@
       var info = badgeCache[id];
       if (!info) return;
       var parts = [];
-      if (info.has_minutes) parts.push('<span class="ar-badge ar-badge-minutes"><i class="fa-solid fa-file-lines"></i> 議事録</span>');
+      if (info.has_minutes) parts.push('<span class="ar-badge ar-badge-minutes" data-minutes="1" role="button" tabindex="0" title="要約を表示"><i class="fa-solid fa-file-lines"></i> 要約</span>');
       if (info.has_chapters) parts.push('<span class="ar-badge ar-badge-chapters" data-chapters="1" role="button" tabindex="0" title="タイムスタンプを表示"><i class="fa-solid fa-list-ul"></i> タイムスタンプ</span>');
       if (info.has_transcript) parts.push('<span class="ar-badge ar-badge-transcript"><i class="fa-solid fa-closed-captioning"></i> 字幕</span>');
       var slot = card.querySelector('.ar-badges');
@@ -264,7 +264,7 @@
     });
   }
 
-  /** 表示中のカードについて、議事録・字幕の有無を判定してバッジを表示する */
+  /** 表示中のカードについて、要約・字幕の有無を判定してバッジを表示する */
   function applyBadges() {
     var cards = el.results.querySelectorAll('.ar-card[data-video]');
     var ids = [];
@@ -279,7 +279,7 @@
     });
     if (!ids.length) return;
 
-    // 議事録（ローカルDB一括判定）
+    // 要約（ローカルDB一括判定）
     fetch('/api/archive/minutes?ids=' + encodeURIComponent(ids.join(',')))
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -364,8 +364,8 @@
       .catch(function (err) { chapDataCache[vid] = null; throw err; });
   }
 
-  /** チャプター一覧をモーダル表示する */
-  function showChapterPopup(vid) {
+  /** モーダルの共通枠を作る。本文要素を返す */
+  function openModalShell(vid, headLabel, headIcon) {
     var card = el.results.querySelector('.ar-card[data-video="' + CSS.escape(vid) + '"]');
     var title = card ? card.getAttribute('data-title') : '';
 
@@ -393,7 +393,7 @@
 
     chapModal.innerHTML = scene
       + '<div class="ar-chap-head">'
-      + '<span class="ar-chap-title"><i class="fa-solid fa-list-ul"></i> タイムスタンプ</span>'
+      + '<span class="ar-chap-title"><i class="fa-solid ' + headIcon + '"></i> ' + headLabel + '</span>'
       + '<button type="button" class="ar-chap-close" aria-label="閉じる">&times;</button></div>'
       + '<div class="ar-chap-video"><a href="' + esc(videoUrl(vid)) + '" target="_blank" rel="noopener noreferrer">'
       + esc(title || vid) + '</a></div>'
@@ -427,9 +427,15 @@
     chapModal._esc = function (e) { if (e.key === 'Escape') closeChapterPopup(); };
     document.addEventListener('keydown', chapModal._esc);
 
+    return chapModal.querySelector('.ar-chap-body');
+  }
+
+  /** チャプター一覧をモーダル表示する */
+  function showChapterPopup(vid) {
+    var body = openModalShell(vid, 'タイムスタンプ', 'fa-list-ul');
+
     fetchChapters(vid).then(function (list) {
       if (!chapModal || chapModal.dataset.done) return;
-      var body = chapModal.querySelector('.ar-chap-body');
       if (!list || !list.length) {
         body.innerHTML = '<div class="ar-chap-empty">タイムスタンプがありません</div>';
         return;
@@ -454,9 +460,44 @@
       });
     }).catch(function () {
       if (!chapModal) return;
-      chapModal.querySelector('.ar-chap-body').innerHTML =
-        '<div class="ar-chap-empty">読み込めませんでした</div>';
+      body.innerHTML = '<div class="ar-chap-empty">読み込めませんでした</div>';
     });
+  }
+
+  /** 要約（5分刻みの topic/summary）をモーダル表示する */
+  function showSummaryPopup(vid) {
+    var body = openModalShell(vid, '要約', 'fa-file-lines');
+
+    fetch('/api/archive/minutes/' + encodeURIComponent(vid))
+      .then(function (r) { return r.status === 404 ? null : r.json(); })
+      .then(function (data) {
+        if (!chapModal || chapModal.dataset.done) return;
+        var segs = (data && data.segments) || [];
+        if (!segs.length) {
+          body.innerHTML = '<div class="ar-chap-empty">要約がありません</div>';
+          return;
+        }
+        var html = '<div class="ar-min-list">';
+        segs.forEach(function (s) {
+          var facts = (s.facts || []).map(function (f) {
+            return '<li>' + esc(f) + '</li>';
+          }).join('');
+          html += '<a class="ar-min-item" href="' + esc(s.url || videoUrl(vid)) + '&t=' + Math.floor(s.start_ms / 1000) + 's"'
+            + ' target="_blank" rel="noopener noreferrer">'
+            + '<span class="ar-min-time">' + esc(timeLabel(s.start_ms)) + '</span>'
+            + '<span class="ar-min-body">'
+            + (s.topic ? '<span class="ar-min-topic">' + esc(s.topic) + '</span>' : '')
+            + (s.summary ? '<span class="ar-min-text">' + esc(s.summary) + '</span>' : '')
+            + (facts ? '<ul class="ar-min-facts">' + facts + '</ul>' : '')
+            + '</span></a>';
+        });
+        html += '</div>';
+        body.innerHTML = html;
+      })
+      .catch(function () {
+        if (!chapModal) return;
+        body.innerHTML = '<div class="ar-chap-empty">読み込めませんでした</div>';
+      });
   }
 
   function closeChapterPopup() {
@@ -477,26 +518,29 @@
     el.status.classList.toggle('is-error', !!isError);
   }
 
-  // カードの「タイムスタンプ」バッジをクリックでチャプター表示（委譲）
+  // カードの「タイムスタンプ」「要約」バッジをクリックでモーダル表示（委譲）
   function bindBadgeClick() {
     if (!el.results) return;
-    el.results.addEventListener('click', function (e) {
-      var b = e.target.closest('.ar-badge-chapters');
-      if (!b) return;
+    function openFrom(b) {
       var card = b.closest('.ar-card[data-video]');
       if (!card) return;
+      var vid = card.getAttribute('data-video');
+      if (b.classList.contains('ar-badge-minutes')) showSummaryPopup(vid);
+      else showChapterPopup(vid);
+    }
+    el.results.addEventListener('click', function (e) {
+      var b = e.target.closest('.ar-badge-chapters, .ar-badge-minutes');
+      if (!b) return;
       e.preventDefault();
       e.stopPropagation();
-      showChapterPopup(card.getAttribute('data-video'));
+      openFrom(b);
     });
     el.results.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter' && e.key !== ' ') return;
-      var b = e.target.closest('.ar-badge-chapters');
+      var b = e.target.closest('.ar-badge-chapters, .ar-badge-minutes');
       if (!b) return;
-      var card = b.closest('.ar-card[data-video]');
-      if (!card) return;
       e.preventDefault();
-      showChapterPopup(card.getAttribute('data-video'));
+      openFrom(b);
     });
   }
 

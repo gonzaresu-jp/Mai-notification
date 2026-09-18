@@ -392,6 +392,10 @@
         .ar-badge-minutes {
             background: rgba(122,131,247,.12);
             color: #5a5ee0;
+            cursor: pointer;
+        }
+        .ar-badge-minutes:hover {
+            background: rgba(122,131,247,.25);
         }
         .ar-badge-transcript {
             background: rgba(34,187,106,.12);
@@ -521,6 +525,53 @@
             color: #888;
             text-align: center;
         }
+
+        /* 要約モーダル（ar-chap の枠を共用） */
+        .ar-min-list {
+            display: block;
+            padding: 4px 0 10px;
+        }
+        .ar-min-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 9px 14px;
+            color: #1a1a1a;
+            text-decoration: none;
+            border-bottom: 1px solid #f0f2f7;
+        }
+        .ar-min-item:last-child { border-bottom: none; }
+        .ar-min-item:hover { background: #f2f6ff; }
+        .ar-min-time {
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            color: #1a6fd6;
+            white-space: nowrap;
+            padding-top: 1px;
+        }
+        .ar-min-body {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            min-width: 0;
+        }
+        .ar-min-topic {
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        .ar-min-text {
+            font-size: 0.84rem;
+            line-height: 1.55;
+            color: #555;
+        }
+        .ar-min-facts {
+            margin: 2px 0 0;
+            padding-left: 16px;
+            font-size: 0.78rem;
+            line-height: 1.5;
+            color: #888;
+        }
+        .ar-min-facts li { margin: 1px 0; }
 
         .ar-title {
             font-size: 0.95rem;

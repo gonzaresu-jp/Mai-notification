@@ -227,7 +227,7 @@ function register(app) {
     await proxyJson(res, `/api/chapters/${id}`);
   });
 
-  // 議事録（minutes）の有無を、与えられた video_ids から判定して返す（バッジ表示用）
+  // 要約（旧・議事録）の有無を、与えられた video_ids から判定して返す（バッジ表示用）
   // data: { flags: { <video_id>: { has_minutes: true } , ... } }
   app.get("/api/archive/minutes", async (req, res) => {
     const ids = String(req.query.ids || "")
@@ -244,6 +244,39 @@ function register(app) {
         if (err) return res.json({ flags });
         (rows || []).forEach((r) => { flags[r.video_id] = { has_minutes: true }; });
         return res.json({ flags });
+      }
+    );
+  });
+
+  // 1本の配信の要約（5分チャンクの topic/summary/facts）を時系列で返す
+  app.get("/api/archive/minutes/:id", async (req, res) => {
+    const id = req.params.id;
+    if (!VIDEO_ID_RE.test(id)) return res.status(400).json({ error: "invalid video_id" });
+    if (!ctx.db) return res.status(503).json({ error: "db unavailable" });
+    ctx.db.all(
+      `SELECT start_ms, end_ms, topic, summary, facts, title, stream_date_jst, url
+       FROM video_minutes WHERE video_id=? ORDER BY start_ms ASC LIMIT 400`,
+      [id],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: "db error" });
+        if (!rows || !rows.length) return res.status(404).json({ error: "minutes not found" });
+        const segments = rows.map((r) => {
+          let facts = [];
+          try { facts = JSON.parse(r.facts || "[]"); } catch { facts = []; }
+          if (!Array.isArray(facts)) facts = [];
+          return {
+            start_ms: r.start_ms, end_ms: r.end_ms,
+            topic: r.topic || "", summary: r.summary || "",
+            facts, url: r.url || "",
+          };
+        });
+        return res.json({
+          video_id: id,
+          title: rows[0].title || "",
+          stream_date_jst: rows[0].stream_date_jst || "",
+          count: segments.length,
+          segments,
+        });
       }
     );
   });
