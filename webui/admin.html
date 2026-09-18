@@ -544,6 +544,16 @@
             <p style="margin:0 0 10px; color:#666; font-size:.9rem;">通知履歴・配信予定・プロフィールに基づいてQ&Aできる専用チャットです。</p>
             <a href="./chat.html" class="btn-primary" style="display:inline-block; text-decoration:none; padding:10px 18px; border-radius:999px;">💬 まいAI チャットを開く</a>
         </section>
+
+        <section class="sub-panel">
+            <h2>🔑 セキュリティ (パスキー)</h2>
+            <p style="margin:0 0 10px; color:#666; font-size:.9rem;">この端末の Windows Hello / TouchID / セキュリティキーを登録すると、次回からパスワード入力でログインしなくてよくなります。</p>
+            <div class="inline-actions">
+                <button type="button" class="btn-primary" id="btn-passkey-register">🔑 この端末にパスキーを登録</button>
+            </div>
+            <div id="passkey-list" style="margin-top:12px; font-size:.85rem; color:#555;"></div>
+            <div class="status-message" id="passkey-status"></div>
+        </section>
     </div>
         
 
@@ -646,12 +656,6 @@
     <script>
         // 認証チェック
         (async () => {
-            
-            if (!token) {
-                window.location.href = './admin/login';
-                return;
-            }
-            
             try {
                 const response = await fetch('/api/admin/verify', {
                     credentials: 'include'
@@ -1213,6 +1217,109 @@
                 statusMessage.classList.remove('show');
             }, 5000);
         }
+
+        // ---- パスキー登録 ----
+        (function () {
+            const btn = document.getElementById('btn-passkey-register');
+            const listEl = document.getElementById('passkey-list');
+            const statusEl = document.getElementById('passkey-status');
+            if (!btn) return;
+
+            function showPkStatus(msg, type) {
+                statusEl.textContent = msg;
+                statusEl.className = `status-message show ${type}`;
+                setTimeout(() => statusEl.classList.remove('show'), 6000);
+            }
+            // サーバーがHTMLエラーページを返しても落ちないJSON読み取り
+            async function readJson(res) {
+                const text = await res.text();
+                try { return JSON.parse(text); }
+                catch (e) { throw new Error('サーバーエラー (HTTP ' + res.status + ')'); }
+            }
+            function b64uToBuf(s) {
+                s = s.replace(/-/g, '+').replace(/_/g, '/');
+                while (s.length % 4) s += '=';
+                const bin = atob(s);
+                const buf = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+                return buf;
+            }
+            function bufToB64u(buf) {
+                const bytes = new Uint8Array(buf);
+                let bin = '';
+                for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+                return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            }
+            function loadPkList() {
+                fetch('/api/admin/passkey/list', { credentials: 'include' })
+                    .then((r) => r.ok ? r.json() : { passkeys: [] })
+                    .then((d) => {
+                        const pks = d.passkeys || [];
+                        if (!pks.length) { listEl.textContent = '登録済みパスキー: なし'; return; }
+                        listEl.innerHTML = '登録済みパスキー: ' + pks.map((p) => {
+                            const dt = new Date(p.created_at).toLocaleDateString('ja-JP');
+                            return `<span style="margin-right:14px;">🔑 ${p.label ? p.label : p.credential_id} (${dt})</span>`;
+                        }).join('');
+                    })
+                    .catch(() => {});
+            }
+            btn.addEventListener('click', async () => {
+                if (!window.PublicKeyCredential) {
+                    showPkStatus('このブラウザはパスキー(WebAuthn)に対応していません', 'error');
+                    return;
+                }
+                btn.disabled = true;
+                btn.textContent = '待機中...';
+                try {
+                    const begin = await fetch('/api/admin/passkey/register/begin', {
+                        method: 'POST', credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({}),
+                    });
+                    const opt = await readJson(begin);
+                    if (!begin.ok) throw new Error(opt.error || '登録を開始できません');
+                    const fid = opt._fid;
+                    delete opt._fid;
+                    opt.user.id = b64uToBuf(opt.user.id);
+                    opt.challenge = b64uToBuf(opt.challenge);
+                    if (opt.excludeCredentials) opt.excludeCredentials = opt.excludeCredentials.map((c) => ({ ...c, id: b64uToBuf(c.id) }));
+                    const cred = await navigator.credentials.create({ publicKey: opt });
+                    btn.textContent = '確認中...';
+                    const finish = await fetch('/api/admin/passkey/register/finish', {
+                        method: 'POST', credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            _fid: fid,
+                            label: navigator.platform || 'device',
+                            response: {
+                                id: cred.id,
+                                rawId: bufToB64u(cred.rawId),
+                                type: cred.type,
+                                clientExtensionResults: cred.getClientExtensionResults(),
+                                response: {
+                                    attestationObject: bufToB64u(cred.response.attestationObject),
+                                    clientDataJSON: bufToB64u(cred.response.clientDataJSON),
+                                },
+                            },
+                        }),
+                    });
+                    const data = await readJson(finish);
+                    if (!finish.ok) throw new Error(data.error || '登録に失敗しました');
+                    showPkStatus('✅ この端末のパスキーを登録しました。次回からログインページで「パスキーでログイン」が使えます', 'success');
+                    loadPkList();
+                } catch (e) {
+                    if (e && e.name === 'NotAllowedError') {
+                        showPkStatus('認証がキャンセルされました', 'error');
+                    } else {
+                        showPkStatus('登録失敗: ' + (e.message || e), 'error');
+                    }
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '🔑 この端末にパスキーを登録';
+                }
+            });
+            loadPkList();
+        })();
     </script>
 </body>
 </html>

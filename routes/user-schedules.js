@@ -13,7 +13,8 @@ function register(app, db) {
          WHERE us.user_id = ? ORDER BY COALESCE(us.scheduled_at, e.start_time) ASC`,
         [req.userId]
       );
-      res.json(rows.map(row => ({ ...row, editable: admin.isAdminRequest(req) || (!row.event_id && row.source !== 'admin') })));
+      const isAdmin = await admin.isAdminRequest(req);
+      res.json(rows.map(row => ({ ...row, editable: isAdmin || (!row.event_id && row.source !== 'admin') })));
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -67,7 +68,7 @@ function register(app, db) {
 
       const target = await dbGet(db, 'SELECT source FROM user_schedules WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);
       if (!target) return res.status(404).json({ error: 'Schedule not found' });
-      if (target.source === 'admin' && !admin.isAdminRequest(req)) return res.status(403).json({ error: 'Permission denied' });
+      if (target.source === 'admin' && !(await admin.isAdminRequest(req))) return res.status(403).json({ error: 'Permission denied' });
 
       const result = await dbRun(db,
         `UPDATE user_schedules SET title = COALESCE(?, title), note = COALESCE(?, note), url = COALESCE(?, url), thumbnail_url = COALESCE(?, thumbnail_url), scheduled_at = COALESCE(?, scheduled_at), reminder_minutes = COALESCE(?, reminder_minutes), reminder_sent_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND event_id IS NULL`,
@@ -88,7 +89,7 @@ function register(app, db) {
     try {
       const schedule = await dbGet(db, 'SELECT id, source, reminder_sent_at FROM user_schedules WHERE id = ? AND user_id = ? AND event_id IS NULL', [req.params.id, req.userId]);
       if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
-      if (schedule.source === 'admin' && !admin.isAdminRequest(req)) return res.status(403).json({ error: 'Permission denied' });
+      if (schedule.source === 'admin' && !(await admin.isAdminRequest(req))) return res.status(403).json({ error: 'Permission denied' });
 
       await dbRun(db, "UPDATE user_schedules SET reminder_sent_at = 'deleted' WHERE id = ? AND reminder_sent_at IS NULL", [req.params.id]);
       await dbRun(db, 'DELETE FROM user_schedules WHERE id = ? AND user_id = ?', [req.params.id, req.userId]);

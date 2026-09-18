@@ -1,10 +1,12 @@
 const adminAuth = require("../admin/admin");
+const webauthn = require("../admin/webauthn");
 const notif = require("../services/notification");
 
 function register(app, db) {
   app.post("/api/admin/login", adminAuth.login);
   app.post("/api/admin/logout", adminAuth.logout);
   app.get("/api/admin/verify", adminAuth.requireAuth, (req, res) => { res.json({ success: true, user: req.adminUser }); });
+  webauthn.register(app);
 
   app.post("/api/admin/notify", adminAuth.requireAuth, async (req, res) => {
     try {
