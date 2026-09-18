@@ -20,17 +20,19 @@ const gemmaLogger = {
   error: (...args) => { console.error(...args); writeLog('ERROR', ...args); }
 };
 
-// --- elzaサーバー (Linux / CPU) 向け設定 ---
-const SERVER_ENDPOINT = process.env.LLAMA_SERVER_ENDPOINT || 'http://localhost:8081/v1/chat/completions';
-const MODEL = 'gemma-4-E4B-it-Q3_K_M';
-const REQUEST_TIMEOUT = 180000; // CPU駆動のため、余裕を持って3分
+// --- Gemini API 向け設定（ローカルllama.cpp負荷削減のためAPIへ移行） ---
+const SERVER_ENDPOINT = process.env.TWITTER_AI_URL || "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const MODEL = process.env.TWITTER_AI_MODEL || "gemini-3.5-flash-lite";
+const API_KEY = process.env.GEMINI_API_KEY || "";
+const REQUEST_TIMEOUT = 60000; // API駆動のため短めに
 const RETRY_TIMES = 3;
 const RETRY_DELAY_MS = 1500;
 
 /**
- * llama-server へのリクエストを実行
+ * Gemini API へのリクエストを実行（OpenAI互換エンドポイント）
  */
-async function callLlamaServer(prompt, retries = RETRY_TIMES) {
+async function callAiServer(prompt, retries = RETRY_TIMES) {
+  if (!API_KEY) throw new Error("GEMINI_API_KEY not configured");
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -39,7 +41,7 @@ async function callLlamaServer(prompt, retries = RETRY_TIMES) {
 
       const response = await fetch(SERVER_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
         body: JSON.stringify({
           model: MODEL,
           messages: [
@@ -47,21 +49,24 @@ async function callLlamaServer(prompt, retries = RETRY_TIMES) {
             { role: "user", content: prompt }
           ],
           temperature: 0.1,
-          extra_body: { "think": false } // 思考出力を抑制
+          response_format: { type: "json_object" } // JSON専用出力
         }),
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
-      if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(`Gemini API ${response.status}: ${detail.slice(0, 200)}`);
+      }
 
       const data = await response.json();
-      return data.choices[0].message.content.trim();
+      return (data.choices[0].message.content || "").trim();
     } catch (err) {
       lastError = err;
       if (attempt < retries) {
         const delay = RETRY_DELAY_MS * Math.pow(1.5, attempt);
-        gemmaLogger.warn(`[Llama] リトライ ${attempt + 1}/${retries}: ${err.message}`);
+        gemmaLogger.warn(`[Gemini] リトライ ${attempt + 1}/${retries}: ${err.message}`);
         await new Promise(r => setTimeout(r, delay));
         continue;
       }
@@ -137,11 +142,11 @@ async function analyzeTweet(tweetText) {
 ${tweetText}`;
 
   try {
-    // ツイート本文は最大100文字で省略プレビューにし、[1234Z] [INFO] [Gemma] Analyzing tweet: で出力
+    // ツイート本文は最大100文字で省略プレビューにし、[1234Z] [INFO] [Gemini] Analyzing tweet: で出力
     const previewText = tweetText.length > 100 ? tweetText.substring(0, 100) + '...' : tweetText;
-    gemmaLogger.log(`[Gemma] Analyzing tweet: ${previewText}`);
+    gemmaLogger.log(`[Gemini] Analyzing tweet: ${previewText}`);
     
-    const response = await callLlamaServer(prompt);
+    const response = await callAiServer(prompt);
 
     // コードブロック記法 (```json ... ```) を除去してからJSONを抽出
     const cleaned = response
@@ -166,14 +171,14 @@ ${tweetText}`;
     }
 
     if (!jsonStr) {
-      gemmaLogger.error('[Gemma] JSON not found in response. raw:', response.slice(0, 300));
+      gemmaLogger.error('[Gemini] JSON not found in response. raw:', response.slice(0, 300));
       return getFallbackResult();
     }
 
     const result = JSON.parse(jsonStr);
     
     // 分析結果をそのままJSON形式で出力
-    gemmaLogger.log(`[Gemma] Analysis result: ${JSON.stringify(result)}`);
+    gemmaLogger.log(`[Gemini] Analysis result: ${JSON.stringify(result)}`);
 
     return {
       category: validateEnum(result.category, ['LIVE', 'NEWS', 'PROMOTION', 'REPOST', 'MORNING', 'DAILY', 'OTHER'], 'OTHER'),
@@ -186,7 +191,7 @@ ${tweetText}`;
       confidence: Math.min(1, Math.max(0, parseFloat(result.confidence) || 0))
     };
   } catch (err) {
-    gemmaLogger.error('[Gemma] Analysis failed:', err.message);
+    gemmaLogger.error('[Gemini] Analysis failed:', err.message);
     return getFallbackResult();
   }
 }

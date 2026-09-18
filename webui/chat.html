@@ -25,7 +25,14 @@
       radial-gradient(1200px 600px at 80% -10%, #ffd9ee 0%, transparent 60%),
       radial-gradient(900px 500px at -10% 110%, #ffe7f5 0%, transparent 55%),
       linear-gradient(160deg, #fff5fb 0%, #f7e8f3 100%);
-    display: flex; flex-direction: column; height: 100dvh; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; height: 100dvh; overflow: hidden;
+  }
+  .shell {
+    width: 100%; max-width: 820px; height: 100dvh;
+    display: flex; flex-direction: column;
+    background: rgba(255,255,255,.35);
+    box-shadow: 0 0 40px rgba(177,30,124,.08);
+    border-left: 1px solid rgba(177,30,124,.10); border-right: 1px solid rgba(177,30,124,.10);
   }
   /* ===== ヘッダー ===== */
   .chat-header {
@@ -42,6 +49,14 @@
   .chat-header .heart { color: #ffd1ea; }
   .chat-header .home { margin-left: auto; color: #fff; text-decoration: none; font-size: .8rem;
     background: rgba(255,255,255,.18); padding: 6px 10px; border-radius: 999px; }
+  .r18-toggle {
+    flex: 0 0 auto; border: 2px solid rgba(255,255,255,.65); background: rgba(255,255,255,.15);
+    color: #fff; font-size: 1rem; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+    transition: .2s; line-height: 1;
+  }
+  .r18-toggle:hover { background: rgba(255,255,255,.28); transform: translateY(-1px); }
+  .r18-toggle.on { background: #d63b97; border-color: #ffd1ea; box-shadow: 0 0 0 3px rgba(255,255,255,.25); }
+  .r18-toggle.on::after { content: " ON"; font-size: .68rem; font-weight: 800; letter-spacing: .05em; }
   /* ===== メッセージ領域 ===== */
   .chat-log { flex: 1; overflow-y: auto; padding: 18px 14px 8px; -webkit-overflow-scrolling: touch; }
   .msg { display: flex; gap: 10px; margin-bottom: 16px; max-width: 100%; animation: pop .25s ease; }
@@ -65,6 +80,14 @@
     animation: blink 1.2s infinite both; }
   .typing i:nth-child(2){ animation-delay: .2s; } .typing i:nth-child(3){ animation-delay: .4s; }
   @keyframes blink { 0%,80%,100%{ transform: scale(.7); opacity:.4 } 40%{ transform: scale(1); opacity:1 } }
+  /* 再試行ボタン */
+  .retry-btn {
+    display: inline-flex; align-items: center; gap: 5px; margin-top: 8px;
+    background: #fff; border: 1.5px solid var(--mai-primary); color: var(--mai-primary);
+    padding: 6px 14px; border-radius: 999px; font-size: .8rem; font-weight: 700;
+    cursor: pointer; transition: .15s; font-family: inherit;
+  }
+  .retry-btn:hover { background: var(--mai-soft-2); transform: translateY(-1px); }
   /* ===== サジェスト ===== */
   .suggest { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 8px; }
   .chip { background: #fff; border: 1.5px solid var(--mai-soft); color: var(--mai-primary);
@@ -83,15 +106,24 @@
     box-shadow: 0 4px 12px rgba(177,30,124,.35); transition: .15s; }
   .send-btn:disabled { opacity: .5; cursor: default; }
   .send-btn:not(:disabled):active { transform: scale(.92); }
+  /* 履歴クリアボタン */
+  .clear-history {
+    background: none; border: none; color: rgba(255,255,255,.7); font-size: .7rem; cursor: pointer;
+    padding: 4px 8px; border-radius: 6px; transition: .15s; margin-left: 4px;
+  }
+  .clear-history:hover { color: #fff; background: rgba(255,255,255,.15); }
 </style>
 </head>
 <body>
+  <div class="shell">
   <header class="chat-header">
     <img class="avatar" src="./icon-192.webp" alt="恋乃夜まい">
     <div class="meta">
       <div class="name">恋乃夜まい <span class="heart">♥</span> まいAI</div>
-      <div class="sub">恋の魔女 / だーりんの“ドキドキ”を待っています</div>
+      <div class="sub" id="headerSub">恋の魔女 / だーりんの“ドキドキ”を待っています</div>
     </div>
+    <button class="r18-toggle" id="r18Toggle" type="button" aria-pressed="false" title="大人のモードを切り替え">🔞</button>
+    <button class="clear-history" id="clearHistory" type="button" title="チャット履歴をクリア">🗑️</button>
     <a class="home" href="./admin.html">管理画面</a>
   </header>
 
@@ -108,6 +140,7 @@
     <textarea id="input" rows="1" placeholder="君のドキドキ…聞かせて？（質問を入力）" autocomplete="off"></textarea>
     <button class="send-btn" id="send" type="submit" aria-label="送信">➤</button>
   </form>
+  </div>
 
 <script>
 (function () {
@@ -117,7 +150,69 @@
   const sendBtn = document.getElementById("send");
   const form = document.getElementById("composer");
   const suggest = document.getElementById("suggest");
+  const r18Toggle = document.getElementById("r18Toggle");
+  const headerSub = document.getElementById("headerSub");
+  const clearHistoryBtn = document.getElementById("clearHistory");
   let busy = false;
+  let history = [];       // API 用の会話履歴 (role/content)
+  let r18 = false;
+
+  // ===== 質問履歴 (上矢印で復元用) =====
+  const SENT_KEY = "mai_sent_questions";
+  let sentQuestions = [];
+  let sentIdx = -1;
+  function loadSent() {
+    try { sentQuestions = JSON.parse(localStorage.getItem(SENT_KEY) || "[]"); } catch { sentQuestions = []; }
+    sentIdx = sentQuestions.length;
+  }
+  function saveSent(q) {
+    if (!q.trim()) return;
+    // 直前と同じなら重複保存しない
+    if (sentQuestions.length && sentQuestions[sentQuestions.length - 1] === q) return;
+    sentQuestions.push(q);
+    if (sentQuestions.length > 200) sentQuestions = sentQuestions.slice(-200);
+    try { localStorage.setItem(SENT_KEY, JSON.stringify(sentQuestions)); } catch {}
+    sentIdx = sentQuestions.length;
+  }
+
+  // ===== チャット履歴 (localStorage) =====
+  const HIST_KEY = "mai_chat_log";
+  const MAX_LOG = 100; // 最大保存メッセージ数
+  let chatLog = [];    // [{role:'user'|'ai', text:string, sources?:[], isError?:bool}]
+
+  function loadLog() {
+    try { chatLog = JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); } catch { chatLog = []; }
+  }
+  function saveLog() {
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(chatLog.slice(-MAX_LOG))); } catch {}
+  }
+  function clearLog() {
+    chatLog = [];
+    try { localStorage.removeItem(HIST_KEY); } catch {}
+    log.innerHTML = "";
+    showWelcome();
+  }
+
+  // ===== R18モード: localStorage に保持 =====
+  function initR18() {
+    try { r18 = localStorage.getItem("mai_r18_mode") === "1"; } catch { r18 = false; }
+    syncR18();
+  }
+  function syncR18() {
+    r18Toggle.classList.toggle("on", r18);
+    r18Toggle.setAttribute("aria-pressed", String(r18));
+    headerSub.textContent = r18
+      ? "🔞 大人のモード / だーりん、少し特殊な部屋で待機中…（18禁・フィクション）"
+      : "恋の魔女 / だーりんの\u201cドキドキ\u201dを待っています";
+  }
+  r18Toggle.addEventListener("click", () => {
+    r18 = !r18;
+    try { localStorage.setItem("mai_r18_mode", r18 ? "1" : "0"); } catch {}
+    syncR18();
+  });
+  clearHistoryBtn.addEventListener("click", () => {
+    if (confirm("チャット履歴をすべて削除しますか？")) clearLog();
+  });
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
@@ -127,13 +222,13 @@
 
   function scrollDown(){ log.scrollTop = log.scrollHeight; }
 
-  function addUser(text){
+  function addUser(text, fromLog){
     const el = document.createElement("div");
     el.className = "msg user";
     el.innerHTML = `<div class="bubble">${esc(text)}</div>`;
     log.appendChild(el); scrollDown();
   }
-  function addAI(){
+  function addAI(fromLog){
     const el = document.createElement("div");
     el.className = "msg ai";
     el.innerHTML = `<img class="ai-ava" src="${AVATAR}" alt="まい"><div class="bubble"></div>`;
@@ -158,36 +253,126 @@
     scrollDown();
   }
 
+  function showError(bubble, msg, question){
+    bubble.innerHTML = esc(msg);
+    // 再試行ボタン
+    const retry = document.createElement("button");
+    retry.className = "retry-btn";
+    retry.textContent = "🔄 もう一度試す";
+    retry.addEventListener("click", () => {
+      bubble.closest(".msg")?.remove();
+      // ログからも削除
+      chatLog = chatLog.filter((m, i) => !(m.role === "ai" && m.isError && m.text === msg));
+      saveLog();
+      ask(question);
+    });
+    bubble.appendChild(retry);
+    scrollDown();
+  }
+
+  // ===== 質問送信 =====
   async function ask(question){
     if (busy || !question.trim()) return;
     busy = true; sendBtn.disabled = true;
     if (suggest) suggest.style.display = "none";
     addUser(question);
+    history.push({ role: "user", content: question });
+    // 質問履歴に保存
+    saveSent(question);
     const bubble = addAI(); typing(bubble);
     try {
       const r = await fetch("/api/admin/ask", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question })
+        body: JSON.stringify({ question, history: history.slice(-10), r18: r18 ? true : false })
       });
       if (r.status === 401) { location.href = "./admin/login"; return; }
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) { bubble.innerHTML = esc("エラー: " + (j.error || r.status)); }
-      else { renderAnswer(bubble, j.answer, j.sources); }
+      if (!r.ok) {
+        const errMsg = "エラー: " + (j.error || r.status);
+        showError(bubble, errMsg, question);
+        history.pop();
+        chatLog.push({ role: "ai", text: errMsg, isError: true, question });
+      } else {
+        renderAnswer(bubble, j.answer, j.sources);
+        history.push({ role: "assistant", content: j.answer });
+        chatLog.push({ role: "user", text: question });
+        chatLog.push({ role: "ai", text: j.answer, sources: j.sources });
+      }
+      saveLog();
     } catch (e) {
-      bubble.innerHTML = esc("通信エラー: " + e.message);
+      const errMsg = "通信エラー: " + e.message;
+      showError(bubble, errMsg, question);
+      history.pop();
+      chatLog.push({ role: "ai", text: errMsg, isError: true, question });
+      saveLog();
     } finally {
       busy = false; sendBtn.disabled = false; input.focus();
     }
   }
 
-  // 入力欄の自動リサイズ
+  // ===== ウェルカムメッセージ =====
+  function showWelcome(){
+    const b = addAI();
+    b.textContent = "やっほー、だーりん！ 恋乃夜まいだよ ♡\n配信予定でも、まいのことでも、なんでも聞いてね？";
+  }
+
+  // ===== 履歴復元 =====
+  function restoreLog(){
+    loadLog();
+    if (!chatLog.length) { showWelcome(); return; }
+    for (const m of chatLog) {
+      if (m.role === "user") {
+        addUser(m.text, true);
+      } else {
+        const b = addAI(true);
+        if (m.isError) {
+          showError(b, m.text, m.question || "");
+        } else {
+          renderAnswer(b, m.text, m.sources);
+        }
+      }
+    }
+    // history (API用) も復元
+    history = [];
+    for (const m of chatLog) {
+      if (m.role === "user") history.push({ role: "user", content: m.text });
+      else if (!m.isError) history.push({ role: "assistant", content: m.text });
+    }
+    scrollDown();
+  }
+
+  // ===== 入力欄の自動リサイズ =====
   function autosize(){ input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; }
   input.addEventListener("input", autosize);
-  // Enterで送信 / Shift+Enterで改行
+
+  // ===== キーハンドリング =====
   input.addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+    // Enter で送信
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); return; }
+    // 上矢印: 過去の質問を復元
+    if (e.key === "ArrowUp" && input.value === "" && sentQuestions.length) {
+      e.preventDefault();
+      if (sentIdx > 0) sentIdx--;
+      input.value = sentQuestions[sentIdx] || "";
+      autosize();
+      // カーソルを末尾に
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+    // 下矢印: もっと新しい質問へ
+    if (e.key === "ArrowDown" && sentQuestions.length) {
+      e.preventDefault();
+      if (sentIdx < sentQuestions.length - 1) {
+        sentIdx++;
+        input.value = sentQuestions[sentIdx] || "";
+      } else {
+        sentIdx = sentQuestions.length;
+        input.value = "";
+      }
+      autosize();
+    }
   });
+
   function submit(){
     const q = input.value.trim();
     if (!q) return;
@@ -200,16 +385,11 @@
     if (chip) ask(chip.textContent.trim());
   });
 
-  // 認証チェック＆ウェルカム
-  (async () => {
-    try {
-      const v = await fetch("/api/admin/verify", { credentials: "include" });
-      if (!v.ok) { location.href = "./admin/login"; return; }
-    } catch { /* オフライン等はそのまま表示 */ }
-    const b = addAI();
-    b.textContent = "やっほー、だーりん！ 恋乃夜まいだよ ♡\n配信予定でも、まいのことでも、なんでも聞いてね？";
-    input.focus();
-  })();
+  // ===== 初期化 =====
+  loadSent();
+  initR18();
+  restoreLog();
+  input.focus();
 })();
 </script>
 </body>

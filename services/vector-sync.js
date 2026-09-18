@@ -15,6 +15,7 @@ const KNOWLEDGE_FILE = process.env.KNOWLEDGE_FILE || path.join(__dirname, "..", 
 
 // source 毎に数値IDを衝突しないようオフセットする（Qdrantのpoint idは符号なし整数）
 const SOURCE_OFFSET = { notifications: 1_000_000_000, events: 2_000_000_000, knowledge: 3_000_000_000 };
+const MINUTES_OFFSET = 4_000_000_000;
 
 function dbAll(sql, params = []) {
   return new Promise((resolve, reject) => ctx.db.all(sql, params, (e, r) => (e ? reject(e) : resolve(r || []))));
@@ -120,6 +121,19 @@ async function syncVectors() {
         const n = await fn();
         total += n;
         if (n < BATCH) break;
+      }
+    }
+    // minutes(議事録) の増分同期
+    if (ctx.db) {
+      try {
+        const minutesSync = require("./minutes-sync");
+        for (let i = 0; i < 20; i++) {
+          const n = await minutesSync.syncMinutesIncremental(ctx.db, BATCH);
+          total += n;
+          if (n < BATCH) break;
+        }
+      } catch (e) {
+        console.error("[vector-sync] minutes sync error:", e?.message || e);
       }
     }
     if (total > 0) console.log(`[vector-sync] upserted ${total} points`);
