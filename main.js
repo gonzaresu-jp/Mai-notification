@@ -158,7 +158,7 @@ async function main() {
   cleanupPuppeteerLocks();
 
   // データベース初期化
-  const dbPath = path.join(__dirname, "data.db");
+  const dbPath = path.join(__dirname, process.env.DB_FILE_NAME || "data.db");
   db = new sqlite3.Database(dbPath);
   db.serialize(() => {
     db.run("PRAGMA busy_timeout = 5000");
@@ -859,7 +859,7 @@ startPromises.push((async () => {
       vapidConfig.vapidPublicKey !== "test-key"
     ) {
       await sendStatusUpdate("milestone", "Milestone Scheduler", "running");
-      const dbPath = path.join(__dirname, "data.db");
+      const dbPath = path.join(__dirname, process.env.DB_FILE_NAME || "data.db");
       milestoneScheduler = new MilestoneScheduler(dbPath, vapidConfig);
       if (typeof milestoneScheduler.start === "function") {
         milestoneScheduler.start();

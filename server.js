@@ -22,7 +22,7 @@ const app = express();
 ctx.app = app;
 app.set("trust proxy", 1);
 
-const dbPath = path.join(__dirname, "data.db");
+const dbPath = path.join(__dirname, process.env.DB_FILE_NAME || "data.db");
 const db = new sqlite3.Database(dbPath);
 ctx.db = db;
 
@@ -123,23 +123,27 @@ require("./routes/notify").register(app, db);
 require("./routes/twitter-media").register(app, db);
 require("./routes/rag").register(app, db);
 require("./routes/archive").register(app);
+// --- テスト環境フラグ（staging: NODE_ENV=development で定期タスク等を停止） ---
+const isTestInstance = process.env.NODE_ENV === "development";
+
 // --- Milestone Scheduler ---
-if (ctx.vapidConfig.vapidPublicKey !== "test-key") {
+if (ctx.vapidConfig.vapidPublicKey !== "test-key" && !isTestInstance) {
   ctx.milestoneScheduler = new MilestoneScheduler(dbPath, ctx.vapidConfig);
   ctx.milestoneScheduler.start();
 } else {
   console.log("Milestone notifications disabled (no VAPID)");
 }
 
-// --- Periodic Tasks ---
-startPeriodicTasks();
+// --- Periodic Tasks --- (テスト環境では定期タスク・ベクトル同期・マイルストーン通知を停止)
+if (isTestInstance) console.log("[staging] periodic/vector/milestone tasks skipped (test instance)");
+else startPeriodicTasks();
 
 // --- アーカイブ上流(.70:8766)のヘルスを定期監視（サーキットブレーカー用） ---
 const archiveRoutes = require("./routes/archive");
 setInterval(() => { archiveRoutes.refreshHealth().catch(() => {}); }, 20000);
 
-// --- ベクトルDB同期（VECTOR_DB_URL / EMBEDDING_ENDPOINT 設定時のみ稼働） ---
-require("./services/vector-sync").startVectorSync();
+// --- ベクトルDB同期（VECTOR_DB_URL / EMBEDDING_ENDPOINT 設定時のみ稼働・テスト環境では停止） ---
+if (!isTestInstance) require("./services/vector-sync").startVectorSync();
 
 // --- System Monitor ---
 discordAlert.startSystemMonitor();
