@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."   # 本番リポジトリ（scripts/ の親）
 
 SRC="data.db"
-STAGING_DIR="/var/www/html/mai-push-test"
+STAGING_DIR="/home/yuzuki/mai-push-test"
 if [ -d "$STAGING_DIR" ]; then
   DST="$STAGING_DIR/data-test.db"
   TARGET_CWD="$STAGING_DIR"
