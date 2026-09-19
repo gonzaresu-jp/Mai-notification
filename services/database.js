@@ -121,6 +121,26 @@ function initDatabase() {
     )`, (err) => { if (err) console.error("video_minutes create err:", err.message); });
     db.run(`CREATE INDEX IF NOT EXISTS idx_video_minutes_video_id ON video_minutes (video_id)`);
 
+    // まいAIチャットの会話セッション（管理者ユーザー別）
+    db.run(`CREATE TABLE IF NOT EXISTS chat_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_user TEXT NOT NULL,
+      title TEXT,
+      r18 INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => { if (err) console.error("chat_sessions create err:", err.message); });
+    db.run(`CREATE INDEX IF NOT EXISTS idx_chat_sessions_admin ON chat_sessions (admin_user, updated_at)`);
+    db.run(`CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      sources_json TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => { if (err) console.error("chat_messages create err:", err.message); });
+    db.run(`CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages (session_id, id)`);
+
     ensureNotificationsSchema();
     ensureScheduledSchema();
     ensureEventsSchema();
