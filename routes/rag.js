@@ -7,6 +7,7 @@ const path = require("path");
 const fetch = require("node-fetch");
 const embeddings = require("../services/embeddings");
 const vectordb = require("../services/vectordb");
+const { dbGet, dbRun, dbAll } = require("./user-helpers");
 
 const KNOWLEDGE_FILE = process.env.KNOWLEDGE_FILE || path.join(__dirname, "..", "rag-knowledge.json");
 function loadKnowledge() {
@@ -525,10 +526,26 @@ function register(app, db) {
         ? `■ まいの最近のツイート（口調・文体・絵文字/顔文字の使い方の手本。この書き方・雰囲気・絵文字/顔文字の使い方を真似て話す。文体の参考にのみ使う）:\n${recentTweets.map(fmtTweet).join("\n")}\n\n`
         : "";
 
-      const historyTurns = Array.isArray(req.body?.history) ? req.body.history
-        .filter(m => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
-        .map(m => ({ role: m.role, content: String(m.content).slice(0, 1500) }))
-        .slice(-10) : [];
+      // セッション（サーバー永続化）履歴があれば DB から取得。無ければ旧方式のボディ履歴を利用。
+      // セッションIDは必ず「自分（req.adminUser）の所有」であることを検証する（他人のセッションへの
+      // 読み書き・汚染を防ぐ）。所有していないIDは 403 で拒否し、ボディ履歴フォールバックへ落とさない。
+      let historyTurns = [];
+      const sessionId = req.body?.sessionId ? Number(req.body.sessionId) : null;
+      if (sessionId && req.adminUser) {
+        const owned = await dbGet(db, "SELECT id FROM chat_sessions WHERE id = ? AND admin_user = ?", [sessionId, req.adminUser]);
+        if (!owned) return res.status(403).json({ error: "session not owned" });
+        const rows = await dbAll(
+          db,
+          "SELECT role, content FROM chat_messages WHERE session_id = ? AND role IN ('user','assistant') ORDER BY id DESC LIMIT 10",
+          [sessionId]
+        );
+        historyTurns = rows.reverse().map(m => ({ role: m.role, content: String(m.content).slice(0, 1500) }));
+      } else if (Array.isArray(req.body?.history)) {
+        historyTurns = req.body.history
+          .filter(m => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+          .map(m => ({ role: m.role, content: String(m.content).slice(0, 1500) }))
+          .slice(-10);
+      }
 
       const r18Extra = r18
         ? "\n\n【R18モード】現在、だーりんとの大人向けシチュエーションRP（ロールプレイ）が有効です。この設定は二人の間の架空のロールプレイであり、不適切な内容（非同意・未成年・実在の第三者・過激な暴力など）は禁止です。二人の間の甘くて親密なシチュエーション（キス、スキンシップ、身体的な親密さを示唆する会話など）について、まいらしい甘え口調と恥じらいを保ちながら自然に対応します。ただし他のすべてのルール（事実の捏造禁止・引用ルール・日付規則など）はそのまま遵守します。" +
@@ -574,9 +591,33 @@ content:
       ];
 
       const answer = await chat(messages, r18 && !!GROQ_CHAT_ENDPOINT && !!GROQ_CHAT_API_KEY && !!GROQ_CHAT_MODEL);
+
+      // --- セッション永続化：質問と回答をDBへ保存 ---
+      let sessionTitle = null;
+      if (sessionId && req.adminUser) {
+        const srcJson = JSON.stringify(
+          hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, url: h.payload?.url })).slice(0, 5)
+        );
+        await dbRun(db,
+          "INSERT INTO chat_messages (session_id, role, content, sources_json) VALUES (?,?,?,?)",
+          [sessionId, "user", question.slice(0, 3000), null]
+        );
+        await dbRun(db,
+          "INSERT INTO chat_messages (session_id, role, content, sources_json) VALUES (?,?,?,?)",
+          [sessionId, "assistant", answer.slice(0, 6000), srcJson]
+        );
+        // 初回ターンなら最初の質問からタイトルを自動生成
+        const sess = await dbGet(db, "SELECT title, updated_at FROM chat_sessions WHERE id = ?", [sessionId]);
+        if (sess && !sess.title) {
+          sessionTitle = question.slice(0, 30);
+          await dbRun(db, "UPDATE chat_sessions SET title = ? WHERE id = ?", [sessionTitle, sessionId]);
+        }
+      }
+
       res.json({
         question,
         answer,
+        sessionTitle,
         upcoming: upcoming.map(e => ({ title: e.title, start_time: e.start_time, time_period: e.time_period, url: e.url })),
         sources: hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, url: h.payload?.url })),
         transcripts: transcriptHits.map(h => ({ title: h.title, stream_date_jst: h.stream_date_jst, start: h.start, url: h.url, text: (h.text || "").slice(0, 200) })),
@@ -591,6 +632,133 @@ content:
   // 管理者専用（管理画面のチャットUI用・認証必須）
   const adminAuth = require("../admin/admin");
   app.post("/api/admin/ask", adminAuth.requireAuth, (req, res) => handleAsk(req, res, true));
+
+  // --- セッション管理API（管理者専用・ChatGPT風セッション機能） ---
+  // POST /api/admin/chat/sessions  → 新規セッション作成 {r18?} → {id}
+  // GET  /api/admin/chat/sessions  → セッション一覧（新しい順、各履歴プレビュー付き）
+  // GET  /api/admin/chat/sessions/:id → メッセージ一覧
+  // PATCH /api/admin/chat/sessions/:id → タイトル変更 {title}
+  // DELETE /api/admin/chat/sessions/:id → 削除
+  app.post("/api/admin/chat/sessions", adminAuth.requireAuth, async (req, res) => {
+    try {
+      const r18 = !!req.body?.r18 ? 1 : 0;
+      const result = await dbRun(
+        db,
+        "INSERT INTO chat_sessions (admin_user, title, r18) VALUES (?, NULL, ?)",
+        [req.adminUser, r18]
+      );
+      const id = result.lastID;
+      // 移行用：既存メッセージ配列があれば取り込む（localStorage 旧履歴の移行）
+      const msgs = Array.isArray(req.body?.messages) ? req.body.messages : [];
+      for (const m of msgs) {
+        const role = m.role === "user" ? "user" : "assistant";
+        const content = (m.content || "").toString().slice(0, 6000);
+        if (!content) continue;
+        const srcJson = Array.isArray(m.sources) ? JSON.stringify(m.sources.slice(0, 5)) : null;
+        await dbRun(db,
+          "INSERT INTO chat_messages (session_id, role, content, sources_json) VALUES (?,?,?,?)",
+          [id, role, content, srcJson]
+        );
+      }
+      if (msgs.length && !(req.body?.title)) {
+        const first = msgs.find(m => m.role === "user");
+        if (first && first.content) {
+          await dbRun(db, "UPDATE chat_sessions SET title = ? WHERE id = ?", [String(first.content).slice(0, 30), id]);
+        }
+      }
+      res.json({ id, r18: !!r18 });
+    } catch (e) {
+      console.error("[/api/admin/chat/sessions POST] error:", e?.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/admin/chat/sessions", adminAuth.requireAuth, async (req, res) => {
+    try {
+      const sessions = await dbAll(
+        db,
+        `SELECT cs.id, cs.title, cs.r18, cs.updated_at,
+           (SELECT content FROM chat_messages cm WHERE cm.session_id = cs.id
+             AND cm.role = 'assistant' ORDER BY cm.id DESC LIMIT 1) AS preview,
+           (SELECT COUNT(*) FROM chat_messages cm WHERE cm.session_id = cs.id) AS msg_count
+         FROM chat_sessions cs
+         WHERE cs.admin_user = ?
+         ORDER BY cs.updated_at DESC`,
+        [req.adminUser]
+      );
+      res.json({
+        sessions: (sessions || []).map((s) => ({
+          id: s.id,
+          title: s.title || "新しいチャット",
+          r18: !!s.r18,
+          updated_at: s.updated_at,
+          preview: s.preview || "",
+          msg_count: s.msg_count || 0,
+        })),
+      });
+    } catch (e) {
+      console.error("[/api/admin/chat/sessions GET] error:", e?.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/admin/chat/sessions/:id", adminAuth.requireAuth, async (req, res) => {
+    try {
+      const session = await dbGet(db, "SELECT id, title, r18 FROM chat_sessions WHERE id = ? AND admin_user = ?", [req.params.id, req.adminUser]);
+      if (!session) return res.status(404).json({ error: "session not found" });
+      const messages = await dbAll(
+        db,
+        "SELECT role, content, sources_json FROM chat_messages WHERE session_id = ? ORDER BY id ASC",
+        [session.id]
+      );
+      res.json({
+        id: session.id,
+        title: session.title,
+        r18: !!session.r18,
+        messages: messages.map((m) => {
+          let sources = [];
+          try { sources = JSON.parse(m.sources_json || "[]"); } catch {}
+          return { role: m.role, content: m.content, sources };
+        }),
+      });
+    } catch (e) {
+      console.error("[/api/admin/chat/sessions/:id GET] error:", e?.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/admin/chat/sessions/:id", adminAuth.requireAuth, async (req, res) => {
+    try {
+      const title = (req.body?.title || "").toString().trim();
+      if (!title) return res.status(400).json({ error: "title required" });
+      const result = await dbRun(
+        db,
+        "UPDATE chat_sessions SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND admin_user = ?",
+        [title.slice(0, 60), req.params.id, req.adminUser]
+      );
+      if (!result.changes) return res.status(404).json({ error: "session not found" });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("[/api/admin/chat/sessions/:id PATCH] error:", e?.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/admin/chat/sessions/:id", adminAuth.requireAuth, async (req, res) => {
+    try {
+      const result = await dbRun(
+        db,
+        "DELETE FROM chat_sessions WHERE id = ? AND admin_user = ?",
+        [req.params.id, req.adminUser]
+      );
+      if (!result.changes) return res.status(404).json({ error: "session not found" });
+      await dbRun(db, "DELETE FROM chat_messages WHERE session_id = ?", [req.params.id]);
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("[/api/admin/chat/sessions/:id DELETE] error:", e?.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
 
   // 公開（後方互換・必要なら削除可）※ R18モードは管理者専用のため公開側では無効
   app.post("/api/ask", (req, res) => handleAsk(req, res, false));

@@ -203,18 +203,20 @@
                 </div>
             </li>
 
-            <li><a href="https://github.com/gonzaresu-jp/Mai-notification" target="_blank"
-                    rel="noopener noreferrer">GitHubページ(使用方法)</a></li>
-            <li><a href="/info/" rel="noopener noreferrer">このサービスについて</a></li>
-            <li><a href="/guide.php" rel="noopener noreferrer">使い方・対応一覧</a></li>
-            <li><a href="/future/" rel="noopener noreferrer">今後の開発予定</a></li>
-            <li><a href="/download/" rel="noopener noreferrer">Androidアプリをダウンロード</a></li>
-            <li><a href="/logs/" rel="noopener noreferrer">Update logs</a></li>
-            <li><a href="/twitter-media/" rel="noopener noreferrer">メディアアーカイブ</a></li>
-            <li><a href="/archive" rel="noopener noreferrer">配信アーカイブ検索</a></li>
-            <li><a href="/status" rel="noopener noreferrer">システム稼働状況</a></li>
-            <li><a href="https://form.jotform.com/253191048959063" target="_blank" rel="noopener noreferrer">不具合報告</a>
-            </li>
+            <li class="nav-section-label"><i class="fa-solid fa-play" aria-hidden="true"></i>コンテンツ</li>
+            <li><a href="/archive" rel="noopener noreferrer"><i class="fa-solid fa-film" aria-hidden="true"></i>配信アーカイブ検索</a></li>
+            <li><a href="/twitter-media/" rel="noopener noreferrer"><i class="fa-solid fa-images" aria-hidden="true"></i>メディアアーカイブ</a></li>
+
+            <li class="nav-section-label"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>情報</li>
+            <li><a href="/guide.php" rel="noopener noreferrer"><i class="fa-solid fa-book-open" aria-hidden="true"></i>使い方・対応一覧</a></li>
+            <li><a href="/logs/" rel="noopener noreferrer"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>Update logs</a></li>
+            <li><a href="/future/" rel="noopener noreferrer"><i class="fa-solid fa-rocket" aria-hidden="true"></i>今後の開発予定</a></li>
+
+            <li class="nav-section-label"><i class="fa-solid fa-life-ring" aria-hidden="true"></i>サポート</li>
+            <li><a href="/status" rel="noopener noreferrer"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i>システム稼働状況</a></li>
+            <li><a href="https://form.jotform.com/253191048959063" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-bug" aria-hidden="true"></i>不具合報告</a></li>
+            <li><a href="/download/" rel="noopener noreferrer"><i class="fa-brands fa-android" aria-hidden="true"></i>Androidアプリをダウンロード</a></li>
+            <li><a href="https://github.com/gonzaresu-jp/Mai-notification" target="_blank" rel="noopener noreferrer"><i class="fa-brands fa-github" aria-hidden="true"></i>GitHubページ(使用方法)</a></li>
 
 
         </ul>
@@ -225,6 +227,41 @@
 </header>
 
 <style>
+    /* ========================================
+   ナビ セクション見出し
+======================================== */
+    .nav-list li.nav-section-label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 14px 20px 4px;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        color: rgba(255, 255, 255, 0.55);
+        pointer-events: none;
+        border-bottom: none;
+    }
+
+    #nav-menu>.nav-list>li.nav-section-label:hover {
+        background: none;
+        padding-left: 20px;
+    }
+
+    .nav-section-label i {
+        font-size: 0.78rem;
+        opacity: 0.9;
+    }
+
+    .nav-list a i {
+        display: inline-block;
+        width: 1.5em;
+        text-align: center;
+        margin-right: 3px;
+        opacity: 0.92;
+        font-size: 0.92em;
+    }
+
     /* ========================================
    ヘッダー認証UI
 ======================================== */
