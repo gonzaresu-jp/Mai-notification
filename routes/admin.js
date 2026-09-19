@@ -20,6 +20,10 @@ function register(app, db) {
         });
         return;
       }
+      // テスト環境（DISABLE_NOTIFICATIONS=1）では実pushを行わず成功を返す
+      if (process.env.DISABLE_NOTIFICATIONS === "1" || process.env.DISABLE_NOTIFICATIONS === "true") {
+        return res.json({ success: true, message: "Notification suppressed (test env)", sentCount: 0, totalCount: 0, suppressed: true });
+      }
       const result = await notif.handleAdminNotify(req.body, req.adminUser);
       res.json({ success: true, message: `Notification sent to ${result.sentCount} clients`, ...result });
     } catch (e) { res.status(500).json({ error: e.message }); }

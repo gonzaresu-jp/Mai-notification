@@ -32,6 +32,15 @@ function register(app, db) {
     if (!data || !type) return res.status(400).json({ error: "Missing data or type" });
     console.log("[/api/notify] Received:", { title: data.title, settingKey });
 
+    // テスト環境（DISABLE_NOTIFICATIONS=1）では実pushを行わず、履歴に記録するだけにする
+    if (process.env.DISABLE_NOTIFICATIONS === "1" || process.env.DISABLE_NOTIFICATIONS === "true") {
+      db.run("INSERT INTO notifications (title, body, url, icon, image, platform, status, tweet_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [data.title || "テスト", data.body || "", data.url || null, data.icon || null, data.image || null, settingKey || type, "test", data.tweet_id || null]);
+      scheduleHistoryJsonUpdate();
+      console.log("[/api/notify] suppressed (DISABLE_NOTIFICATIONS) — logged to test DB only");
+      return res.json({ success: true, message: "Notification suppressed (test env)", sentCount: 0, totalCount: 0, suppressed: true });
+    }
+
     const notificationHash = getNotificationHash(data, settingKey);
     const now = Date.now();
     const lastSent = ctx.recentNotifications.get(notificationHash);
