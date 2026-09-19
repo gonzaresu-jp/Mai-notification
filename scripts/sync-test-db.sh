@@ -3,18 +3,25 @@
 # 使い方: bash scripts/sync-test-db.sh
 # ※ staging API が起動している場合は先に止めてから実行（ロック競合回避）
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.."   # 本番リポジトリ（scripts/ の親）
 
 SRC="data.db"
-DST="data-test.db"
+STAGING_DIR="/var/www/html/mai-push-test"
+if [ -d "$STAGING_DIR" ]; then
+  DST="$STAGING_DIR/data-test.db"
+  TARGET_CWD="$STAGING_DIR"
+else
+  # staging worktree が無い場合は自分のリポジトリ内に書く（旧挙動）
+  DST="data-test.db"
+  TARGET_CWD=""
+fi
 
 if [ ! -f "$SRC" ]; then
   echo "error: $SRC not found" >&2
   exit 1
 fi
 
-DOTENV_LOG=$( [ -x "$(command -v dotenv)" ] && echo yes || echo no )
-if pm2 describe mai-push-api-test >/dev/null 2>&1 && pm2 pid mai-push-api-test >/dev/null 2>&1; then
+if pm2 describe mai-push-api-test >/dev/null 2>&1; then
   PID=$(pm2 pid mai-push-api-test 2>/dev/null || true)
   if [ -n "$PID" ] && [ "$PID" != "0" ]; then
     echo "warning: mai-push-api-test (pid=$PID) が稼働中です。先に pm2 stop mai-push-api-test を推奨"
