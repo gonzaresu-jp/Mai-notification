@@ -1,6 +1,23 @@
 <?php
 $updateLogs = [
     [
+        "date" => "2026-09-20",
+        "details" => [
+            "add" => [
+                "staging（テスト）環境を構築 — 本番と同じホストに git worktree（/home/yuzuki/mai-push-test）で分離し、専用DB（data-test.db）・実push抑止（DISABLE_NOTIFICATIONS=1）・定期タスク停止（NODE_ENV=development）を実現。専用URL https://mai-test.honna-yuzuki.com/ でログインゲート付き公開",
+                "開発フロー用スクリプト scripts/deploy-staging.sh / scripts/promote.sh を追加 — ブランチをstagingへデプロイして自動smoke、問題なければmainへfast-forward昇格する運用を確立（詳細は DEVELOPMENT-WORKFLOW.md に記載）",
+            ],
+            "change" => [
+                "アーカイブAPIのレートリミットを調整 — /api/ 全体の上限を150回/分から300回/分に緩和し、/api/archive/* は専用400回/分に分離（配信アーカイブ検索の1画面表示が約40リクエストで、ページ送りや検索を数回すると429「Too many API requests」になっていた問題を解消）",
+            ],
+            "fix" => [
+                "GitHub公開リポジトリの履歴に混入していた Twitch認証情報（Client Secret / App Access Token）と Discord Webhook URL を全履歴から除去 — git-filter-repo でrewriteしforce push（SHA変更済み）。認証情報は全て再発行済み（旧値は無効化）。残存しないことを全コミットで検証済み",
+            ],
+        ],
+        "lines" => "73,600",
+    ],
+
+    [
         "date" => "2026-09-19",
         "details" => [
             "add" => [
