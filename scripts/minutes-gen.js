@@ -178,7 +178,8 @@ async function resolveVideos(db, args) {
     const rows = await dbAll(db,
       `SELECT video_id, title, stream_date_jst FROM video_minutes`, []);
     const done = new Set(rows.map(r => r.video_id));
-    const list = await fetch(`${ARCHIVE_API_BASE}/api/videos?limit=100&sort=stream_at_desc`).then(r => r.json()).catch(() => null);
+    // include_deleted=1 で「YTから削除された動画」も要約生成の対象にする（AIのみ利用）
+    const list = await fetch(`${ARCHIVE_API_BASE}/api/videos?limit=100&sort=stream_at_desc&include_deleted=1`).then(r => r.json()).catch(() => null);
     let candidates = [];
     if (list && Array.isArray(list.videos)) {
       // v_catalog には caption 有無の列が無いため、タイトルで候補を絞る。

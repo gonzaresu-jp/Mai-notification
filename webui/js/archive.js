@@ -220,6 +220,12 @@
         if (fb) img.src = fb;
       });
     });
+    // ページ移動などでカードを再構築したとき、確定済みバッジをキャッシュから再描画する
+    // （badgeRendered が残っていると applyBadges がスキップして表示が消える）。
+    el.results.querySelectorAll('.ar-card[data-video]').forEach(function (card) {
+      badgeRendered[card.getAttribute('data-video')] = false;
+    });
+    renderBadgeLine();
     applyBadges();
   }
 
@@ -800,6 +806,7 @@
             if (m.like_count != null) g.video.like_count = m.like_count;
             if (!g.video.stream_at_jst && m.stream_at_jst) g.video.stream_at_jst = m.stream_at_jst;
             if (!g.video.stream_date_jst && m.stream_date_jst) g.video.stream_date_jst = m.stream_date_jst;
+            if (!g.video.categories && Array.isArray(m.categories)) g.video.categories = m.categories;
           }
         });
         (data.title || []).forEach(function (hit) {

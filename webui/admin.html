@@ -452,6 +452,139 @@
         .back-home:hover {
             background: rgba(255,255,255,0.3);
         }
+
+        /* --- アーカイブ管理 --- */
+        .arc-tabbar {
+            display: flex;
+            gap: 8px;
+            margin: 12px 0;
+            flex-wrap: wrap;
+        }
+        .arc-tab.is-active {
+            background: #B11E7C;
+            color: #fff;
+            border-color: #B11E7C;
+        }
+        .arc-ctlbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .arc-ctlbar input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+        }
+        .arc-info {
+            font-size: .85rem;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .arc-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .arc-row {
+            border: 1px solid #e3d5f0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #fff;
+        }
+        .arc-row.dim {
+            opacity: .75;
+        }
+        .arc-row-head {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        .arc-row-title {
+            flex: 1;
+            min-width: 200px;
+            font-weight: 600;
+            font-size: .92rem;
+        }
+        .arc-row-meta {
+            font-size: .78rem;
+            color: #888;
+            margin-top: 4px;
+        }
+        .arc-badge {
+            display: inline-block;
+            font-size: .72rem;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #efe5f8;
+            color: #5b3a7a;
+            white-space: nowrap;
+        }
+        .arc-badge.deleted {
+            background: #fdeaea;
+            color: #b3261e;
+        }
+        .arc-badge.no-transcript {
+            background: #fff3d6;
+            color: #8a6d00;
+        }
+        .arc-chip {
+            display: inline-block;
+            font-size: .74rem;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #e8e0f4;
+            color: #4a2f6d;
+            margin: 2px 4px 2px 0;
+        }
+        .arc-chip button {
+            border: none;
+            background: none;
+            color: inherit;
+            cursor: pointer;
+            margin-left: 2px;
+            font-size: .9rem;
+            line-height: 1;
+        }
+        .arc-row-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+        .arc-editor {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            background: #faf6ff;
+            border: 1px dashed #cbb8e0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .arc-editor .cat-opts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .arc-editor .cat-opts label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: .83rem;
+        }
+        .arc-editor input[type="text"] {
+            width: 100%;
+        }
+        .arc-addform {
+            margin-bottom: 10px;
+        }
+        .arc-addform-body {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
     </style>
 </head>
 <body>
@@ -553,6 +686,50 @@
             </div>
             <div id="passkey-list" style="margin-top:12px; font-size:.85rem; color:#555;"></div>
             <div class="status-message" id="passkey-status"></div>
+        </section>
+
+        <section class="sub-panel">
+            <h2>📼 アーカイブ管理</h2>
+            <p style="margin:0 0 10px; color:#666; font-size:.9rem;">
+                配信アーカイブのカテゴリ編集・YTから削除された動画の管理。
+                「deleted」にした動画は公開検索に出なくなり、AI（まいAIチャット）と要約生成だけが使えるようになります。
+            </p>
+            <div class="arc-tabbar" id="arc-tabbar">
+                <button type="button" class="btn-secondary arc-tab is-active" data-tab="cats">🏷 カテゴリ編集</button>
+                <button type="button" class="btn-secondary arc-tab" data-tab="deleted">🗑 削除済み動画</button>
+            </div>
+
+            <div class="arc-tabpane" id="arc-pane-cats">
+                <div class="arc-ctlbar">
+                    <input type="text" id="arc-cat-filter" placeholder="タイトル/IDで絞り込み" />
+                    <button type="button" class="btn-secondary" id="arc-cat-search">🔎 絞り込み</button>
+                    <button type="button" class="event-btn event-btn-main" id="arc-cat-reload">🔄 再読み込み</button>
+                    <button type="button" class="event-btn event-btn-sub" id="arc-cat-more">⬇ もっと読み込む</button>
+                </div>
+                <div class="arc-info" id="arc-cat-info">読み込み中...</div>
+                <div class="arc-list" id="arc-cat-list"></div>
+            </div>
+
+            <div class="arc-tabpane" id="arc-pane-deleted" style="display:none;">
+                <details class="arc-addform">
+                    <summary>➕ YTから削除された動画を追加</summary>
+                    <div class="arc-addform-body">
+                        <input type="text" id="arc-del-id" placeholder="video_id（11文字、URLでも可）" />
+                        <input type="text" id="arc-del-title" placeholder="タイトル" />
+                        <input type="date" id="arc-del-date" />
+                        <input type="number" id="arc-del-duration" placeholder="再生時間（秒）" />
+                        <input type="text" id="arc-del-url" placeholder="https://www.youtube.com/watch?v=..." />
+                        <button type="button" class="btn-primary" id="arc-del-add">登録（公開検索から除外）</button>
+                    </div>
+                </details>
+                <div class="arc-ctlbar">
+                    <button type="button" class="event-btn event-btn-sub" id="arc-del-reload">🔄 再読み込み</button>
+                </div>
+                <div class="arc-info" id="arc-del-info">読み込み中...</div>
+                <div class="arc-list" id="arc-del-list"></div>
+            </div>
+
+            <div class="status-message" id="arc-status"></div>
         </section>
     </div>
         
@@ -1321,5 +1498,6 @@
             loadPkList();
         })();
     </script>
+    <script src="./js/admin-archive.js?v=20260921"></script>
 </body>
 </html>

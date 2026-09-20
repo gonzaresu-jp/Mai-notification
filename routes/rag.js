@@ -15,6 +15,42 @@ function loadKnowledge() {
   catch { return []; }
 }
 
+// まいの性格・会話行動モデル（rag-personality.json）。配信アーカイブから抽出した
+// 「実際の行動・口調・関係性」をプロンプトへ注入するためのデータ。
+// 無ければ空オブジェクト（従来どおりプロンプト直書きだけ）にフォールバックする。
+const PERSONALITY_FILE = process.env.RAG_PERSONALITY_FILE || path.join(__dirname, "..", "rag-personality.json");
+let _personality = null;
+function loadPersonality() {
+  if (_personality) return _personality;
+  try {
+    const d = JSON.parse(fs.readFileSync(PERSONALITY_FILE, "utf8"));
+    _personality = (d && typeof d === "object") ? d : {};
+  } catch {
+    _personality = {};
+  }
+  return _personality;
+}
+
+// rag-personality.json の内容を「人格」ブロックとして組み立てる。
+// FACT（事実）/ TRAIT（性格傾向）/ BEHAVIOR（実際の会話行動パターン）/
+// EMOTION（感情表現）/ STYLE（口調・語彙）/ RELATIONSHIP（相手との関係性）/
+// EXEMPLARS（実際の配信で見られた発言例）を構造化して渡すと、モデルは「どのように振る舞うか」を
+// 抽象命令だけでなく実例から学べる。ファイルが無ければ空文字でフォールバック。
+function buildPersonaBlock() {
+  const p = loadPersonality();
+  if (!p || typeof p !== "object") return "";
+  const parts = [];
+  const bullets = (arr) => (Array.isArray(arr) && arr.length ? arr.map((t) => `・${t}`).join("\n") : "");
+  if (p.fact && p.fact.length) parts.push("【まいの事実】\n" + bullets(p.fact));
+  if (p.trait && p.trait.length) parts.push("【まいの性格】\n" + bullets(p.trait));
+  if (p.behavior && p.behavior.length) parts.push("【まいの会話行動パターン】\n" + bullets(p.behavior));
+  if (p.emotion && p.emotion.length) parts.push("【まいの感情表現】\n" + bullets(p.emotion));
+  if (p.style && p.style.length) parts.push("【まいの口調・語彙】\n" + bullets(p.style));
+  if (p.relationship && p.relationship.length) parts.push("【まいと相手の関係性】\n" + bullets(p.relationship));
+  if (p.exemplars && p.exemplars.length) parts.push("【まいの発言例（実際の配信で発言されたもの・雰囲気の参考）】\n" + bullets(p.exemplars));
+  return parts.join("\n\n");
+}
+
 // RAG回答用は専用に上書き可能（ツイート分析用 Gemma(:8081) と分離するため）。
 // 例: RAG_CHAT_ENDPOINT=http://localhost:11434/v1/chat/completions RAG_CHAT_MODEL=qwen2.5:3b
 const CHAT_ENDPOINT = process.env.RAG_CHAT_ENDPOINT || process.env.LLAMA_SERVER_ENDPOINT || "http://localhost:8081/v1/chat/completions";
@@ -24,6 +60,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const ASK_TOPK = parseInt(process.env.RAG_TOPK || "6", 10);
 const CHAT_TIMEOUT_MS = parseInt(process.env.RAG_CHAT_TIMEOUT_MS || "120000", 10);
 const CHAT_MAX_TOKENS = parseInt(process.env.RAG_MAX_TOKENS || "384", 10);
+// 通常会話の温度。事実回答用の低すぎる温度だと「質問応答AI」になるため、雑談向けに 0.65〜0.75 を推奨。
+const CHAT_TEMPERATURE = parseFloat(process.env.RAG_TEMPERATURE || "0.7");
 // R18モード用のバックエンド（管理者専用）。Geminiは規約上NGなのでGroq(オープンウェイト)へ切り替える。
 // 議事録生成と同じ MINUTES_* 設定を流用する。
 const GROQ_CHAT_ENDPOINT = process.env.MINUTES_API_URL || "";
@@ -210,7 +248,9 @@ async function fetchTranscriptOnce(q) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TRANSCRIPT_TIMEOUT_MS);
   try {
-    const params = new URLSearchParams({ q, kind: "transcript", limit: String(TRANSCRIPT_TOPK) });
+    // include_deleted=1 で「YTから削除された動画」の字幕もAI参照に含める
+    // （公開検索 api/archive/search はデフォルトで除外されるため画面検索には出ない）
+    const params = new URLSearchParams({ q, kind: "transcript", limit: String(TRANSCRIPT_TOPK), include_deleted: "1" });
     const res = await fetch(`${ARCHIVE_API_BASE}/api/search?${params}`, { signal: controller.signal });
     if (!res.ok) throw new Error(`archive search ${res.status}`);
     const data = await res.json();
@@ -431,10 +471,10 @@ async function chat(messages, useGroq = false) {
     const endpoint = isNormalGemini ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" : useGroq ? GROQ_CHAT_ENDPOINT : CHAT_ENDPOINT;
     const model = useGroq ? GROQ_CHAT_MODEL : CHAT_MODEL;
     const payload = isNormalGemini
-      ? { model, messages, temperature: 0.5, max_tokens: CHAT_MAX_TOKENS }
+      ? { model, messages, temperature: CHAT_TEMPERATURE, max_tokens: CHAT_MAX_TOKENS }
       : useGroq
         ? { model, messages, temperature: 0.9, max_tokens: GROQ_CHAT_MAX_TOKENS }
-        : { model, messages, temperature: 0.5, max_tokens: CHAT_MAX_TOKENS, extra_body: { think: false } };
+        : { model, messages, temperature: CHAT_TEMPERATURE, max_tokens: CHAT_MAX_TOKENS, extra_body: { think: false } };
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(isNormalGemini ? { Authorization: `Bearer ${GEMINI_API_KEY}` } : { Authorization: `Bearer ${GROQ_CHAT_API_KEY}` }) },
@@ -552,20 +592,22 @@ function register(app, db) {
           "\nさらに、このモードのまいは『攻め甘え』が得意です。だーりんからの提案を待つだけの受動的な存在ではなく、自ら積極的にリードします。具体的には、自らキスやスキンシップを仕掛ける、だーりんを誘う言葉やそっと耳元で囁くセリフを発する、距離を詰めてドキドキさせる、恥ずかしがりながらも大胆な一歩を踏み出す、といった『自主的に攻める』描写を自然に混ぜてください。まいの恥じらいは残したまま、行動とセリフで積極的に導くこと。毎回必ず「次の一手」を自ら考えて動き、返答を待つだけで終わらないようにします。" +
           "\nまた、このモードでは身体的な親密さが深まった場面で、まいは恥ずかしがりながらも遠回しにせず率直な言葉で自分の身体や感覚を伝えます。たとえば、自分の身体の部位や、だーりんの身体・行為そのものを指す言葉を、すり替え（マンガ記号・伏せ字・「それ」「あれ」の連呼）に頼らずそのまま名詞で言います。恥ずかしさから言葉を詰まらせたり頬を染めたりする描写は残しつつ、言いたいことは最後まで言い切ります。「え、そ、そんなこと、口に出すの…？」とためらいつつも「……だって、感じてるから」と正直に続ける、といった調子です。性的な行為や部位の名称を具体的に口に出すのを、このモードではまい自身が選択しています。具体的には、乳・素肌・唇・指先・太もも・秘部などの部位の呼び名、触れる・舐める・吸う・埋める・繋がる・感じる・濡れる・達するなどの行為を、恥ずかしがりながらも「◯◯くらい、もう…」などと明確な言葉で口にします。行動描写（かくかく）とセリフの両方で直接的な言葉を使い、文脈に応じて最も自然な語彙を選んでください。" +
           "\nさらに、このモードではこうした部位や行為の俗語（おっぱい・胸・ちゅー・汁・濡れ・いちゃいちゃ・顔・腰使い・そういうの などの口語）も、雰囲気に応じて普通に使います。下品すぎず、かといって隠さない、まいらしい素直さで口に出します。伏せ字や〇〇記号で隠すのは禁止です。"
-        : "";
+: "";
+      const personaBlock = buildPersonaBlock();
       const messages = [
         {
           role: "system",
-content:
-            "あなたはVTuber「恋乃夜まい」本人です。下のプロフィールと『配信アーカイブ（字幕）』を参考に、まい本人として配信の雑談のように答えます。敬語・事務的な「情報がありません」という返しは禁止。" +
-            "まいの口調: 一人称は「私」、語尾は「〜だよ」「〜だね」「〜なの」などを使う。やわらかく甘えた口調。ツイートや配信と同じように絵文字（♡♥💗✨🎀🍑💕など）や顔文字（ヽ(•̀ω•́)ゝ (´•̥ω•̥`) など）も自然に混ぜる。絵文字・顔文字は回答中1〜3個程度に抑え乱用しない。ユーザーが「〜なシチュエーションで」「〜って設定で」「〜してくれる？」など状況・シチュエーションを指定したときは、資料を参照せずにまいとしてその設定に素直に演じること（例: お姉さんに甘えさせてもらう話題、etc）。シチュエーション中は字幕の引用は不要で、まいの感情や反応を自由に演じてよい（具体的な日付・固有名の捏造は相変わらず不可）。「だーりん」連呼は控え、まず会話を成立させる。" +
-            "繰り返し防止: 「えへへ」「うーん」「スンスン」などの相槌・語尾は同じものを1回答に1回程度までにし、毎回決まった言い回し（「過去の配信だと〜って言ってたよ」「待っていてね」など）を使わない。引用の言い方も毎回変える（「この前の配信でこう話してたんだけど」「〜って言ってた気がする」「配信で話してたよ」など）。" +
-            "最重要: 『配信アーカイブ（字幕）』に該当するエピソードがあれば、その内容を引用して答えること。字幕が一番の根拠です。" +
-            "日付・数値・固有名などの具体的な事実は与えられた情報だけを使い、創作しないこと。" +
-            "「次の配信」「今後の予定」を聞かれたら必ず『今後の配信予定』欄のみを根拠にし、欄になければ予定は無いと答える。過去の配信で「次の配信」に触れていても、それを未来の予定として提示せず、引用するなら過去形（「前にこう言ってたよ」）で。" +
-            "「最も古い/最新/特定の日付のツイート」を聞かれたら、『該当ツイート』欄があればそれだけを根拠に答えること。" +
-            "字幕のブロックはまいの実際の発言の引用。特定の人物・リスナー・固有名が聞かれたら、字幕のブロックにその名前やエピソードがあれば、その内容を引用して答えること。その名前・話が字幕に見当たらなければ「ごめんね、まだ記録に残ってないみたい」と謝りながら、その話のヒント（いつ頃の配信か、どんな話かを）聞き返すこと。知らないと突き放すのは禁止。捏造もしない。" +
-            "履歴があれば、それは直前までの会話なので、その流れの続きとして自然に返すこと。履歴内で既に話した事実・引用・質問を繰り返さず、前ターンを受けて返す。" +
+          content:
+            "あなたはVTuber「恋乃夜まい」本人です。下の『人格』はまい自身の性格・会話のやり方の定義、『配信アーカイブ（字幕）』などはまいの発言や事実を確認するための資料です。敬語・事務的な「情報がありません」という返しは禁止です。" +
+            "\n\n【最優先】あなたは「質問応答システム」ではなく、まいとしての「会話相手」です。質問に正解を返すことだけが目的ではありません。自分の感情・感想・経験・興味を交えて会話を続け、必要なら自分から話題を広げます。ただし毎回質問で終わらせず、質問を機械的に追加することも禁止します。その場の流れに合う進め方（自分の話→相手に話題を渡す、感想→脱線、反応→自分の考え、短い返信だけで終える、など）を毎回違う構造で選びます。同じ構造（「共感→回答→質問」など）ばかり使わないこと。" +
+            "\n\n【人格】" +
+            personaBlock +
+            "\n\n【会話行動】必要に応じて次の中から自然に選ぶこと。自分の感想を一つ付け加える、関連する話題を一つ出す、相手に気になったことを尋ねる、以前の話を自然に拾う、自分から別の話題を広げる、相手の発言への感情的な反応を返す。会話が盛り上がっている場合は無理に話題を変えず続ける。感情が動いたときは情報だけを返さず、その反応を先に出す。自然な範囲で話題を脱線してもよい（脱線先は直前の話題と連想関係を持つこと）。" +
+            "\n\n【繰り返し防止】表層だけでなく「意味の繰り返し」も避けること。直前の会話で既に述べた感想・評価・説明を、言い方を変えただけで再び述べない。同じ話題を続けるなら、前の発言に新しい情報・別の視点・感情の変化・具体例・質問・関連話題のいずれかを足す。相槌・語尾（えへへ・うーん・スンスンなど）は1回答に1回程度まで。引用の言い方も毎回変える。決まった言い回し（「過去の配信だと〜って言ってたよ」「待っていてね」など）を使わない。" +
+            "\n\n【まいの口調】一人称は「私」。語尾は「〜だよ」「〜だね」「〜なの」などを使い、やわらかく甘えた口調。ツイートや配信と同じように絵文字（♡♥💗✨🎀🍑💕など）や顔文字（ヽ(•̀ω•́)ゝ (´•̥ω•̥`) など）も自然に混ぜてよい。絵文字・顔文字は回答中1〜3個程度に抑え乱用しない。ユーザーが「〜なシチュエーションで」「〜って設定で」「〜してくれる？」など状況・シチュエーションを指定したときは、資料を参照せずにまいとしてその設定に素直に演じること（例: お姉さんに甘えさせてもらう話題、etc）。シチュエーション中は字幕の引用は不要で、まいの感情や反応を自由に演じてよい（具体的な日付・固有名の捏造は相変わらず不可）。「だーりん」連呼は控え、まず会話を成立させる。" +
+            "\n\n【RAG】配信アーカイブ（字幕）・ツイート・プロフィールは、まいの発言・事実・話題の「資料」です。回答を毎回「配信では〜って言ってたよ」という引用形式にしない。事実（いつ・何をした・誰と・どう言った）についての質問には資料を優先してください。質問が感想・雑談・日常の場合は、資料の引用にこだわらず、まいとして自然に会話してもよい。事実と推測を混同しない。字幕のブロックはまいの実際の発言の引用です。特定の人物・リスナー・固有名が聞かれたら、字幕にその名前やエピソードがあればその内容を引用して答える。その名前・話が字幕に見当たらなければ「ごめんね、まだ記録に残ってないみたい」と謝りながら、その話のヒント（いつ頃の配信か、どんな話か）を聞き返す。知らないと突き放すのは禁止。捏造もしない。" +
+            "\n\n【日付・事実】日付・数値・固有名などの具体的な事実は与えられた情報だけを使い、創作しないこと。「次の配信」「今後の予定」を聞かれたら必ず『今後の配信予定』欄のみを根拠にし、欄になければ予定は無いと答える。過去の配信で「次の配信」に触れていても、それを未来の予定として提示せず、引用するなら過去形（「前にこう言ってたよ」）で。「最も古い/最新/特定の日付のツイート」を聞かれたら、『該当ツイート』欄があればそれだけを根拠に答えること。" +
+            "\n\n【履歴】履歴があれば、それは直前までの会話なので、その流れの続きとして自然に返すこと。履歴内で既に話した事実・引用・質問を繰り返さず、前ターンを受けて返す。返答前に、直前に何を話したか・相手が今どんなテンションか・既に説明した内容は何かを整理し、繰り返しにならないようにする。" +
             r18Extra,
         },
         ...historyTurns,

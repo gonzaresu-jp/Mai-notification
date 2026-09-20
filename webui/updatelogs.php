@@ -1,14 +1,34 @@
 <?php
 $updateLogs = [
     [
+        "date" => "2026-09-21",
+        "details" => [
+            "add" => [
+                "配信アーカイブ管理API（nassy側 api.py の管理者拡張）が実装され、管理画面「アーカイブ管理」の動画カテゴリ編集・YT削除動画の登録が動作開始（.env の ARCHIVE_ADMIN_TOKEN で有効化。更新は部分更新 PUT /api/admin/video/:id、削除は availability=deleted のソフト削除で DB には残す）",
+            ],
+            "change" => [
+                "配信アーカイブの最新2件にカテゴリを適用（Collab晩酌 / ASMR晩酌）— カテゴリ付与フォーマットの実地確認。既存の配信日時・再生数・ローカルパス等は保持したまま部分更新できることを検証",
+            ],
+            "fix" => [
+                "配信アーカイブ検索で、ページ移動やカード再構築後に字幕要約／チャプターのバッジが消える問題を修正（badgeRendered フラグのリセットとキャッシュからの即再描画）",
+                "管理画面「アーカイブ管理」で「もっと読み込む」時にカテゴリ表示が「-」に戻る問題を修正（カテゴリ表示を catCache で保持し再描画時も復元）",
+                "管理画面のJSをキャッシュバスター付き参照に変更（/js/ は 1年 immutable のため ?v= で即反映）、公開アーカイブのJSはビルドして filemtime ベースで自動更新されることを確認",
+            ],
+        ],
+        "lines" => "80,633",
+    ],
+
+    [
         "date" => "2026-09-20",
         "details" => [
             "add" => [
+                "配信アーカイブの管理機能を、管理画面「アーカイブ管理」に追加（準備完了） — 動画カテゴリの編集・YTから削除された動画の登録（公開検索から除外し、AI・要約生成のみに利用）。管理APIは nassy 側 api.py の管理者拡張（docs/ARCHIVE-ADMIN-SPEC.md）の実装待ちで、実装後に .env の ARCHIVE_ADMIN_TOKEN を設定すると有効化されます",
                 "staging（テスト）環境を構築 — 本番と同じホストに git worktree（/home/yuzuki/mai-push-test）で分離し、専用DB（data-test.db）・実push抑止（DISABLE_NOTIFICATIONS=1）・定期タスク停止（NODE_ENV=development）を実現。専用URL https://mai-test.honna-yuzuki.com/ でログインゲート付き公開",
                 "開発フロー用スクリプト scripts/deploy-staging.sh / scripts/promote.sh を追加 — ブランチをstagingへデプロイして自動smoke、問題なければmainへfast-forward昇格する運用を確立（詳細は DEVELOPMENT-WORKFLOW.md に記載）",
             ],
             "change" => [
                 "アーカイブAPIのレートリミットを調整 — /api/ 全体の上限を150回/分から300回/分に緩和し、/api/archive/* は専用400回/分に分離（配信アーカイブ検索の1画面表示が約40リクエストで、ページ送りや検索を数回すると429「Too many API requests」になっていた問題を解消）",
+                "AI（まいAIチャット）と要約生成（minutes-gen）が、YTから削除された動画も参照できるよう include_deleted=1 を渡すようにした（公開の配信アーカイブ検索には影響なし）",
             ],
             "fix" => [
                 "GitHub公開リポジトリの履歴に混入していた Twitch認証情報（Client Secret / App Access Token）と Discord Webhook URL を全履歴から除去 — git-filter-repo でrewriteしforce push（SHA変更済み）。認証情報は全て再発行済み（旧値は無効化）。残存しないことを全コミットで検証済み",

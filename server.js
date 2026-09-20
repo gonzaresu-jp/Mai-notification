@@ -136,6 +136,7 @@ require("./routes/subscriptions").register(app, db);
 require("./routes/android").register(app, db);
 require("./routes/events").register(app, db);
 require("./routes/admin").register(app, db);
+require("./routes/admin-archive").register(app, db);
 require("./routes/scraper-status").register(app, db);
 require("./routes/system").register(app);
 require("./routes/history").register(app, db);
