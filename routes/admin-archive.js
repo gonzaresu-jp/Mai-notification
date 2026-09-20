@@ -107,6 +107,14 @@ function register(app) {
     return res.status(r.status).json(r.data || {});
   });
 
+  // タイトル検索（.70 /api/search の中継）
+  app.get("/api/admin/archive/search", adminAuth.requireAuth, async (req, res) => {
+    if (!tokenEnabled()) return adminUnconfigured(res);
+    const qs = pickAdminQuery(req, ["q", "kind", "limit", "offset", "include_deleted"]);
+    const r = await adminFetch(`/api/search${qs}`);
+    return res.status(r.status).json(r.data || {});
+  });
+
   app.get("/api/admin/archive/video/:id", adminAuth.requireAuth, async (req, res) => {
     const id = String(req.params.id || "");
     if (!VIDEO_ID_RE.test(id)) return res.status(400).json({ error: "invalid video_id" });

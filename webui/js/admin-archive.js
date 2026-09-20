@@ -41,12 +41,24 @@
     return null;
   }
 
+  const fmtViews = (n) => {
+    const v = Number(n) || 0;
+    if (v >= 10000) return (v / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+    if (v >= 1000) return (v / 1000).toFixed(1).replace(/\.0$/, '') + '千';
+    return String(v);
+  };
+
   const badge = (v) => {
     const cls = v.availability === 'deleted' ? 'deleted' : '';
     return `<span class="arc-badge ${cls}">${esc(v.availability || 'public')}</span>`;
   };
 
-  // --- タブ切替 ---
+  const thumb = (v) => {
+    if (v.availability === 'deleted') return '';
+    return `<div class="arc-thumb"><img src="https://i.ytimg.com/vi/${esc(v.video_id)}/mqdefault.jpg" loading="lazy" alt="" /></div>`;
+  };
+
+  // --- タブ切替（アーカイブ内） ---
   $('arc-tabbar').addEventListener('click', (e) => {
     const btn = e.target.closest('.arc-tab');
     if (!btn) return;
@@ -67,69 +79,229 @@
     } catch (e) {
       MASTER_CATS = [];
     }
+    const opts = MASTER_CATS.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    const filt = $('arc-cat-filter');
+    if (filt) {
+      const cur = filt.value;
+      filt.innerHTML = '<option value="">すべてのカテゴリ</option>' + opts;
+      filt.value = cur || '';
+    }
+    const batch = $('arc-batch-cat');
+    if (batch) batch.innerHTML = '<option value="">カテゴリを選ぶ…</option>' + opts;
   }
 
   // --- カテゴリ編集タブ ---
-  const catVideos = [];
-  let catOffset = 0;
-  let catAllLoaded = false;
   const PAGE = 50;
+  // 現在の表示クエリ
+  let curQuery = { q: '', category: '', sort: 'stream_at_desc' };
+  let curOffset = 0;
+  let curTotal = 0;
+  let curVideos = [];
 
-  // 取得済みのカテゴリ表記を video_id -> text で保持し、
-  // 「もっと読み込む」などで再利用する（再描画で「-」に戻る・再フェッチするのを防ぐ）
-  const catCache = new Map();
+  // 各行のカテゴリを video_id -> string[] で保持
+  const catsMap = new Map();
+  // バッチ選択
+  const selected = new Set();
 
-  async function loadCatPage(reset) {
+  function loadCatPage(offset, fromReset) {
     const info = $('arc-cat-info');
     const listEl = $('arc-cat-list');
-    try {
-      if (reset) { catVideos.length = 0; catOffset = 0; catAllLoaded = false; }
-      const d = await api(`/api/admin/archive/videos?limit=${PAGE}&offset=${catOffset}&sort=stream_at_desc&include_deleted=1`);
-      const videos = d.videos || [];
-      if (!videos.length) { catAllLoaded = true; info.textContent = 'これ以上の動画はありません。'; }
-      catVideos.push(...videos);
-      catOffset += videos.length;
-      info.textContent = `読み込み済み ${catVideos.length} 本${d.total ? ' / 全 ' + d.total + ' 本' : ''}`;
-      renderCats();
-    } catch (e) {
-      info.innerHTML = `<span style="color:#b3261e">読み込みエラー: ${esc(e.message)}</span>`;
-      setStatus('カテゴリ一覧を取得できませんでした', 'error');
+    if (fromReset) { curOffset = 0; curTotal = 0; curVideos = []; selected.clear(); }
+    if (offset !== undefined) curOffset = offset;
+
+    const params = new URLSearchParams({
+      limit: PAGE,
+      offset: curOffset,
+      sort: curQuery.sort || 'stream_at_desc',
+      include_deleted: '1',
+    });
+    if (curQuery.category) params.set('category', curQuery.category);
+
+    let p;
+    if (curQuery.q) {
+      params.set('q', curQuery.q);
+      params.set('kind', 'title');
+      // 検索は /api/search → videos マップになる
+      p = api('/api/admin/archive/search?' + params.toString()).then((d) => {
+        const hits = Array.isArray(d.title) ? d.title : (d.title ? Object.values(d.title) : []);
+        const map = d.videos || {};
+        const videos = hits.map((h) => (h && h.video_id ? map[h.video_id] || h : h)).filter(Boolean);
+        curTotal = (d.total !== undefined && d.total !== null) ? d.total : (curOffset + videos.length);
+        return { videos, total: curTotal };
+      });
+    } else {
+      p = api('/api/admin/archive/videos?' + params.toString()).then((d) => ({
+        videos: d.videos || [],
+        total: d.total || 0,
+      }));
     }
+
+    listEl.innerHTML = '読み込み中...';
+    return p.then(({ videos, total }) => {
+      curVideos = videos;
+      curTotal = total;
+      videos.forEach((v) => {
+        catsMap.set(v.video_id, Array.isArray(v.categories) ? v.categories.filter((c) => c) : []);
+      });
+      const from = curVideos.length ? curOffset + 1 : 0;
+      const to = curOffset + curVideos.length;
+      info.textContent = curQuery.q
+        ? `検索結果 ${videos.length} 件${total ? ' / 該当 ' + total + ' 件' : ''} ${curQuery.q ? '（「' + curQuery.q + '」）' : ''}`
+        : `表示 ${from}〜${to} 本 / 全 ${total || 0} 本`;
+      renderCats();
+      renderPagination();
+    }).catch((e) => {
+      info.innerHTML = `<span style="color:#b3261e">読み込みエラー: ${esc(e.message)}</span>`;
+      listEl.innerHTML = '';
+      setStatus('一覧を取得できませんでした', 'error');
+      renderPagination();
+    });
+  }
+
+  function renderPagination() {
+    const pageCount = Math.max(1, Math.ceil(curTotal / PAGE));
+    const pageNum = Math.floor(curOffset / PAGE) + 1;
+    $('arc-cat-pg-info').textContent = curTotal ? `${pageNum} / ${pageCount} ページ` : '';
+    const prev = $('arc-cat-prev');
+    const next = $('arc-cat-next');
+    prev.disabled = curOffset <= 0;
+    next.disabled = curOffset + PAGE >= curTotal;
   }
 
   function renderCats() {
     const listEl = $('arc-cat-list');
-    const filter = $('arc-cat-filter').value.trim().toLowerCase();
-    const rows = catVideos.filter((v) => {
-      if (!filter) return true;
-      return (v.title || '').toLowerCase().includes(filter) || (v.video_id || '').toLowerCase().includes(filter);
-    });
-    listEl.innerHTML = rows.map((v) => `
+    const rows = curVideos.map((v) => {
+      const cats = catsMap.get(v.video_id) || [];
+      const chips = cats.map((c) =>
+        `<span class="arc-cat-chip on" data-id="${esc(v.video_id)}" data-cat="${esc(c)}">${esc(c)}<span class="x">×</span></span>`).join('');
+      const suggestions = MASTER_CATS.filter((c) => !cats.includes(c)).slice(0, 4);
+      const sug = suggestions.map((c) =>
+        `<span class="arc-cat-chip" data-id="${esc(v.video_id)}" data-cat="${esc(c)}">+${esc(c)}</span>`).join('');
+      return `
       <div class="arc-row" data-id="${esc(v.video_id)}">
-        <div class="arc-row-head">
-          <div class="arc-row-title">${esc(v.title || '(タイトルなし)')}</div>
-          ${badge(v)}
+        <input type="checkbox" class="arc-sel" data-sel="${esc(v.video_id)}" ${selected.has(v.video_id) ? 'checked' : ''} title="一括適用の対象に追加" />
+        ${thumb(v)}
+        <div class="arc-row-body">
+          <div class="arc-row-head">
+            <div class="arc-row-title">${esc(v.title || '(タイトルなし)')}</div>
+            ${badge(v)}
+          </div>
+          <div class="arc-row-meta">${esc(v.video_id)} ・ ${esc(v.stream_date_jst || '日付不明')}
+            ${v.view_count ? `<span class="arc-stat-cell">👁 ${fmtViews(v.view_count)}</span>` : ''}
+          </div>
+          <div class="arc-cat-show-list">${chips}${sug}</div>
         </div>
-        <div class="arc-row-meta">${esc(v.video_id)} ・ ${esc(v.stream_date_jst || '日付不明')} ・ <span class="cats-inline" data-id="${esc(v.video_id)}">${esc(catCache.get(v.video_id) || '-')}</span></div>
         <div class="arc-row-actions">
-          <button type="button" class="btn-secondary arc-edit" data-id="${esc(v.video_id)}">✏️ カテゴリ編集</button>
+          <a class="btn-secondary" href="https://www.youtube.com/watch?v=${esc(v.video_id)}" target="_blank" rel="noopener">▶ YT</a>
+          <button type="button" class="btn-secondary arc-edit" data-id="${esc(v.video_id)}">✏️ 詳細編集</button>
         </div>
         <div class="arc-editor" data-editor="${esc(v.video_id)}" style="display:none;"></div>
-      </div>`).join('') || '<div class="arc-info">該当なし</div>';
-    // 未取得のものだけフェッチする（取得済みはキャッシュ表示）
-    listEl.querySelectorAll('.cats-inline').forEach((el) => {
-      if (!catCache.has(el.dataset.id)) fillCatInline(el);
-    });
+      </div>`;
+    }).join('');
+    listEl.innerHTML = rows || '<div class="arc-info">該当なし</div>';
+    updateBatchBar();
   }
 
-  async function fillCatInline(el) {
+  function updateBatchBar() {
+    $('arc-batch-num').textContent = selected.size + ' 件選択';
+    $('arc-batchbar').style.display = selected.size ? '' : 'none';
+    const selAll = $('arc-batch-selall');
+    selAll.checked = curVideos.length > 0 && curVideos.every((v) => selected.has(v.video_id));
+  }
+
+  // チップクリック（追加/削除）
+  $('arc-cat-list').addEventListener('click', (e) => {
+    const chip = e.target.closest('.arc-cat-chip');
+    if (chip) {
+      applyCatToggle(chip.dataset.id, chip.dataset.cat, chip.classList.contains('on'));
+      return;
+    }
+    const btn = e.target.closest('.arc-edit');
+    if (btn) {
+      const row = btn.closest('.arc-row');
+      openEditor(btn.dataset.id, row.querySelector('.arc-editor'));
+      return;
+    }
+    const sel = e.target.closest('.arc-sel');
+    if (sel) {
+      if (sel.checked) selected.add(sel.dataset.sel); else selected.delete(sel.dataset.sel);
+      updateBatchBar();
+    }
+  });
+
+  async function applyCatToggle(videoId, cat, currentlyOn) {
+    if (!cat) return;
+    const current = [...(catsMap.get(videoId) || [])];
+    const next = currentlyOn
+      ? current.filter((c) => c !== cat)
+      : Array.from(new Set([...current, cat]));
+    catsMap.set(videoId, next);
     try {
-      const d = await api('/api/admin/archive/video/' + el.dataset.id);
-      const cats = (d.categories || []).filter((c) => c);
-      const text = cats.length ? cats.join(', ') : '（カテゴリなし）';
-      catCache.set(el.dataset.id, text);
-      el.textContent = text;
-    } catch { el.textContent = '（未取得）'; }
+      await api('/api/admin/archive/video/' + videoId, {
+        method: 'PATCH',
+        body: JSON.stringify({ categories: next }),
+      });
+      setStatus(currentlyOn ? `「${cat}」を解除しました` : `「${cat}」を追加しました`);
+      renderCats();
+    } catch (e) {
+      catsMap.set(videoId, current);
+      renderCats();
+      setStatus('更新エラー: ' + e.message, 'error');
+    }
+  }
+
+  // 一括適用
+  $('arc-batch-add').addEventListener('click', () => batchApply(true));
+  $('arc-batch-remove').addEventListener('click', () => batchApply(false));
+  async function batchApply(add) {
+    const cat = $('arc-batch-cat').value;
+    if (!cat) { setStatus('一括適用するカテゴリを選択してください', 'error'); return; }
+    if (!selected.size) { setStatus('選択中の動画がありません', 'error'); return; }
+    const ids = [...selected];
+    try {
+      for (const id of ids) {
+        let next;
+        if (add) {
+          next = Array.from(new Set([...(catsMap.get(id) || []), cat]));
+        } else {
+          next = (catsMap.get(id) || []).filter((c) => c !== cat);
+        }
+        catsMap.set(id, next);
+        await api('/api/admin/archive/video/' + id, {
+          method: 'PATCH',
+          body: JSON.stringify({ categories: next }),
+        });
+      }
+      setStatus(add ? `「${cat}」を ${ids.length} 件に追加しました` : `「${cat}」を ${ids.length} 件から解除しました`);
+      selected.clear();
+      renderCats();
+    } catch (e) {
+      setStatus('一括更新エラー: ' + e.message, 'error');
+      loadCatPage(curOffset);
+    }
+  }
+
+  $('arc-batch-clear').addEventListener('click', () => { selected.clear(); renderCats(); });
+  $('arc-batch-selall').addEventListener('change', (e) => {
+    curVideos.forEach((v) => {
+      if (e.target.checked) selected.add(v.video_id); else selected.delete(v.video_id);
+    });
+    renderCats();
+  });
+
+  // 検索・フィルタ・ソート・ページング
+  $('arc-cat-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
+  $('arc-cat-filter').addEventListener('change', runSearch);
+  $('arc-cat-sort').addEventListener('change', runSearch);
+  $('arc-cat-reload').addEventListener('click', runSearch);
+  $('arc-cat-prev').addEventListener('click', () => loadCatPage(Math.max(0, curOffset - PAGE)));
+  $('arc-cat-next').addEventListener('click', () => loadCatPage(curOffset + PAGE));
+
+  function runSearch() {
+    curQuery.q = $('arc-cat-search').value.trim();
+    curQuery.category = $('arc-cat-filter').value || '';
+    curQuery.sort = $('arc-cat-sort').value || 'stream_at_desc';
+    loadCatPage(0, true);
   }
 
   async function openEditor(videoId, holderEl) {
@@ -143,13 +315,18 @@
       return;
     }
     const current = Array.isArray(detail.categories) ? detail.categories.filter((c) => c) : [];
+    const title = String(detail.title || '');
+    if (detail.video_id && catsMap.get(videoId) === undefined && current.length && !title) {
+      // タイトル未取得の場合は、現行カテゴリから補完
+      catsMap.set(videoId, current);
+    }
     const union = Array.from(new Set([...MASTER_CATS, ...current]));
     const box = (name, checked) => `
       <label><input type="checkbox" class="arc-cat-cb" value="${esc(name)}" ${checked ? 'checked' : ''}> ${esc(name)}</label>`;
     holderEl.innerHTML = `
       <div class="form-group">
         <label>タイトル</label>
-        <input type="text" data-cat-title value="${esc(detail.title || '')}" />
+        <input type="text" data-cat-title value="${esc(title)}" />
       </div>
       <div class="form-group">
         <label>カテゴリ（このリストで選択）</label>
@@ -169,17 +346,16 @@
       const next = Array.from(new Set([...checks, ...extra]));
       const payload = { categories: next };
       const newTitle = holderEl.querySelector('[data-cat-title]').value.trim();
-      if (newTitle && newTitle !== (detail.title || '')) payload.title = newTitle;
+      if (newTitle && newTitle !== title) payload.title = newTitle;
       try {
         await api('/api/admin/archive/video/' + videoId, {
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
         setStatus('カテゴリを保存しました');
-        const text = next.length ? next.join(', ') : '（カテゴリなし）';
-        catCache.set(videoId, text);
-        const el = document.querySelector(`.cats-inline[data-id="${videoId}"]`);
-        if (el) el.textContent = text;
+        catsMap.set(videoId, next);
+        const prev = catsMap.get(videoId);
+        if (prev) catsMap.set(videoId, next);
         openEditor(videoId, holderEl);
       } catch (e) {
         setStatus('保存エラー: ' + e.message, 'error');
@@ -187,18 +363,6 @@
     });
     holderEl.querySelector('[data-cat-close]').addEventListener('click', () => { holderEl.style.display = 'none'; });
   }
-
-  $('arc-cat-list').addEventListener('click', (e) => {
-    const btn = e.target.closest('.arc-edit');
-    if (!btn) return;
-    const row = btn.closest('.arc-row');
-    const holder = row.querySelector('.arc-editor');
-    openEditor(btn.dataset.id, holder);
-  });
-  $('arc-cat-reload').addEventListener('click', () => loadCatPage(true));
-  $('arc-cat-more').addEventListener('click', () => loadCatPage(false));
-  $('arc-cat-search').addEventListener('click', () => renderCats());
-  $('arc-cat-filter').addEventListener('keydown', (e) => { if (e.key === 'Enter') renderCats(); });
 
   // --- 削除済み動画タブ ---
   async function loadDeleted() {
@@ -341,7 +505,7 @@
   (async () => {
     await loadMasterCategories();
     try {
-      await loadCatPage(true);
+      await loadCatPage(0, true);
     } catch { /* loadCatPage が自身で表示する */ }
   })();
 })();

@@ -453,6 +453,69 @@
             background: rgba(255,255,255,0.3);
         }
 
+        /* --- タブナビゲーション --- */
+        .admin-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: linear-gradient(135deg, #B11E7C 0%, #a12f8c 100%);
+            padding: 10px 0;
+            margin: -20px 0 4px;
+        }
+        .admin-tab {
+            flex: 0 0 auto;
+            width: auto;
+            padding: 10px 18px;
+            font-size: 14px;
+            border-radius: 999px;
+            border: 1.5px solid rgba(255,255,255,0.35);
+            background: rgba(255,255,255,0.10);
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .admin-tab:hover {
+            background: rgba(255,255,255,0.22);
+        }
+        .admin-tab.is-active {
+            background: #fff;
+            color: #B11E7C;
+            border-color: #fff;
+            font-weight: 700;
+        }
+        .admin-panel {
+            display: none;
+        }
+        .admin-panel.is-active {
+            display: block;
+            animation: adminFadeIn 0.18s ease;
+        }
+        @keyframes adminFadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: none; }
+        }
+        .admin-section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 0 0 16px 0;
+        }
+        .admin-section-head h2 {
+            margin: 0;
+            font-size: 20px;
+            color: #333;
+        }
+        .admin-section-desc {
+            margin: 0 0 14px 0;
+            color: #666;
+            font-size: .9rem;
+            line-height: 1.6;
+        }
+
         /* --- アーカイブ管理 --- */
         .arc-tabbar {
             display: flex;
@@ -490,6 +553,18 @@
             border-radius: 10px;
             padding: 10px 12px;
             background: #fff;
+        }
+        #arc-cat-list .arc-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+        #arc-cat-list .arc-row-body {
+            flex: 1;
+            min-width: 0;
+        }
+        #arc-cat-list .arc-row .arc-sel {
+            margin-top: 4px;
         }
         .arc-row.dim {
             opacity: .75;
@@ -585,12 +660,149 @@
             gap: 8px;
             margin-top: 8px;
         }
+
+        /* --- アーカイブ管理 UI 強化 --- */
+        .arc-searchbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .arc-searchbar input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+        }
+        .arc-searchbar select {
+            flex: 0 0 auto;
+            width: auto;
+            min-width: 160px;
+        }
+        .arc-cat-show-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .arc-cat-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: .78rem;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: #e8e0f4;
+            color: #4a2f6d;
+            border: 1.5px solid #e8e0f4;
+            cursor: pointer;
+            transition: all .15s;
+            user-select: none;
+        }
+        .arc-cat-chip.on {
+            background: #B11E7C;
+            color: #fff;
+            border-color: #B11E7C;
+        }
+        .arc-cat-chip:hover {
+            transform: translateY(-1px);
+        }
+        .arc-cat-chip .x {
+            font-weight: 700;
+            opacity: .75;
+        }
+        .arc-batchbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: #faf6ff;
+            border: 1px dashed #cbb8e0;
+        }
+        .arc-batchbar .sel-num {
+            font-weight: 700;
+            color: #4a2f6d;
+        }
+        .arc-batchbar select {
+            flex: 0 0 auto;
+            width: auto;
+            min-width: 150px;
+            padding: 6px 10px;
+        }
+        .arc-batchbar button {
+            flex: 0 0 auto;
+            width: auto;
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+        .arc-row .arc-sel {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+            margin-top: 4px;
+            accent-color: #B11E7C;
+        }
+        .arc-row-head {
+            align-items: flex-start;
+        }
+        .arc-thumb {
+            width: 112px;
+            height: 63px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #eee;
+            flex-shrink: 0;
+        }
+        .arc-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .arc-stat-cell {
+            font-size: .78rem;
+            color: #777;
+            margin-top: 4px;
+        }
+        .arc-pagination {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+            margin-top: 12px;
+        }
+        .arc-pagination button {
+            flex: 0 0 auto;
+            width: auto;
+            padding: 8px 14px;
+            font-size: 13px;
+        }
+        .arc-pagination .pg-info {
+            font-size: .85rem;
+            color: #666;
+            min-width: 140px;
+            text-align: center;
+        }
+        .arc-sort {
+            flex: 0 0 auto;
+            width: auto;
+            min-width: 150px;
+        }
     </style>
 </head>
 <body>
     <div class="admin-shell">
     <a href="/" class="back-home">← ホームに戻る</a>
-    <section class="container">
+    <nav class="admin-tabs" id="admin-tabs">
+        <button type="button" class="admin-tab is-active" data-tab="notify">📢 通知送信</button>
+        <button type="button" class="admin-tab" data-tab="archive">📼 アーカイブ管理</button>
+        <button type="button" class="admin-tab" data-tab="events">📅 イベント管理</button>
+        <button type="button" class="admin-tab" data-tab="weekly">🗓 今週の一言</button>
+        <button type="button" class="admin-tab" data-tab="ai">🤖 まいAI</button>
+        <button type="button" class="admin-tab" data-tab="security">🔑 パスキー</button>
+    </nav>
+
+    <section class="container admin-panel is-active" data-panel="notify">
         <h1>📢 管理者通知パネル</h1>
         
         <form id="notification-form">
@@ -635,6 +847,7 @@
                     <div class="preview-title" id="preview-title">タイトルがここに表示されます</div>
                     <div class="preview-body" id="preview-body">メッセージがここに表示されます</div>
                 </div>
+                <div class="preview-meta" id="preview-meta" style="margin-top:8px; font-size:.82rem; color:#777; display:flex; gap:8px; flex-wrap:wrap; align-items:center;"></div>
             </div>
              <div class="button-group">
                  <button type="button" class="btn-clear" id="btn-clear">クリア</button>
@@ -645,7 +858,7 @@
         
         <div class="status-message" id="status-message"></div>
 
-        <section class="sub-panel">
+        <section class="sub-panel admin-panel" data-panel="weekly">
             <h2>🗓 今週の一言</h2>
             <div class="form-group" style="margin-bottom:12px;">
                 <label for="weekly-date">対象日（この日が含まれる週に保存）</label>
@@ -663,22 +876,23 @@
             <div class="status-message" id="weekly-message-status"></div>
         </section>
 
-        <section class="event-panel">
+        <section class="event-panel admin-panel" data-panel="events">
             <h2>📅 イベント管理</h2>
             <div class="event-actions-toolbar">
+                <input type="text" id="event-filter" placeholder="🔎 イベントを絞り込み" style="flex:1; min-width:160px;" />
                 <button type="button" class="event-btn event-btn-main" id="btn-ev-create">➕ 新規イベント作成</button>
                 <button type="button" class="event-btn event-btn-sub" id="btn-ev-reload">🔄 再読み込み</button>
             </div>
             <div id="event-container" class="event-list">読み込み中...</div>
         </section>
 
-        <section class="sub-panel">
+        <section class="sub-panel admin-panel" data-panel="ai">
             <h2>🤖 まいAI</h2>
             <p style="margin:0 0 10px; color:#666; font-size:.9rem;">通知履歴・配信予定・プロフィールに基づいてQ&Aできる専用チャットです。</p>
             <a href="./chat.html" class="btn-primary" style="display:inline-block; text-decoration:none; padding:10px 18px; border-radius:999px;">💬 まいAI チャットを開く</a>
         </section>
 
-        <section class="sub-panel">
+        <section class="sub-panel admin-panel" data-panel="security">
             <h2>🔑 セキュリティ (パスキー)</h2>
             <p style="margin:0 0 10px; color:#666; font-size:.9rem;">この端末の Windows Hello / TouchID / セキュリティキーを登録すると、次回からパスワード入力でログインしなくてよくなります。</p>
             <div class="inline-actions">
@@ -688,7 +902,7 @@
             <div class="status-message" id="passkey-status"></div>
         </section>
 
-        <section class="sub-panel">
+        <section class="sub-panel admin-panel" data-panel="archive">
             <h2>📼 アーカイブ管理</h2>
             <p style="margin:0 0 10px; color:#666; font-size:.9rem;">
                 配信アーカイブのカテゴリ編集・YTから削除された動画の管理。
@@ -700,14 +914,35 @@
             </div>
 
             <div class="arc-tabpane" id="arc-pane-cats">
-                <div class="arc-ctlbar">
-                    <input type="text" id="arc-cat-filter" placeholder="タイトル/IDで絞り込み" />
-                    <button type="button" class="btn-secondary" id="arc-cat-search">🔎 絞り込み</button>
+                <div class="arc-searchbar">
+                    <input type="text" id="arc-cat-search" placeholder="🔎 タイトル・video_id で検索" />
+                    <select id="arc-cat-filter" aria-label="カテゴリでフィルタ">
+                        <option value="">すべてのカテゴリ</option>
+                    </select>
+                    <select id="arc-cat-sort" class="arc-sort" aria-label="並び順">
+                        <option value="stream_at_desc">新しい順</option>
+                        <option value="stream_at_asc">古い順</option>
+                        <option value="view_count_desc">再生回数順</option>
+                    </select>
                     <button type="button" class="event-btn event-btn-main" id="arc-cat-reload">🔄 再読み込み</button>
-                    <button type="button" class="event-btn event-btn-sub" id="arc-cat-more">⬇ もっと読み込む</button>
+                </div>
+                <div class="arc-batchbar" id="arc-batchbar" style="display:none;">
+                    <input type="checkbox" id="arc-batch-selall" title="このページの全件を選択" />
+                    <span class="sel-num" id="arc-batch-num">0 件選択</span>
+                    <select id="arc-batch-cat" aria-label="一括適用するカテゴリ">
+                        <option value="">カテゴリを選ぶ…</option>
+                    </select>
+                    <button type="button" class="btn-secondary" id="arc-batch-add">追加</button>
+                    <button type="button" class="btn-secondary" id="arc-batch-remove">解除</button>
+                    <button type="button" class="event-btn event-btn-danger" id="arc-batch-clear">選択解除</button>
                 </div>
                 <div class="arc-info" id="arc-cat-info">読み込み中...</div>
                 <div class="arc-list" id="arc-cat-list"></div>
+                <div class="arc-pagination">
+                    <button type="button" class="btn-secondary" id="arc-cat-prev">← 前へ</button>
+                    <span class="pg-info" id="arc-cat-pg-info"></span>
+                    <button type="button" class="btn-secondary" id="arc-cat-next">次へ →</button>
+                </div>
             </div>
 
             <div class="arc-tabpane" id="arc-pane-deleted" style="display:none;">
@@ -846,7 +1081,31 @@
                 return;
             }
         })();
-        
+
+        // タブ切替（ロード時とURLハッシュで復元）
+        function switchAdminTab(tabName, updateHash) {
+            const tab = (tabName || '').trim();
+            document.querySelectorAll('.admin-tab').forEach((b) => {
+                b.classList.toggle('is-active', b.dataset.tab === tab);
+            });
+            document.querySelectorAll('.admin-panel').forEach((p) => {
+                p.classList.toggle('is-active', p.dataset.panel === tab);
+            });
+            if (updateHash !== false && tab) {
+                history.replaceState(null, '', '#tab=' + tab);
+            }
+        }
+        document.querySelectorAll('.admin-tab').forEach((b) => {
+            b.addEventListener('click', () => switchAdminTab(b.dataset.tab, true));
+        });
+        (function initTabFromHash() {
+            const m = location.hash.match(/tab=([a-zA-Z0-9_-]+)/);
+            const target = m ? m[1] : null;
+            if (target && document.querySelector('.admin-panel[data-panel="' + target + '"]')) {
+                switchAdminTab(target, false);
+            }
+        })();
+
         const form = document.getElementById('notification-form');
         const titleInput = document.getElementById('title');
         const bodyInput = document.getElementById('body');
@@ -889,15 +1148,45 @@
             previewTitle.textContent = titleInput.value || 'タイトルがここに表示されます';
             previewBody.textContent = bodyInput.value || 'メッセージがここに表示されます';
         }
-        
+
+        // 送信対象・予約時刻の表示更新
+        function updatePreviewMeta() {
+            const meta = document.getElementById('preview-meta');
+            if (!meta) return;
+            const parts = [];
+            if (scheduleAtInput.value) {
+                const d = new Date(scheduleAtInput.value);
+                if (!isNaN(d.getTime())) {
+                    parts.push(`⏰ <b>${d.toLocaleString('ja-JP')} に予約送信</b>`);
+                }
+            } else {
+                parts.push('⚡ <b>即時送信</b>');
+            }
+            if (clientIdInput.value.trim()) {
+                parts.push(`🎯 特定デバイス <code style="font-size:.78rem">${esc_html(clientIdInput.value.trim())}</code>`);
+            } else {
+                parts.push('👥 全員に通知');
+            }
+            meta.innerHTML = parts.join('<span style="opacity:.3">|</span>');
+        }
+
+        function esc_html(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        updatePreviewMeta();
         titleInput.addEventListener('input', updatePreview);
         bodyInput.addEventListener('input', updatePreview);
+        scheduleAtInput.addEventListener('input', updatePreviewMeta);
+        clientIdInput.addEventListener('input', () => { updatePreviewMeta(); updateSendButton(); });
         
         // クリアボタン
         btnClear.addEventListener('click', () => {
             form.reset();
             iconInput.value = './ad.webp';
             updatePreview();
+            updatePreviewMeta();
             statusMessage.classList.remove('show');
         });
         
@@ -960,6 +1249,8 @@
                     form.reset();
                     iconInput.value = './ad.ico';
                     updatePreview();
+                    updatePreviewMeta();
+                    updateSendButton();
                 }, 2000);
                 
             } catch (error) {
@@ -981,6 +1272,7 @@
         }
 
         // リスナーに追加
+        scheduleAtInput.addEventListener('input', () => { updateSendButton(); updatePreviewMeta(); });
         clientIdInput.addEventListener('input', updateSendButton);
 
         // フォームロード時にも実行
@@ -1208,7 +1500,18 @@
                     eventContainer.innerHTML = 'イベントなし';
                     return;
                 }
-                eventContainer.innerHTML = items.map(evRenderEventItem).join('');
+                const filter = (document.getElementById('event-filter') || {}).value || '';
+                const kw = filter.trim().toLowerCase();
+                const filtered = kw
+                    ? items.filter((ev) => (String(ev.title || '').toLowerCase().includes(kw)
+                        || String(ev.platform || '').toLowerCase().includes(kw)
+                        || String(ev.status || '').toLowerCase().includes(kw)))
+                    : items;
+                if (!filtered.length) {
+                    eventContainer.innerHTML = '絞り込みの結果、表示できるイベントはありません';
+                    return;
+                }
+                eventContainer.innerHTML = filtered.map(evRenderEventItem).join('');
             } catch (error) {
                 eventContainer.innerHTML = `取得失敗: ${evEscapeHtml(error.message)}`;
             }
@@ -1379,6 +1682,16 @@
         btnEvReload.addEventListener('click', evLoadEvents);
         btnEvClose.addEventListener('click', evCloseModal);
         btnEvCancel.addEventListener('click', evCloseModal);
+        {
+            const filterInput = document.getElementById('event-filter');
+            if (filterInput) {
+                let filterTimer;
+                filterInput.addEventListener('input', () => {
+                    clearTimeout(filterTimer);
+                    filterTimer = setTimeout(evLoadEvents, 250);
+                });
+            }
+        }
         eventModal.addEventListener('click', (e) => {
             if (e.target === eventModal) evCloseModal();
         });
@@ -1498,6 +1811,6 @@
             loadPkList();
         })();
     </script>
-    <script src="./js/admin-archive.js?v=20260921"></script>
+    <script src="./js/admin-archive.js?v=20260922"></script>
 </body>
 </html>
