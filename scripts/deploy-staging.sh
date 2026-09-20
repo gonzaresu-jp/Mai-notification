@@ -32,7 +32,8 @@ BRANCH="${BRANCH_ORIG:-main}"
 STAGING="/home/yuzuki/mai-push-test"
 PROD="$(cd "$(dirname "$0")/.." && pwd)"
 
-if [ ! -d "$STAGING/.git" ]; then
+# worktree の .git は「ディレクトリではなくファイル」なので -e で判定する
+if [ ! -e "$STAGING/.git" ] || ! git -C "$STAGING" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "error: staging worktree が見つかりません ($STAGING)" >&2
   exit 1
 fi
