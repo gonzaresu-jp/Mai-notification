@@ -132,6 +132,12 @@ function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => { if (err) console.error("chat_sessions create err:", err.message); });
     db.run(`CREATE INDEX IF NOT EXISTS idx_chat_sessions_admin ON chat_sessions (admin_user, updated_at)`);
+    // 全セッション共通の「だーりんのお願い・好み」（管理者ユーザー別・1行）
+    db.run(`CREATE TABLE IF NOT EXISTS chat_prefs (
+      admin_user TEXT PRIMARY KEY,
+      prefs TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => { if (err) console.error("chat_prefs create err:", err.message); });
     // 既存DBのマイグレーション: 旧スキーマに prefs カラムが無ければ追加
     db.all(`PRAGMA table_info(chat_sessions)`, (err, cols) => {
       if (err) { console.error("chat_sessions PRAGMA err:", err.message); return; }

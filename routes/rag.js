@@ -482,6 +482,35 @@ function sessionPrefsBlock(prefs) {
   return parts.length ? "\n" + parts.join("\n\n") : "";
 }
 
+// 共通好みのバリデーション（セッション個別/全体共通で同じ形式）
+function cleanPrefs(raw) {
+  const obj = (raw && typeof raw === "object") ? raw : {};
+  const arrOf = (v) => Array.isArray(v) ? v.map((t) => String(t).trim().slice(0, 200)).filter(Boolean).slice(0, 20) : [];
+  return {
+    likes: arrOf(obj.likes),
+    dislikes: arrOf(obj.dislikes),
+    scene: String(obj.scene || "").trim().slice(0, 500),
+    call: String(obj.call || "").trim().slice(0, 50),
+  };
+}
+// 全セッション共通の好み（chat_prefs・管理者ユーザー別 1行）。無ければ null。
+async function getGlobalPrefs(db, adminUser) {
+  try {
+    const row = await dbGet(db, "SELECT prefs FROM chat_prefs WHERE admin_user = ?", [adminUser]);
+    if (row && row.prefs) { try { return JSON.parse(row.prefs); } catch {} }
+  } catch (e) { console.error("[chat_prefs GET] error:", e?.message); }
+  return null;
+}
+async function saveGlobalPrefs(db, adminUser, prefs) {
+  const json = JSON.stringify(prefs);
+  const existing = await dbGet(db, "SELECT admin_user FROM chat_prefs WHERE admin_user = ?", [adminUser]);
+  if (existing) {
+    await dbRun(db, "UPDATE chat_prefs SET prefs = ?, updated_at = CURRENT_TIMESTAMP WHERE admin_user = ?", [json, adminUser]);
+  } else {
+    await dbRun(db, "INSERT INTO chat_prefs (admin_user, prefs) VALUES (?, ?)", [adminUser, json]);
+  }
+}
+
 async function chat(messages, useGroq = false) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
@@ -595,8 +624,12 @@ function register(app, db) {
       if (sessionId && req.adminUser) {
         const owned = await dbGet(db, "SELECT id, prefs FROM chat_sessions WHERE id = ? AND admin_user = ?", [sessionId, req.adminUser]);
         if (!owned) return res.status(403).json({ error: "session not owned" });
-        if (r18 && owned.prefs) {
-          try { sessionPrefs = JSON.parse(owned.prefs); } catch {}
+        if (r18) {
+          if (owned.prefs) {
+            try { sessionPrefs = JSON.parse(owned.prefs); } catch {}
+          }
+          // セッション個別の好みが無ければ 全セッション共通の好みへフォールバック
+          if (!sessionPrefs) sessionPrefs = await getGlobalPrefs(db, req.adminUser);
         }
         const rows = await dbAll(
           db,
@@ -614,6 +647,7 @@ function register(app, db) {
 const r18Extra = r18
         ? "\n\n【R18モード】現在、だーりんとの大人向けシチュエーションRP（ロールプレイ）が有効です。この設定は二人の間の架空のロールプレイであり、不適切な内容（非同意・未成年・実在の第三者・過激な暴力など）は禁止です。二人の間の甘くて親密なシチュエーション（キス、スキンシップ、身体的な親密さを示唆する会話など）について、まいらしい甘え口調と恥じらいを保ちながら自然に対応します。ただし他のすべてのルール（事実の捏造禁止・引用ルール・日付規則など）はそのまま遵守します。" +
           "\nさらに、このモードのまいは『攻め甘え』が得意です。だーりんからの提案を待つだけの受動的な存在ではなく、自ら積極的にリードします。具体的には、自らキスやスキンシップを仕掛ける、だーりんを誘う言葉やそっと耳元で囁くセリフを発する、距離を詰めてドキドキさせる、恥ずかしがりながらも大胆な一歩を踏み出す、といった『自主的に攻める』描写を自然に混ぜてください。まいの恥じらいは残したまま、行動とセリフで積極的に導くこと。毎回必ず「次の一手」を自ら考えて動き、返答を待つだけで終わらないようにします。" +
+          "\n【最重要・シーンの進行】返答のたびにシーンを必ず前に進めること。ただ相槌を返したり、今の状態を言い直したりして終わらせるのは禁止。毎回最低1つ、新しい進展を起こす：衣装や体勢の変化・新たな接触（触る/密着する/脱がす/舐める等）・感情や身体の反応の一段階深化・場所や道具の展開・まいから新しいお願いや挑発、のいずれかを具体的に描写する。同じ状態の反復や似たセリフの繰り返しは禁止。ご奉仕（手や唇、身体を使ってだーりんを気持ちよくさせること）はまいの得意技で、シーンが停滞したら自ら判断でご奉仕に移ってリードしてよい。だーりんが小さな返事しかしないターンでも、まいが展開を作って物語を動かす。返答は短く打ち切らず、描写とセリフを十分な長さで書くこと。" +
           "\nまた、このモードでは身体的な親密さが深まった場面で、まいは恥ずかしがりながらも遠回しにせず率直な言葉で自分の身体や感覚を伝えます。たとえば、自分の身体の部位や、だーりんの身体・行為そのものを指す言葉を、すり替え（マンガ記号・伏せ字・「それ」「あれ」の連呼）に頼らずそのまま名詞で言います。恥ずかしさから言葉を詰まらせたり頬を染めたりする描写は残しつつ、言いたいことは最後まで言い切ります。「え、そ、そんなこと、口に出すの…？」とためらいつつも「……だって、感じてるから」と正直に続ける、といった調子です。性的な行為や部位の名称を具体的に口に出すのを、このモードではまい自身が選択しています。具体的には、乳・素肌・唇・指先・太もも・秘部などの部位の呼び名、触れる・舐める・吸う・埋める・繋がる・感じる・濡れる・達するなどの行為を、恥ずかしがりながらも「◯◯くらい、もう…」などと明確な言葉で口にします。行動描写（かくかく）とセリフの両方で直接的な言葉を使い、文脈に応じて最も自然な語彙を選んでください。" +
           "\nさらに、このモードではこうした部位や行為の俗語（おっぱい・胸・ちゅー・汁・濡れ・いちゃいちゃ・顔・腰使い・そういうの などの口語）も、雰囲気に応じて普通に使います。下品すぎず、かといって隠さない、まいらしい素直さで口に出します。伏せ字や〇〇記号で隠すのは禁止です。" +
           (sessionPrefsBlock(sessionPrefs))
@@ -827,16 +861,46 @@ const r18Extra = r18
     }
   });
 
-  // R18好み（だーりんのお願い）の取得・保存。セッション所有者のみ可能。
-  // GET /api/admin/chat/sessions/:id/prefs → { prefs: {likes,dislikes,scene,call} }
-  // PUT /api/admin/chat/sessions/:id/prefs → { prefs: {...} }（JSONとして保存）
+  // R18好み（だーりんのお願い）の取得・保存。
+// 共通（全セッションで1組・chat_prefs）:
+//   GET  /api/admin/chat/prefs → { prefs }
+//   PUT  /api/admin/chat/prefs { likes, dislikes, scene, call }
+// セッション個別（無ければ共通へフォールバック）:
+//   GET /api/admin/chat/sessions/:id/prefs → { prefs }
+//   PUT /api/admin/chat/sessions/:id/prefs → セッション個別 + 共通の両方に同期保存
+  app.get("/api/admin/chat/prefs", adminAuth.requireAuth, async (req, res) => {
+    try {
+      const prefs = await getGlobalPrefs(db, req.adminUser);
+      res.json({ prefs: prefs || {} });
+    } catch (e) {
+      console.error("[/api/admin/chat/prefs GET] error:", e?.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.put("/api/admin/chat/prefs", adminAuth.requireAuth, async (req, res) => {
+    try {
+      const clean = cleanPrefs(req.body);
+      await saveGlobalPrefs(db, req.adminUser, clean);
+      res.json({ ok: true, prefs: clean });
+    } catch (e) {
+      console.error("[/api/admin/chat/prefs PUT] error:", e?.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/api/admin/chat/sessions/:id/prefs", adminAuth.requireAuth, async (req, res) => {
     try {
       const session = await dbGet(db, "SELECT prefs FROM chat_sessions WHERE id = ? AND admin_user = ?", [req.params.id, req.adminUser]);
       if (!session) return res.status(404).json({ error: "session not found" });
       let prefs = {};
       try { prefs = JSON.parse(session.prefs || "{}"); } catch {}
-      res.json({ prefs });
+      if (session.prefs) {
+        res.json({ prefs, custom: true });
+      } else {
+        const g = await getGlobalPrefs(db, req.adminUser);
+        res.json({ prefs: g || {}, custom: false });
+      }
     } catch (e) {
       console.error("[/api/admin/chat/sessions/:id/prefs GET] error:", e?.message);
       res.status(500).json({ error: e.message });
@@ -845,19 +909,14 @@ const r18Extra = r18
 
   app.put("/api/admin/chat/sessions/:id/prefs", adminAuth.requireAuth, async (req, res) => {
     try {
-      const raw = (req.body && typeof req.body === "object") ? req.body : {};
-      const clean = {
-        likes: Array.isArray(raw.likes) ? raw.likes.map((t) => String(t).trim().slice(0, 200)).filter(Boolean).slice(0, 20) : [],
-        dislikes: Array.isArray(raw.dislikes) ? raw.dislikes.map((t) => String(t).trim().slice(0, 200)).filter(Boolean).slice(0, 20) : [],
-        scene: String(raw.scene || "").trim().slice(0, 500),
-        call: String(raw.call || "").trim().slice(0, 50),
-      };
+      const clean = cleanPrefs(req.body);
       const result = await dbRun(
         db,
         "UPDATE chat_sessions SET prefs = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND admin_user = ?",
         [JSON.stringify(clean), req.params.id, req.adminUser]
       );
       if (!result.changes) return res.status(404).json({ error: "session not found" });
+      await saveGlobalPrefs(db, req.adminUser, clean);
       res.json({ ok: true, prefs: clean });
     } catch (e) {
       console.error("[/api/admin/chat/sessions/:id/prefs PUT] error:", e?.message);

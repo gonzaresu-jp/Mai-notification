@@ -218,9 +218,10 @@
     };
   }
   async function loadSessionPrefs() {
-    if (!currentSessionId || !prefEls.likes) return;
+    // 共通好み（chat_prefs）を読み込む。パネルは全チャット共通の設定を編集するUI。
+    if (!prefEls.likes) return;
     try {
-      const r = await fetch("/api/admin/chat/sessions/" + currentSessionId + "/prefs", { credentials: "include" });
+      const r = await fetch("/api/admin/chat/prefs", { credentials: "include" });
       if (r.status === 401) { location.href = "/admin/login.html"; return; }
       if (!r.ok) return;
       const j = await r.json();
@@ -232,12 +233,12 @@
     } catch (e) { console.warn("prefs load failed", e); }
   }
   async function saveSessionPrefs() {
-    if (!currentSessionId) { showPrefsStatus("セッションを作ってから保存してね"); return; }
-    try {
-      const r = await fetch("/api/admin/chat/sessions/" + currentSessionId + "/prefs", {
+    // 保存先は 共通(chat_prefs)。開いているセッションがあれば そのセッションにも同期（即時反映のため）。
+    const body = prefsFromInputs();    try {
+      const r = await fetch("/api/admin/chat/prefs", {
         method: "PUT", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(prefsFromInputs())
+        body: JSON.stringify(body)
       });
       if (r.status === 401) { location.href = "/admin/login.html"; return; }
       if (!r.ok) {
@@ -245,7 +246,15 @@
         showPrefsStatus("保存できなかったよ… " + (j.error || r.status));
         return;
       }
-      showPrefsStatus("保存したよ ♡");
+      if (currentSessionId) {
+        // セッション個別の好みも同じ値へ同期（フォールバックで共通が使われるが、過去セッションの古い個別値を上書き）
+        fetch("/api/admin/chat/sessions/" + currentSessionId + "/prefs", {
+          method: "PUT", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }).catch(() => {});
+      }
+      showPrefsStatus("保存したよ ♡ 全チャットに反映されるよ");
     } catch (e) { showPrefsStatus("通信エラー: " + e.message); }
   }
   function showPrefsStatus(msg) {
