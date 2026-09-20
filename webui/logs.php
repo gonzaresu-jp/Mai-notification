@@ -126,7 +126,11 @@
             if (isset($log["lines"])) {
                 $n = (int) preg_replace('/[^0-9]/', '', (string) $log["lines"]);
                 if ($n > 0) {
-                    $chartPts[] = ["date" => $log["date"], "n" => $n, "disp" => $log["lines"]];
+                    // X軸を実日付の時間軸にするためタイムスタンプを持たせる
+                    $ts = strtotime($log["date"]);
+                    if ($ts) {
+                        $chartPts[] = ["date" => $log["date"], "n" => $n, "disp" => $log["lines"], "ts" => $ts];
+                    }
                 }
             }
         }
@@ -140,8 +144,12 @@
             $W = 820; $H = 280;
             $padL = 74; $padR = 20; $padT = 18; $padB = 34;
             $iw = $W - $padL - $padR; $ih = $H - $padT - $padB;
-            $xOf = function ($i) use ($padL, $iw, $cCount) {
-                return $cCount === 1 ? $padL + $iw / 2 : $padL + $iw * ($i / ($cCount - 1));
+            // X軸は実日付の時間軸（更新間隔が一定でないため、日付の経過に比例して配置）
+            $t0 = (int) $chartPts[0]["ts"];
+            $tN = (int) $chartPts[$cCount - 1]["ts"];
+            $tSpan = max(1, $tN - $t0);
+            $xOf = function ($p) use ($padL, $iw, $t0, $tSpan) {
+                return $padL + $iw * (((int) $p["ts"] - $t0) / $tSpan);
             };
             $rng = max(1, $cMax - $cMin);
             // 下限を滑らかに（最小値の下に少し余白を作る）
@@ -151,14 +159,15 @@
                 return $padT + $ih * (1 - ($n - $yMin) / max(1, $yMax - $yMin));
             };
             $linePts = [];
-            foreach ($chartPts as $i => $p) { $linePts[] = round($xOf($i), 1) . "," . round($yOf($p["n"]), 1); }
+            foreach ($chartPts as $p) { $linePts[] = round($xOf($p), 1) . "," . round($yOf($p["n"]), 1); }
             $polyline = implode(" ", $linePts);
-            $areaPath = "M " . $linePts[0] . " L " . implode(" L ", array_slice($linePts, 1)) . " L " . round($xOf($cCount - 1), 1) . "," . round($padT + $ih, 1) . " L " . round($xOf(0), 1) . "," . round($padT + $ih, 1) . " Z";
+            $baseY = round($padT + $ih, 1);
+            $areaPath = "M " . $linePts[0] . " L " . implode(" L ", array_slice($linePts, 1)) . " L " . round($xOf($chartPts[$cCount - 1]), 1) . "," . $baseY . " L " . round($xOf($chartPts[0]), 1) . "," . $baseY . " Z";
             // Y軸ラベル用の値（下端/中間/上端）
             $yVals = [$yMin + ($yMax - $yMin) * 0, $yMin + ($yMax - $yMin) * 0.5, $yMax];
             ?>
             <div class="card log-card history-chart-card">
-                <div class="log-date" style="font-size:18px;">📊 コード成長（行数の推移）</div>
+                <div class="log-date" style="font-size:18px;"><i class="fa-solid fa-chart-line" aria-hidden="true"></i> コード成長（行数の推移）</div>
                 <div class="log-bg"></div>
                 <svg viewBox="0 0 <?= $W ?> <?= $H ?>" style="width:100%;height:auto;display:block;" role="img" aria-label="コード行数の推移グラフ">
                     <defs>
@@ -174,8 +183,8 @@
                     <?php endforeach; ?>
                     <path d="<?= $areaPath ?>" fill="url(#lineFillGrad)"/>
                     <polyline points="<?= $polyline ?>" fill="none" stroke="#B11E7C" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-                    <?php foreach ($chartPts as $i => $p): ?>
-                        <circle cx="<?= round($xOf($i), 1) ?>" cy="<?= round($yOf($p["n"]), 1) ?>" r="4" fill="#fff" stroke="#B11E7C" stroke-width="2">
+                    <?php foreach ($chartPts as $p): ?>
+                        <circle cx="<?= round($xOf($p), 1) ?>" cy="<?= round($yOf($p["n"]), 1) ?>" r="4" fill="#fff" stroke="#B11E7C" stroke-width="2">
                             <title><?= htmlspecialchars($p["date"]) ?> — <?= htmlspecialchars($p["disp"]) ?> lines</title>
                         </circle>
                     <?php endforeach; ?>

@@ -91,7 +91,7 @@
       const item = document.createElement("button");
       item.className = "sess-item" + (s.id === currentSessionId ? " active" : "");
       item.innerHTML =
-        `<span class="sess-del" title="このセッションを削除">🗑</span>` +
+        `<span class="sess-del" title="このセッションを削除"><i class="fa-solid fa-trash-can"></i></span>` +
         `<div class="sess-title">${esc(s.title)}</div>` +
         `<div class="sess-prev">${esc(s.preview || "（会話がまだありません）")} · ${fmtTime(s.updated_at)}</div>`;
       const del = item.querySelector(".sess-del");
@@ -180,8 +180,8 @@
   function syncR18() {
     r18Toggle.classList.toggle("on", r18);
     r18Toggle.setAttribute("aria-pressed", String(r18));
-    headerSub.textContent = r18
-      ? "🔞 大人のモード / だーりん、少し特殊な部屋で待機中…（18禁・フィクション）"
+    headerSub.innerHTML = r18
+      ? '<i class="fa-solid fa-heart-circle-exclamation"></i> 大人のモード / だーりん、少し特殊な部屋で待機中…（18禁・フィクション）'
       : "恋の魔女 / だーりんの\u201cドキドキ\u201dを待っています";
     if (prefsToggle) {
       prefsToggle.classList.toggle("on", r18);
@@ -308,7 +308,7 @@
     bubble.innerHTML = esc(msg);
     const retry = document.createElement("button");
     retry.className = "retry-btn";
-    retry.textContent = "🔄 もう一度試す";
+    retry.innerHTML = '<i class="fa-solid fa-rotate"></i> もう一度試す';
     retry.addEventListener("click", () => {
       bubble.closest(".msg")?.remove();
       ask(question);

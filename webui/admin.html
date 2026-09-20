@@ -788,22 +788,30 @@
             width: auto;
             min-width: 150px;
         }
+        /* FontAwesome アイコンの余白（絵文字から FA に統一） */
+        .admin-tab i, .arc-tab i, .btn-send i, .btn-primary i, .btn-secondary i,
+        .event-btn i, .back-home i, .event-meta i, .log-pk-item i,
+        .status-message i {
+            margin-right: 6px;
+        }
+        .event-meta i { margin-right: 4px; }
     </style>
+<link rel="stylesheet" href="/fontawesome-free-7.2.0-web/css/all.min.css" crossorigin="anonymous" />
 </head>
 <body>
     <div class="admin-shell">
-    <a href="/" class="back-home">← ホームに戻る</a>
+    <a href="/" class="back-home"><i class="fa-solid fa-arrow-left"></i> ホームに戻る</a>
     <nav class="admin-tabs" id="admin-tabs">
-        <button type="button" class="admin-tab is-active" data-tab="notify">📢 通知送信</button>
-        <button type="button" class="admin-tab" data-tab="archive">📼 アーカイブ管理</button>
-        <button type="button" class="admin-tab" data-tab="events">📅 イベント管理</button>
-        <button type="button" class="admin-tab" data-tab="weekly">🗓 今週の一言</button>
-        <button type="button" class="admin-tab" data-tab="ai">🤖 まいAI</button>
-        <button type="button" class="admin-tab" data-tab="security">🔑 パスキー</button>
+        <button type="button" class="admin-tab is-active" data-tab="notify"><i class="fa-solid fa-bullhorn"></i> 通知送信</button>
+        <button type="button" class="admin-tab" data-tab="archive"><i class="fa-solid fa-photo-film"></i> アーカイブ管理</button>
+        <button type="button" class="admin-tab" data-tab="events"><i class="fa-solid fa-calendar-days"></i> イベント管理</button>
+        <button type="button" class="admin-tab" data-tab="weekly"><i class="fa-solid fa-calendar-week"></i> 今週の一言</button>
+        <button type="button" class="admin-tab" data-tab="ai"><i class="fa-solid fa-robot"></i> まいAI</button>
+        <button type="button" class="admin-tab" data-tab="security"><i class="fa-solid fa-key"></i> パスキー</button>
     </nav>
 
     <section class="container admin-panel is-active" data-panel="notify">
-        <h1>📢 管理者通知パネル</h1>
+        <h1><i class="fa-solid fa-bullhorn"></i> 管理者通知パネル</h1>
         
         <form id="notification-form">
             <div class="form-group">
@@ -842,7 +850,7 @@
                  <div class="helper-text">特定のデバイスにのみ送る場合は client_id を入力。空欄の場合は全員に送信されます。</div>
              </div>
             <div class="preview">
-                <h3>📱 プレビュー</h3>
+                <h3><i class="fa-solid fa-mobile-screen"></i> プレビュー</h3>
                 <div class="preview-card">
                     <div class="preview-title" id="preview-title">タイトルがここに表示されます</div>
                     <div class="preview-body" id="preview-body">メッセージがここに表示されます</div>
@@ -851,7 +859,7 @@
             </div>
              <div class="button-group">
                  <button type="button" class="btn-clear" id="btn-clear">クリア</button>
-                 <button type="submit" class="btn-send" id="btn-send">📤 全員に送信</button>
+                 <button type="submit" class="btn-send" id="btn-send"><i class="fa-solid fa-paper-plane"></i> 全員に送信</button>
              </div>
          </form>
     </section>
@@ -859,7 +867,7 @@
         <div class="status-message" id="status-message"></div>
 
         <section class="sub-panel admin-panel" data-panel="weekly">
-            <h2>🗓 今週の一言</h2>
+            <h2><i class="fa-solid fa-calendar-week"></i> 今週の一言</h2>
             <div class="form-group" style="margin-bottom:12px;">
                 <label for="weekly-date">対象日（この日が含まれる週に保存）</label>
                 <input type="date" id="weekly-date" />
@@ -877,45 +885,45 @@
         </section>
 
         <section class="event-panel admin-panel" data-panel="events">
-            <h2>📅 イベント管理</h2>
+            <h2><i class="fa-solid fa-calendar-days"></i> イベント管理</h2>
             <div class="event-actions-toolbar">
-                <input type="text" id="event-filter" placeholder="🔎 イベントを絞り込み" style="flex:1; min-width:160px;" />
-                <button type="button" class="event-btn event-btn-main" id="btn-ev-create">➕ 新規イベント作成</button>
-                <button type="button" class="event-btn event-btn-sub" id="btn-ev-reload">🔄 再読み込み</button>
+                <input type="text" id="event-filter" placeholder="イベントを絞り込み" style="flex:1; min-width:160px;" />
+                <button type="button" class="event-btn event-btn-main" id="btn-ev-create"><i class="fa-solid fa-plus"></i> 新規イベント作成</button>
+                <button type="button" class="event-btn event-btn-sub" id="btn-ev-reload"><i class="fa-solid fa-arrows-rotate"></i> 再読み込み</button>
             </div>
             <div id="event-container" class="event-list">読み込み中...</div>
         </section>
 
         <section class="sub-panel admin-panel" data-panel="ai">
-            <h2>🤖 まいAI</h2>
+            <h2><i class="fa-solid fa-robot"></i> まいAI</h2>
             <p style="margin:0 0 10px; color:#666; font-size:.9rem;">通知履歴・配信予定・プロフィールに基づいてQ&Aできる専用チャットです。</p>
-            <a href="./chat.html" class="btn-primary" style="display:inline-block; text-decoration:none; padding:10px 18px; border-radius:999px;">💬 まいAI チャットを開く</a>
+            <a href="./chat.html" class="btn-primary" style="display:inline-block; text-decoration:none; padding:10px 18px; border-radius:999px;"><i class="fa-solid fa-comments"></i> まいAI チャットを開く</a>
         </section>
 
         <section class="sub-panel admin-panel" data-panel="security">
-            <h2>🔑 セキュリティ (パスキー)</h2>
+            <h2><i class="fa-solid fa-key"></i> セキュリティ (パスキー)</h2>
             <p style="margin:0 0 10px; color:#666; font-size:.9rem;">この端末の Windows Hello / TouchID / セキュリティキーを登録すると、次回からパスワード入力でログインしなくてよくなります。</p>
             <div class="inline-actions">
-                <button type="button" class="btn-primary" id="btn-passkey-register">🔑 この端末にパスキーを登録</button>
+                <button type="button" class="btn-primary" id="btn-passkey-register"><i class="fa-solid fa-key"></i> この端末にパスキーを登録</button>
             </div>
             <div id="passkey-list" style="margin-top:12px; font-size:.85rem; color:#555;"></div>
             <div class="status-message" id="passkey-status"></div>
         </section>
 
         <section class="sub-panel admin-panel" data-panel="archive">
-            <h2>📼 アーカイブ管理</h2>
+            <h2><i class="fa-solid fa-photo-film"></i> アーカイブ管理</h2>
             <p style="margin:0 0 10px; color:#666; font-size:.9rem;">
                 配信アーカイブのカテゴリ編集・YTから削除された動画の管理。
                 「deleted」にした動画は公開検索に出なくなり、AI（まいAIチャット）と要約生成だけが使えるようになります。
             </p>
             <div class="arc-tabbar" id="arc-tabbar">
-                <button type="button" class="btn-secondary arc-tab is-active" data-tab="cats">🏷 カテゴリ編集</button>
-                <button type="button" class="btn-secondary arc-tab" data-tab="deleted">🗑 削除済み動画</button>
+                <button type="button" class="btn-secondary arc-tab is-active" data-tab="cats"><i class="fa-solid fa-tags"></i> カテゴリ編集</button>
+                <button type="button" class="btn-secondary arc-tab" data-tab="deleted"><i class="fa-solid fa-trash-can"></i> 削除済み動画</button>
             </div>
 
             <div class="arc-tabpane" id="arc-pane-cats">
                 <div class="arc-searchbar">
-                    <input type="text" id="arc-cat-search" placeholder="🔎 タイトル・video_id で検索" />
+                    <input type="text" id="arc-cat-search" placeholder="タイトル・video_id で検索" />
                     <select id="arc-cat-filter" aria-label="カテゴリでフィルタ">
                         <option value="">すべてのカテゴリ</option>
                     </select>
@@ -924,7 +932,7 @@
                         <option value="stream_at_asc">古い順</option>
                         <option value="view_count_desc">再生回数順</option>
                     </select>
-                    <button type="button" class="event-btn event-btn-main" id="arc-cat-reload">🔄 再読み込み</button>
+                    <button type="button" class="event-btn event-btn-main" id="arc-cat-reload"><i class="fa-solid fa-arrows-rotate"></i> 再読み込み</button>
                 </div>
                 <div class="arc-batchbar" id="arc-batchbar" style="display:none;">
                     <input type="checkbox" id="arc-batch-selall" title="このページの全件を選択" />
@@ -939,15 +947,15 @@
                 <div class="arc-info" id="arc-cat-info">読み込み中...</div>
                 <div class="arc-list" id="arc-cat-list"></div>
                 <div class="arc-pagination">
-                    <button type="button" class="btn-secondary" id="arc-cat-prev">← 前へ</button>
+                    <button type="button" class="btn-secondary" id="arc-cat-prev"><i class="fa-solid fa-arrow-left"></i> 前へ</button>
                     <span class="pg-info" id="arc-cat-pg-info"></span>
-                    <button type="button" class="btn-secondary" id="arc-cat-next">次へ →</button>
+                    <button type="button" class="btn-secondary" id="arc-cat-next">次へ <i class="fa-solid fa-arrow-right"></i></button>
                 </div>
             </div>
 
             <div class="arc-tabpane" id="arc-pane-deleted" style="display:none;">
                 <details class="arc-addform">
-                    <summary>➕ YTから削除された動画を追加</summary>
+                    <summary><i class="fa-solid fa-plus"></i> YTから削除された動画を追加</summary>
                     <div class="arc-addform-body">
                         <input type="text" id="arc-del-id" placeholder="video_id（11文字、URLでも可）" />
                         <input type="text" id="arc-del-title" placeholder="タイトル" />
@@ -958,7 +966,7 @@
                     </div>
                 </details>
                 <div class="arc-ctlbar">
-                    <button type="button" class="event-btn event-btn-sub" id="arc-del-reload">🔄 再読み込み</button>
+                    <button type="button" class="event-btn event-btn-sub" id="arc-del-reload"><i class="fa-solid fa-arrows-rotate"></i> 再読み込み</button>
                 </div>
                 <div class="arc-info" id="arc-del-info">読み込み中...</div>
                 <div class="arc-list" id="arc-del-list"></div>
@@ -1032,7 +1040,7 @@
                             <option value="voice">ボイス販売</option>
                             <option value="1on1">1on1</option>
                             <option value="other">その他</option>
-                            <option value="memo">📝 メモ</option>
+                            <option value="memo">メモ</option>
                         </select>
                     </div>
                 </div>
@@ -1160,12 +1168,12 @@
                     parts.push(`⏰ <b>${d.toLocaleString('ja-JP')} に予約送信</b>`);
                 }
             } else {
-                parts.push('⚡ <b>即時送信</b>');
+                parts.push('<i class="fa-solid fa-bolt"></i> <b>即時送信</b>');
             }
             if (clientIdInput.value.trim()) {
-                parts.push(`🎯 特定デバイス <code style="font-size:.78rem">${esc_html(clientIdInput.value.trim())}</code>`);
+                parts.push(`<i class="fa-solid fa-bullseye"></i> 特定デバイス <code style="font-size:.78rem">${esc_html(clientIdInput.value.trim())}</code>`);
             } else {
-                parts.push('👥 全員に通知');
+                parts.push('<i class="fa-solid fa-users"></i> 全員に通知');
             }
             meta.innerHTML = parts.join('<span style="opacity:.3">|</span>');
         }
@@ -1220,7 +1228,7 @@
                     body: JSON.stringify({
                         type: 'admin',
                         settingKey: 'admin',
-                        // 🌟 clientId を API に渡す 🌟
+                        // clientId を API に渡す
                         clientId: clientId || undefined,
                         scheduleAt: scheduleAt || undefined,
                         data: {
@@ -1242,7 +1250,7 @@
                 }
                 
                 const result = await response.json();
-                showStatus(`✅ 送信成功！（${result.message || '完了'}）`, 'success');
+                showStatus(`<i class="fa-solid fa-circle-check"></i> 送信成功！（${result.message || '完了'}）`, 'success');
                 
                 // フォームをクリア
                 setTimeout(() => {
@@ -1254,10 +1262,10 @@
                 }, 2000);
                 
             } catch (error) {
-                showStatus(`❌ 送信エラー: ${error.message}`, 'error');
+                showStatus(`<i class="fa-solid fa-circle-xmark"></i> 送信エラー: ${error.message}`, 'error');
             } finally {
                 btnSend.disabled = false;
-                btnSend.textContent = '📤 全員に送信';
+                btnSend.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 全員に送信';
             }
         });
 
@@ -1265,9 +1273,9 @@
             if (scheduleAtInput.value) {
                 btnSend.textContent = '⏰ 予約送信';
             } else if (clientIdInput.value.trim()) {
-                btnSend.textContent = '📤 特定デバイスに送信';
+                btnSend.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 特定デバイスに送信';
             } else {
-                btnSend.textContent = '📤 全員に送信';
+                btnSend.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 全員に送信';
             }
         }
 
@@ -1475,7 +1483,7 @@
                     ${thumbHtml}
                     <div class="event-info">
                         <div class="event-title">${evEscapeHtml(event.title || '')}</div>
-                        <div class="event-meta">🕒 ${startTimeText}</div>
+                        <div class="event-meta"><i class="fa-regular fa-clock"></i> ${startTimeText}</div>
                         <div class="event-badges">
                             <span class="badge badge-${event.status || 'scheduled'}">${statusText}</span>
                             ${platformBadge}
@@ -1700,7 +1708,7 @@
         evLoadEvents();
         
         function showStatus(message, type) {
-            statusMessage.textContent = message;
+            statusMessage.innerHTML = message;
             statusMessage.className = `status-message show ${type}`;
             
             setTimeout(() => {
@@ -1716,7 +1724,7 @@
             if (!btn) return;
 
             function showPkStatus(msg, type) {
-                statusEl.textContent = msg;
+                statusEl.innerHTML = msg;
                 statusEl.className = `status-message show ${type}`;
                 setTimeout(() => statusEl.classList.remove('show'), 6000);
             }
@@ -1748,7 +1756,7 @@
                         if (!pks.length) { listEl.textContent = '登録済みパスキー: なし'; return; }
                         listEl.innerHTML = '登録済みパスキー: ' + pks.map((p) => {
                             const dt = new Date(p.created_at).toLocaleDateString('ja-JP');
-                            return `<span style="margin-right:14px;">🔑 ${p.label ? p.label : p.credential_id} (${dt})</span>`;
+                            return `<span style="margin-right:14px;"><i class="fa-solid fa-key"></i> ${p.label ? p.label : p.credential_id} (${dt})</span>`;
                         }).join('');
                     })
                     .catch(() => {});
@@ -1795,7 +1803,7 @@
                     });
                     const data = await readJson(finish);
                     if (!finish.ok) throw new Error(data.error || '登録に失敗しました');
-                    showPkStatus('✅ この端末のパスキーを登録しました。次回からログインページで「パスキーでログイン」が使えます', 'success');
+                    showPkStatus('<i class="fa-solid fa-circle-check"></i> この端末のパスキーを登録しました。次回からログインページで「パスキーでログイン」が使えます', 'success');
                     loadPkList();
                 } catch (e) {
                     if (e && e.name === 'NotAllowedError') {
@@ -1805,7 +1813,7 @@
                     }
                 } finally {
                     btn.disabled = false;
-                    btn.textContent = '🔑 この端末にパスキーを登録';
+                    btn.innerHTML = '<i class="fa-solid fa-key"></i> この端末にパスキーを登録';
                 }
             });
             loadPkList();
