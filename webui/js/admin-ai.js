@@ -62,6 +62,7 @@
   // 積み上げ横棒（感情×期間の交差）。rows: [{label, slot:{POSITIVE,NEUTRAL,NEGATIVE}}]
   function sentiStackSvg(rows, opts) {
     const o = Object.assign({ w: 760, rowH: 18 }, opts || {});
+    const w = o.w;
     const max = Math.max(1, ...rows.map(r => (r.slot.POSITIVE + r.slot.NEUTRAL + r.slot.NEGATIVE)));
     const labelW = o.labelW || 96, valueW = 96;
     let bars = "";
