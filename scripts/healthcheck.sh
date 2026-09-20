@@ -1,10 +1,12 @@
 #!/bin/bash
 API_BASE="http://localhost:8080"
 WORKER_BASE="http://localhost:3002"
-WEBHOOK_URL="https://discord.com/api/webhooks/REDACTED"
+# Webhookは .env の DISCORD_WEBHOOK_URL から読む（GitHubに直接書かない。判定: FriendlyScanner流出検知対策）
+WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-$(grep -m1 '^DISCORD_WEBHOOK_URL=' /var/www/html/mai-push/.env 2>/dev/null | cut -d= -f2- | tr -d "\"'")}"
 HOSTNAME=$(hostname)
 send_alert() {
     local level="$1" title="$2" desc="$3"
+    if [ ! -s "$WEBHOOK_URL" ]; then echo "healthcheck: webhook URLが空のためDiscord通知をスキップ" >&2; return 0; fi
     local color=16776960
     [ "$level" = "ERROR" ] && color=16711680
     curl -s -H "Content-Type: application/json" \
