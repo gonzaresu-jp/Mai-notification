@@ -12,6 +12,10 @@
   const sidebar = document.getElementById("sidebar");
   const scrim = document.getElementById("scrim");
   const sidebarToggle = document.getElementById("sidebarToggle");
+  const prefsToggle = document.getElementById("prefsToggle");
+  const prefsPanel = document.getElementById("prefsPanel");
+  const prefsSave = document.getElementById("prefsSave");
+  const prefsStatus = document.getElementById("prefsStatus");
   let busy = false;
   let currentSessionId = null;   // 現在のセッションID（null=未作成）
   let r18 = false;
@@ -135,6 +139,7 @@
     log.innerHTML = "";
     showWelcome();
     await loadSessions();
+    if (r18) loadSessionPrefs();
     closeSidebar();
     input.focus();
   }
@@ -163,6 +168,7 @@
       renderSessions();
       closeSidebar();
       scrollDown();
+      if (r18) loadSessionPrefs();
     } catch (e) { console.warn("session load failed", e); }
   }
 
@@ -177,12 +183,84 @@
     headerSub.textContent = r18
       ? "🔞 大人のモード / だーりん、少し特殊な部屋で待機中…（18禁・フィクション）"
       : "恋の魔女 / だーりんの\u201cドキドキ\u201dを待っています";
+    if (prefsToggle) {
+      prefsToggle.classList.toggle("on", r18);
+      prefsToggle.setAttribute("aria-pressed", String(r18));
+    }
+    if (!r18) {
+      if (prefsPanel) prefsPanel.hidden = true;
+      if (prefsToggle) prefsToggle.setAttribute("aria-pressed", "false");
+    }
   }
   r18Toggle.addEventListener("click", () => {
     r18 = !r18;
     try { localStorage.setItem("mai_r18_mode", r18 ? "1" : "0"); } catch {}
     syncR18();
+    if (r18) loadSessionPrefs();
   });
+
+  // ===== だーりんのお願い・好み（R18） =====
+  const prefEls = {
+    likes: document.getElementById("prefLikes"),
+    dislikes: document.getElementById("prefDislikes"),
+    scene: document.getElementById("prefScene"),
+    call: document.getElementById("prefCall"),
+  };
+  function splitTags(str) {
+    return String(str || "").split(/[,、\n]/).map(t => t.trim()).filter(Boolean);
+  }
+  function prefsFromInputs() {
+    return {
+      likes: splitTags(prefEls.likes.value),
+      dislikes: splitTags(prefEls.dislikes.value),
+      scene: prefEls.scene.value.trim(),
+      call: prefEls.call.value.trim(),
+    };
+  }
+  async function loadSessionPrefs() {
+    if (!currentSessionId || !prefEls.likes) return;
+    try {
+      const r = await fetch("/api/admin/chat/sessions/" + currentSessionId + "/prefs", { credentials: "include" });
+      if (r.status === 401) { location.href = "/admin/login.html"; return; }
+      if (!r.ok) return;
+      const j = await r.json();
+      const p = j.prefs || {};
+      prefEls.likes.value = (p.likes || []).join(", ");
+      prefEls.dislikes.value = (p.dislikes || []).join(", ");
+      prefEls.scene.value = p.scene || "";
+      prefEls.call.value = p.call || "";
+    } catch (e) { console.warn("prefs load failed", e); }
+  }
+  async function saveSessionPrefs() {
+    if (!currentSessionId) { showPrefsStatus("セッションを作ってから保存してね"); return; }
+    try {
+      const r = await fetch("/api/admin/chat/sessions/" + currentSessionId + "/prefs", {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prefsFromInputs())
+      });
+      if (r.status === 401) { location.href = "/admin/login.html"; return; }
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        showPrefsStatus("保存できなかったよ… " + (j.error || r.status));
+        return;
+      }
+      showPrefsStatus("保存したよ ♡");
+    } catch (e) { showPrefsStatus("通信エラー: " + e.message); }
+  }
+  function showPrefsStatus(msg) {
+    if (!prefsStatus) return;
+    prefsStatus.textContent = msg;
+    clearTimeout(showPrefsStatus._t);
+    showPrefsStatus._t = setTimeout(() => { prefsStatus.textContent = ""; }, 2500);
+  }
+  if (prefsToggle) {
+    prefsToggle.addEventListener("click", () => {
+      prefsPanel.hidden = !prefsPanel.hidden;
+      if (!prefsPanel.hidden) loadSessionPrefs();
+    });
+  }
+  if (prefsSave) prefsSave.addEventListener("click", saveSessionPrefs);
 
   function scrollDown(){ log.scrollTop = log.scrollHeight; }
 

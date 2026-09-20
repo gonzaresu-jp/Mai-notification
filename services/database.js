@@ -127,10 +127,21 @@ function initDatabase() {
       admin_user TEXT NOT NULL,
       title TEXT,
       r18 INTEGER NOT NULL DEFAULT 0,
+      prefs TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => { if (err) console.error("chat_sessions create err:", err.message); });
     db.run(`CREATE INDEX IF NOT EXISTS idx_chat_sessions_admin ON chat_sessions (admin_user, updated_at)`);
+    // 既存DBのマイグレーション: 旧スキーマに prefs カラムが無ければ追加
+    db.all(`PRAGMA table_info(chat_sessions)`, (err, cols) => {
+      if (err) { console.error("chat_sessions PRAGMA err:", err.message); return; }
+      if (!cols.some(c => c.name === "prefs")) {
+        db.run(`ALTER TABLE chat_sessions ADD COLUMN prefs TEXT`, (e2) => {
+          if (e2) console.error("chat_sessions add prefs err:", e2.message);
+          else console.log("migration: chat_sessions.prefs added");
+        });
+      }
+    });
     db.run(`CREATE TABLE IF NOT EXISTS chat_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,

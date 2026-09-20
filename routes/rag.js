@@ -36,7 +36,7 @@ function loadPersonality() {
 // EMOTION（感情表現）/ STYLE（口調・語彙）/ RELATIONSHIP（相手との関係性）/
 // EXEMPLARS（実際の配信で見られた発言例）を構造化して渡すと、モデルは「どのように振る舞うか」を
 // 抽象命令だけでなく実例から学べる。ファイルが無ければ空文字でフォールバック。
-function buildPersonaBlock() {
+function buildPersonaBlock(includeKinks = false) {
   const p = loadPersonality();
   if (!p || typeof p !== "object") return "";
   const parts = [];
@@ -48,6 +48,9 @@ function buildPersonaBlock() {
   if (p.style && p.style.length) parts.push("【まいの口調・語彙】\n" + bullets(p.style));
   if (p.relationship && p.relationship.length) parts.push("【まいと相手の関係性】\n" + bullets(p.relationship));
   if (p.exemplars && p.exemplars.length) parts.push("【まいの発言例（実際の配信で発言されたもの・雰囲気の参考）】\n" + bullets(p.exemplars));
+  if (includeKinks && p.r18_kinks && p.r18_kinks.length) {
+    parts.push("【まいの素の性癖（R18モードの演じ方の根幹・通常会話では口にしない本心）】\n" + bullets(p.r18_kinks));
+  }
   return parts.join("\n\n");
 }
 
@@ -462,6 +465,23 @@ function sourceLine(hit) {
   return `[${p.platform || "通知"}] ${p.title || ""}${p.body ? `: ${p.body}` : ""}${p.url ? ` ${p.url}` : ""}`;
 }
 
+// セッションに保存された「だーりんのお願い・好み」(R18用)をシステムプロンプトのブロックに組み立てる。
+// prefs は { likes:[], dislikes:[], scene:"", call:"" } 形式を想定（タグが無い要素はスキップ）。
+function sessionPrefsBlock(prefs) {
+  if (!prefs || typeof prefs !== "object") return "";
+  const parts = [];
+  const arr = (v) => (Array.isArray(v) ? v.map((t) => String(t).trim()).filter(Boolean) : []);
+  const likes = arr(prefs.likes);
+  const dislikes = arr(prefs.dislikes);
+  const scene = String(prefs.scene || "").trim();
+  const call = String(prefs.call || "").trim();
+  if (likes.length) parts.push("【だーりんのお願い・好み】この内容を必ず演じに反映すること:\n" + likes.map((t) => `・${t}`).join("\n"));
+  if (dislikes.length) parts.push("【だーりんが苦手なこと】この内容には絶対に触れないこと（明白にそれを望む会話になっても避ける）:\n" + dislikes.map((t) => `・${t}`).join("\n"));
+  if (scene) parts.push(`【だーりんが望む傾向のシチュエーション】${scene}`);
+  if (call) parts.push(`【まいからの呼称】だーりんに呼びかけるときは「${call}」を使うこと。`);
+  return parts.length ? "\n" + parts.join("\n\n") : "";
+}
+
 async function chat(messages, useGroq = false) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
@@ -570,10 +590,14 @@ function register(app, db) {
       // セッションIDは必ず「自分（req.adminUser）の所有」であることを検証する（他人のセッションへの
       // 読み書き・汚染を防ぐ）。所有していないIDは 403 で拒否し、ボディ履歴フォールバックへ落とさない。
       let historyTurns = [];
+      let sessionPrefs = null; // セッションに保存された「だーりんのお願い・好み」(R18用)
       const sessionId = req.body?.sessionId ? Number(req.body.sessionId) : null;
       if (sessionId && req.adminUser) {
-        const owned = await dbGet(db, "SELECT id FROM chat_sessions WHERE id = ? AND admin_user = ?", [sessionId, req.adminUser]);
+        const owned = await dbGet(db, "SELECT id, prefs FROM chat_sessions WHERE id = ? AND admin_user = ?", [sessionId, req.adminUser]);
         if (!owned) return res.status(403).json({ error: "session not owned" });
+        if (r18 && owned.prefs) {
+          try { sessionPrefs = JSON.parse(owned.prefs); } catch {}
+        }
         const rows = await dbAll(
           db,
           "SELECT role, content FROM chat_messages WHERE session_id = ? AND role IN ('user','assistant') ORDER BY id DESC LIMIT 10",
@@ -587,13 +611,14 @@ function register(app, db) {
           .slice(-10);
       }
 
-      const r18Extra = r18
+const r18Extra = r18
         ? "\n\n【R18モード】現在、だーりんとの大人向けシチュエーションRP（ロールプレイ）が有効です。この設定は二人の間の架空のロールプレイであり、不適切な内容（非同意・未成年・実在の第三者・過激な暴力など）は禁止です。二人の間の甘くて親密なシチュエーション（キス、スキンシップ、身体的な親密さを示唆する会話など）について、まいらしい甘え口調と恥じらいを保ちながら自然に対応します。ただし他のすべてのルール（事実の捏造禁止・引用ルール・日付規則など）はそのまま遵守します。" +
           "\nさらに、このモードのまいは『攻め甘え』が得意です。だーりんからの提案を待つだけの受動的な存在ではなく、自ら積極的にリードします。具体的には、自らキスやスキンシップを仕掛ける、だーりんを誘う言葉やそっと耳元で囁くセリフを発する、距離を詰めてドキドキさせる、恥ずかしがりながらも大胆な一歩を踏み出す、といった『自主的に攻める』描写を自然に混ぜてください。まいの恥じらいは残したまま、行動とセリフで積極的に導くこと。毎回必ず「次の一手」を自ら考えて動き、返答を待つだけで終わらないようにします。" +
           "\nまた、このモードでは身体的な親密さが深まった場面で、まいは恥ずかしがりながらも遠回しにせず率直な言葉で自分の身体や感覚を伝えます。たとえば、自分の身体の部位や、だーりんの身体・行為そのものを指す言葉を、すり替え（マンガ記号・伏せ字・「それ」「あれ」の連呼）に頼らずそのまま名詞で言います。恥ずかしさから言葉を詰まらせたり頬を染めたりする描写は残しつつ、言いたいことは最後まで言い切ります。「え、そ、そんなこと、口に出すの…？」とためらいつつも「……だって、感じてるから」と正直に続ける、といった調子です。性的な行為や部位の名称を具体的に口に出すのを、このモードではまい自身が選択しています。具体的には、乳・素肌・唇・指先・太もも・秘部などの部位の呼び名、触れる・舐める・吸う・埋める・繋がる・感じる・濡れる・達するなどの行為を、恥ずかしがりながらも「◯◯くらい、もう…」などと明確な言葉で口にします。行動描写（かくかく）とセリフの両方で直接的な言葉を使い、文脈に応じて最も自然な語彙を選んでください。" +
-          "\nさらに、このモードではこうした部位や行為の俗語（おっぱい・胸・ちゅー・汁・濡れ・いちゃいちゃ・顔・腰使い・そういうの などの口語）も、雰囲気に応じて普通に使います。下品すぎず、かといって隠さない、まいらしい素直さで口に出します。伏せ字や〇〇記号で隠すのは禁止です。"
-: "";
-      const personaBlock = buildPersonaBlock();
+          "\nさらに、このモードではこうした部位や行為の俗語（おっぱい・胸・ちゅー・汁・濡れ・いちゃいちゃ・顔・腰使い・そういうの などの口語）も、雰囲気に応じて普通に使います。下品すぎず、かといって隠さない、まいらしい素直さで口に出します。伏せ字や〇〇記号で隠すのは禁止です。" +
+          (sessionPrefsBlock(sessionPrefs))
+        : "";
+      const personaBlock = buildPersonaBlock(r18);
       const messages = [
         {
           role: "system",
@@ -798,6 +823,44 @@ function register(app, db) {
       res.json({ ok: true });
     } catch (e) {
       console.error("[/api/admin/chat/sessions/:id DELETE] error:", e?.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // R18好み（だーりんのお願い）の取得・保存。セッション所有者のみ可能。
+  // GET /api/admin/chat/sessions/:id/prefs → { prefs: {likes,dislikes,scene,call} }
+  // PUT /api/admin/chat/sessions/:id/prefs → { prefs: {...} }（JSONとして保存）
+  app.get("/api/admin/chat/sessions/:id/prefs", adminAuth.requireAuth, async (req, res) => {
+    try {
+      const session = await dbGet(db, "SELECT prefs FROM chat_sessions WHERE id = ? AND admin_user = ?", [req.params.id, req.adminUser]);
+      if (!session) return res.status(404).json({ error: "session not found" });
+      let prefs = {};
+      try { prefs = JSON.parse(session.prefs || "{}"); } catch {}
+      res.json({ prefs });
+    } catch (e) {
+      console.error("[/api/admin/chat/sessions/:id/prefs GET] error:", e?.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.put("/api/admin/chat/sessions/:id/prefs", adminAuth.requireAuth, async (req, res) => {
+    try {
+      const raw = (req.body && typeof req.body === "object") ? req.body : {};
+      const clean = {
+        likes: Array.isArray(raw.likes) ? raw.likes.map((t) => String(t).trim().slice(0, 200)).filter(Boolean).slice(0, 20) : [],
+        dislikes: Array.isArray(raw.dislikes) ? raw.dislikes.map((t) => String(t).trim().slice(0, 200)).filter(Boolean).slice(0, 20) : [],
+        scene: String(raw.scene || "").trim().slice(0, 500),
+        call: String(raw.call || "").trim().slice(0, 50),
+      };
+      const result = await dbRun(
+        db,
+        "UPDATE chat_sessions SET prefs = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND admin_user = ?",
+        [JSON.stringify(clean), req.params.id, req.adminUser]
+      );
+      if (!result.changes) return res.status(404).json({ error: "session not found" });
+      res.json({ ok: true, prefs: clean });
+    } catch (e) {
+      console.error("[/api/admin/chat/sessions/:id/prefs PUT] error:", e?.message);
       res.status(500).json({ error: e.message });
     }
   });
