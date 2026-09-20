@@ -48,12 +48,14 @@ else
 fi
 
 # 2. 対象ブランチへ切り替え＋リモートと同一に固定（未コミットの追跡変更は無い前提）
+#    デプロイ先は常にローカルデプロイ用ブランチ名「staging」を使う。
+#    main を直接チェックアウトすると本番 worktree(=\$PROD)と競合するため。
 if [ "$DRY" -eq 1 ]; then
-  echo "[dry] git checkout -B $BRANCH origin/$BRANCH"
+  echo "[dry] git checkout -B staging origin/$BRANCH"
   echo "[dry] git reset --hard origin/$BRANCH"
 else
-  echo "==> checkout $BRANCH (reset to origin/$BRANCH)"
-  git checkout -B "$BRANCH" "origin/$BRANCH"
+  echo "==> checkout staging (reset to origin/$BRANCH)"
+  git checkout -B staging "origin/$BRANCH"
   git reset --hard "origin/$BRANCH"
 fi
 
