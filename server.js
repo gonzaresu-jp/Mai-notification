@@ -39,7 +39,16 @@ loadVapid();
 
 // --- Rate Limiters ---
 const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, keyGenerator: (req) => ipKeyGenerator(req), standardHeaders: true, legacyHeaders: false });
-const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 150, standardHeaders: true, legacyHeaders: false, validate: { trustProxy: false }, message: { error: "Too many API requests, please try again later." } });
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+  message: { error: "Too many API requests, please try again later." },
+  // アーカイブ系は1画面で約40リクエスト（字幕/チャプターのバッジ判定）飛ぶため、グローバル制限から除外する
+  skip: (req) => req.originalUrl.startsWith("/api/archive"),
+});
 // --- notifyLimiter defined in routes/notify.js ---
 
 // --- Middleware ---
@@ -93,6 +102,17 @@ app.use("/api/", (req, res, next) => {
 });
 
 app.use("/api/", apiLimiter);
+
+// アーカイブAPI専用のリミッタ（上流はローカル・キャッシュ/サーキットブレーカー付きなので緩めに）
+// 1画面のバッジ判定で最大 ~40リクエスト/人 になることを考慮
+const archiveLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 400,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many archive API requests, please try again later." },
+});
+app.use("/api/archive", archiveLimiter);
 
 // --- SSE endpoint (must be before /api/events/:id) ---
 app.get("/api/events/stream", (req, res) => {
