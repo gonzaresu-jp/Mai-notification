@@ -898,7 +898,13 @@
             <h2><i class="fa-solid fa-robot"></i> まいAI</h2>
             <p style="margin:0 0 10px; color:#666; font-size:.9rem;">通知履歴・配信予定・プロフィールに基づいてQ&Aできる専用チャットです。</p>
             <a href="./chat.html" class="btn-primary" style="display:inline-block; text-decoration:none; padding:10px 18px; border-radius:999px;"><i class="fa-solid fa-comments"></i> まいAI チャットを開く</a>
-        </section>
+
+                <h3 style="margin:22px 0 4px;"><i class="fa-solid fa-chart-line"></i> ツイート統計（まいちゃんのX）</h3>
+                <p style="margin:0 0 12px; color:#666; font-size:.84rem;">過去ログとGemma/Gemini分析ラベルから集計。新着ツイートの分析結果は自動で蓄積されます。</p>
+                <div id="tw-stats" style="display:flex; flex-direction:column; gap:14px;">
+                    <div style="color:#999; font-size:.85rem;"><i class="fa-solid fa-spinner fa-spin"></i> 統計を読み込み中…</div>
+                </div>
+            </section>
 
         <section class="sub-panel admin-panel" data-panel="security">
             <h2><i class="fa-solid fa-key"></i> セキュリティ (パスキー)</h2>
@@ -1820,5 +1826,6 @@
         })();
     </script>
     <script src="./js/admin-archive.js?v=20260922"></script>
+    <script src="./js/admin-ai.js?v=20260923"></script>
 </body>
 </html>

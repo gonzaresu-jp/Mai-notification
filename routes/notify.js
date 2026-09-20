@@ -114,6 +114,27 @@ function register(app, db) {
       res.json({ success: true, message: `Notification sent to ${sentCount} clients`, sentCount, totalCount: total + androidTotal, detailsSummary: { attempted: total + androidTotal, succeeded: sentCount, failed: total + androidTotal - sentCount }, webPush: { sentCount: webSentCount, totalCount: total }, android: { sentCount: androidSentCount, totalCount: androidTotal } });
     });
   });
+
+  // 内部API: 新着ツイートのGemma/Gemini分析結果をnotifications.dataに保存する。
+  // POST /api/internal/twitter/analysis { tweet_id, platform, analysis }
+  // twitter.js のgemmaPromiseから送信され、以降ツイート統計はログなしでこのカラムから集計できる。
+  app.post("/api/internal/twitter/analysis", requireNotifyToken, (req, res) => {
+    const { tweet_id, platform } = req.body || {};
+    const analysis = req.body?.analysis;
+    if (!tweet_id || !platform || !analysis || typeof analysis !== "object") {
+      return res.status(400).json({ error: "tweet_id, platform, analysis required" });
+    }
+    db.run(
+      "UPDATE notifications SET data = ? WHERE tweet_id = ? AND platform = ?",
+      [JSON.stringify(analysis), String(tweet_id), platform],
+      function (err) {
+        if (err) { console.error("[/api/internal/twitter/analysis] update err:", err.message); return res.status(500).json({ error: err.message }); }
+        if (!this.changes) { console.warn("[/api/internal/twitter/analysis] no matching notification for tweet_id:", tweet_id); return res.json({ ok: true, updated: 0 }); }
+        console.log(`[/api/internal/twitter/analysis] saved analysis for ${platform}/${tweet_id}`);
+        res.json({ ok: true, updated: this.changes });
+      }
+    );
+  });
 }
 
 module.exports = { register };
