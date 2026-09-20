@@ -89,3 +89,23 @@ git reset --hard <commit> && git push --force origin main   # ※force push は�
 ```
 
 または promote 直後なら `git revert` で新しい commit を積んでから通常 push。
+
+## コード行数集計方法（updateLogs の "lines"）
+
+- 公式コマンド: `bash scripts/count-lines.sh [<git-rev>]`
+  - 引数なし = 現在の作業ツリー、引数あり = そのコミット時点の追跡ファイルを集計
+- 集計対象: **git 追跡ファイルのみ**（`git ls-files` / `git ls-tree`）
+- 除外（生成物・素材は行数に含めない）:
+  - `webui/dist/` 全体（esbuild の minify 済み出力）
+  - `*.min.js` / `*.min.css`（minify 済みファイル）
+  - `package-lock.json`（npm が自動生成するロックファイル）
+  - `*.svg`（アイコン素材）
+  - `webui/compare.html`（比較レポート用の自動生成HTML）
+- 表示形式: cloc の `SUM` 行 `code` 列（例: `33,924` → "33,924"）
+- updateLogs には**その日の値を絶対値として記録**する（前日値に増分を足す等の累積計算はしない）
+
+### 背景（2026-09-21 修正）
+
+- 09-19 までは手書きソースのみの値（29,663 等）だったが、09-20 の集計で集計対象が「作業ツリー全体」にすり替わり 73,600 まで水増しされていた
+- 09-21 にそれを起点として 80,633 と連鎖誤記したため、コミット対象の cloc 実測（47,299）に一旦修正
+- さらに生成物（dist/min/lock/svg/compare.html）も除外すべきと判明し、上記の `count-lines.sh` 方式に統一

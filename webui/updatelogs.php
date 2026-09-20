@@ -15,7 +15,7 @@ $updateLogs = [
                 "管理画面のJSをキャッシュバスター付き参照に変更（/js/ は 1年 immutable のため ?v= で即反映）、公開アーカイブのJSはビルドして filemtime ベースで自動更新されることを確認",
             ],
         ],
-        "lines" => "47,299",
+        "lines" => "33,940",
     ],
 
     [
@@ -34,7 +34,7 @@ $updateLogs = [
                 "GitHub公開リポジトリの履歴に混入していた Twitch認証情報（Client Secret / App Access Token）と Discord Webhook URL を全履歴から除去 — git-filter-repo でrewriteしforce push（SHA変更済み）。認証情報は全て再発行済み（旧値は無効化）。残存しないことを全コミットで検証済み",
             ],
         ],
-        "lines" => "40,715",
+        "lines" => "31,976",
     ],
 
     [
