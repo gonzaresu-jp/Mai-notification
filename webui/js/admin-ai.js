@@ -59,6 +59,30 @@
     return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;" role="img">${bars}</svg>`;
   }
 
+  // 積み上げ横棒（感情×期間の交差）。rows: [{label, slot:{POSITIVE,NEUTRAL,NEGATIVE}}]
+  function sentiStackSvg(rows, opts) {
+    const o = Object.assign({ w: 760, rowH: 18 }, opts || {});
+    const max = Math.max(1, ...rows.map(r => (r.slot.POSITIVE + r.slot.NEUTRAL + r.slot.NEGATIVE)));
+    const labelW = o.labelW || 96, valueW = 96;
+    let bars = "";
+    rows.forEach((r, i) => {
+      const y = i * o.rowH + 3;
+      const total = r.slot.POSITIVE + r.slot.NEUTRAL + r.slot.NEGATIVE;
+      if (!total) return;
+      const iw = (w - labelW - valueW - 6) / max;
+      bars += `<text x="${labelW - 8}" y="${y + 13}" text-anchor="end" font-size="12" fill="#555">${esc(r.label)}</text>`;
+      for (const k of ["POSITIVE", "NEUTRAL", "NEGATIVE"]) {
+        const n = r.slot[k] || 0;
+        if (!n) continue;
+        bars += `<rect x="${labelW}" y="${y}" width="${(n * iw).toFixed(1)}" height="${o.rowH - 4}" fill="${k === "POSITIVE" ? "#e06b9a" : k === "NEGATIVE" ? "#667eea" : "#c9c3cf"}" opacity=".85"></rect>`;
+      }
+      const ns = Math.round((r.slot.POSITIVE - r.slot.NEGATIVE) / total * 100) / 100;
+      bars += `<text x="${w - 2}" y="${y + 13}" text-anchor="end" font-size="12" fill="#333">±${ns >= 0 ? "+" : ""}${ns.toFixed(2)} (${total})</text>`;
+    });
+    const h = rows.length * o.rowH + 6;
+    return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;" role="img">${bars}</svg>`;
+  }
+
   function card(title, icon, value, note) {
     return `<div style="flex:1; min-width:150px; background:#faf5f8; border:1px solid #f0dae4; border-radius:12px; padding:12px 14px;">
       <div style="font-size:.76rem; color:#8a5570; font-weight:700;"><i class="fa-solid ${icon}"></i> ${esc(title)}</div>
@@ -110,6 +134,20 @@
     const catBlock = catRows.length ? block("分析ラベル — カテゴリ", barSvg(catRows, { rowH: 18 })) : "";
     const sentiBlock = sentiRows.length ? block("感情（sentiment）", barSvg(sentiRows, { rowH: 18 })) : "";
 
+    // 感情×時期の交差（いつ どの時間帯に POSITIVE/NEGATIVE が集中するか）
+    const byMonthRows = Object.entries(s.analysis.byMonth).sort().map(([m, slot]) => ({ label: m, slot }));
+    const monthSenti = byMonthRows.length
+      ? block("感情 × 月（積み上げ: ポジ/グレー/ネガ・右の±は POSITIVE−NEGATIVE インデックス）", sentiStackSvg(byMonthRows)) : "";
+    const byHourRows = Object.keys(s.analysis.byHour).map(Number).sort((a, b) => a - b).map(h => ({
+      label: (String(h).padStart(2) + "時"), slot: s.analysis.byHour[String(h)] || s.analysis.byHour[h]
+    }));
+    const hourSenti = byHourRows.length ? block("感情 × 時間帯（JST・± 低い時帯ほどネガティブ寄り）", sentiStackSvg(byHourRows, { labelW: 46, rowH: 16 })) : "";
+    const byWdRows = [0, 1, 2, 3, 4, 5, 6].filter(d => s.analysis.byWeekday[d]).map(d => ({ label: s.weekdaysJa[d], slot: s.analysis.byWeekday[d] }));
+    const wdSenti = byWdRows.length ? block("感情 × 曜日", sentiStackSvg(byWdRows, { labelW: 40, rowH: 16 })) : "";
+    const catLabelJa = { LIVE: "配信", DAILY: "雑談", NEWS: "お知らせ", PROMOTION: "グッズ", MORNING: "あいさつ", OTHER: "その他", REPOST: "リポスト" };
+    const catSentiRows = Object.entries(s.analysis.byCategory).sort((a, b) => (b[1].POSITIVE + b[1].NEGATIVE) - (a[1].POSITIVE + a[1].NEGATIVE)).map(([k, slot]) => ({ label: catLabelJa[k] || k, slot }));
+    const catSenti = catSentiRows.length ? block("感情 × カテゴリ（雑談のネガティブが目立つ傾向）", sentiStackSvg(catSentiRows, { rowH: 16 })) : "";
+
     root.innerHTML =
       cards +
       hoursBlock +
@@ -117,6 +155,10 @@
       weekdayBlock +
       (catRows.length ? catBlock : "") +
       (sentiRows.length ? sentiBlock : "") +
+      monthSenti +
+      hourSenti +
+      wdSenti +
+      catSenti +
       phraseBlock +
       linkBlock +
       tagBlock;

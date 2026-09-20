@@ -123,7 +123,14 @@ function aggregate(rowsInput, loggedPairs) {
     chars: { avg: 0, max: 0, buckets: { "0-20": 0, "21-50": 0, "51-100": 0, "101-140": 0, "140+": 0 } },
     phrases: {},
     tags: [],
-    analysis: { assigned: 0, coverage: 0, categories: {}, sentiment: {}, fromData: 0, fromLog: 0 },
+    analysis: { assigned: 0, coverage: 0, categories: {}, sentiment: {}, fromData: 0, fromLog: 0,
+      // 感情ラベルの交差集計（いつ何時にポジティブ/ネガティブが多いか）
+      byMonth: {}, byHour: {}, byWeekday: {}, byCategory: {} },
+  };
+  const sentiKeys = ["POSITIVE", "NEUTRAL", "NEGATIVE"];
+  const sentiSlot = (obj, key) => {
+    if (!obj[key]) obj[key] = { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 };
+    return obj[key];
   };
   for (const l of LINK_DEFS) stats.links[l[0]] = 0;
   for (const p of PHRASE_DEFS) stats.phrases[p[0]] = 0;
@@ -188,6 +195,14 @@ function aggregate(rowsInput, loggedPairs) {
       if (src === "data") stats.analysis.fromData++; else stats.analysis.fromLog++;
       bump(stats.analysis.categories, category);
       if (sentiment) bump(stats.analysis.sentiment, sentiment);
+      if (sentiment && sentiKeys.includes(sentiment) && p) {
+        sentiSlot(stats.analysis.byMonth, p.month)[sentiment]++;
+        sentiSlot(stats.analysis.byHour, p.hour)[sentiment]++;
+        sentiSlot(stats.analysis.byWeekday, p.weekday)[sentiment]++;
+      }
+      if (sentiment && sentiKeys.includes(sentiment)) {
+        sentiSlot(stats.analysis.byCategory, category)[sentiment]++;
+      }
     }
   }
   if (stats.total > 0) {

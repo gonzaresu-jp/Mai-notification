@@ -45,6 +45,44 @@ async function main() {
   for (const [k, n] of cats) console.log(`   category ${k}: ${n}`);
   const sens = Object.entries(s.analysis.sentiment).sort((a, b) => b[1] - a[1]);
   for (const [k, n] of sens) console.log(`   sentiment ${k}: ${n} (${fmtPct((n / (s.analysis.assigned || 1)) * 100)})`);
+  console.log("\n▶ 月別感情傾向（POSITIVE率・ns=avg sentiment）");
+  const sentimentScore = { POSITIVE: 1, NEUTRAL: 0, NEGATIVE: -1 };
+  const monthSent = Object.entries(s.analysis.byMonth).sort();
+  const barFor = (slot) => {
+    const t = slot.POSITIVE + slot.NEUTRAL + slot.NEGATIVE;
+    if (!t) return "        ";
+    const p = slot.POSITIVE / t, g = slot.NEUTRAL / t, b = slot.NEGATIVE / t;
+    return `+${(p * 10).toFixed(0)}${" ".repeat(Math.round(g * 10))}${(b * 10) <= 0.05 ? "" : "-"}`.padEnd(12);
+  };
+  for (const [m, slot] of monthSent) {
+    const t = slot.POSITIVE + slot.NEUTRAL + slot.NEGATIVE;
+    const ns = Math.round((slot.POSITIVE * 1 + slot.NEGATIVE * -1) / t * 100) / 100;
+    console.log(`   ${m}: ${barFor(slot)} ±${ns.toFixed(2)}  (+${slot.POSITIVE} / -${slot.NEGATIVE} / ${slot.NEUTRAL})`);
+  }
+  console.log("\n▶ 時間帯別感情傾向（± = POSITIVE-NEGATIVEインデックス）");
+  const hourSent = Object.entries(s.analysis.byHour).map(([h, slot]) => {
+    const t = slot.POSITIVE + slot.NEUTRAL + slot.NEGATIVE;
+    return [Number(h), slot, Math.round((slot.POSITIVE - slot.NEGATIVE) / t * 100) / 100, t];
+  }).filter(x => x[3] > 0).sort((a, b) => a[2] - b[2]);
+  for (const [hh, slot, ns, t] of hourSent) console.log(`   ${String(hh).padStart(2)}時: ±${ns >= 0 ? "+" : ""}${ns.toFixed(2)}  (${slot.POSITIVE}+ / ${slot.NEGATIVE}- / ${slot.NEUTRAL}±${t}件)`);
+  console.log("\n▶ 曜日別感情傾向");
+  for (const d of [0, 1, 2, 3, 4, 5, 6]) {
+    const slot = s.analysis.byWeekday[d];
+    if (!slot) continue;
+    const t = slot.POSITIVE + slot.NEUTRAL + slot.NEGATIVE;
+    const ns = Math.round((slot.POSITIVE - slot.NEGATIVE) / t * 100) / 100;
+    console.log(`   ${s.weekdaysJa[d]}: ±${ns >= 0 ? "+" : ""}${ns.toFixed(2)}  (+${slot.POSITIVE} / -${slot.NEGATIVE} / ${slot.NEUTRAL}±·${t}件)`);
+  }
+  console.log("\n▶ カテゴリ別感情傾向");
+  {
+    const catLabels = { LIVE: "配信", DAILY: "雑談", NEWS: "お知らせ", PROMOTION: "グッズ", MORNING: "あいさつ", OTHER: "その他", REPOST: "リポスト" };
+    const pairs = Object.entries(s.analysis.byCategory).sort((a, b) => b[1].POSITIVE + b[1].NEGATIVE - (a[1].POSITIVE + a[1].NEGATIVE));
+    for (const [k, slot] of pairs) {
+      const t = slot.POSITIVE + slot.NEUTRAL + slot.NEGATIVE;
+      const ns = Math.round((slot.POSITIVE - slot.NEGATIVE) / t * 100) / 100;
+      console.log(`   ${catLabels[k] || k}: ±${ns >= 0 ? "+" : ""}${ns.toFixed(2)}  (+${slot.POSITIVE} / -${slot.NEGATIVE} / ${slot.NEUTRAL}±·${t})`);
+    }
+  }
   console.log("\n▶ 文字数分布");
   for (const [k, n] of Object.entries(s.chars.buckets)) console.log(`   ${k}: ${n}`);
 
