@@ -119,6 +119,72 @@
     <main>
         <h2 class="history fade">Update logs</h2>
 
+        <?php
+        // --- コード成長グラフ（lines 値をインラインSVGで描画・ライブラリ不要）---
+        $chartPts = [];
+        foreach ($updateLogs as $log) {
+            if (isset($log["lines"])) {
+                $n = (int) preg_replace('/[^0-9]/', '', (string) $log["lines"]);
+                if ($n > 0) {
+                    $chartPts[] = ["date" => $log["date"], "n" => $n, "disp" => $log["lines"]];
+                }
+            }
+        }
+        $chartPts = array_reverse($chartPts); // 古い→新しい（左→右）
+        ?>
+        <?php if (count($chartPts) >= 2): ?>
+            <?php
+            $cMin = min(array_column($chartPts, "n"));
+            $cMax = max(array_column($chartPts, "n"));
+            $cCount = count($chartPts);
+            $W = 820; $H = 280;
+            $padL = 74; $padR = 20; $padT = 18; $padB = 34;
+            $iw = $W - $padL - $padR; $ih = $H - $padT - $padB;
+            $xOf = function ($i) use ($padL, $iw, $cCount) {
+                return $cCount === 1 ? $padL + $iw / 2 : $padL + $iw * ($i / ($cCount - 1));
+            };
+            $rng = max(1, $cMax - $cMin);
+            // 下限を滑らかに（最小値の下に少し余白を作る）
+            $yMin = max(0, $cMin - $rng * 0.10);
+            $yMax = $cMax + $rng * 0.08;
+            $yOf = function ($n) use ($padT, $ih, $yMin, $yMax) {
+                return $padT + $ih * (1 - ($n - $yMin) / max(1, $yMax - $yMin));
+            };
+            $linePts = [];
+            foreach ($chartPts as $i => $p) { $linePts[] = round($xOf($i), 1) . "," . round($yOf($p["n"]), 1); }
+            $polyline = implode(" ", $linePts);
+            $areaPath = "M " . $linePts[0] . " L " . implode(" L ", array_slice($linePts, 1)) . " L " . round($xOf($cCount - 1), 1) . "," . round($padT + $ih, 1) . " L " . round($xOf(0), 1) . "," . round($padT + $ih, 1) . " Z";
+            // Y軸ラベル用の値（下端/中間/上端）
+            $yVals = [$yMin + ($yMax - $yMin) * 0, $yMin + ($yMax - $yMin) * 0.5, $yMax];
+            ?>
+            <div class="card log-card history-chart-card">
+                <div class="log-date" style="font-size:18px;">📊 コード成長（行数の推移）</div>
+                <div class="log-bg"></div>
+                <svg viewBox="0 0 <?= $W ?> <?= $H ?>" style="width:100%;height:auto;display:block;" role="img" aria-label="コード行数の推移グラフ">
+                    <defs>
+                        <linearGradient id="lineFillGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#B11E7C" stop-opacity=".28"/>
+                            <stop offset="100%" stop-color="#B11E7C" stop-opacity=".02"/>
+                        </linearGradient>
+                    </defs>
+                    <?php foreach ($yVals as $yi => $yv): ?>
+                        <?php $yLine = round($yOf($yv), 1); ?>
+                        <line x1="<?= $padL ?>" y1="<?= $yLine ?>" x2="<?= $W - $padR ?>" y2="<?= $yLine ?>" stroke="#eee" stroke-width="1"/>
+                        <text x="<?= $padL - 8 ?>" y="<?= $yLine + 4 ?>" text-anchor="end" font-size="12" fill="#999"><?= number_format((int) round($yv)) ?></text>
+                    <?php endforeach; ?>
+                    <path d="<?= $areaPath ?>" fill="url(#lineFillGrad)"/>
+                    <polyline points="<?= $polyline ?>" fill="none" stroke="#B11E7C" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+                    <?php foreach ($chartPts as $i => $p): ?>
+                        <circle cx="<?= round($xOf($i), 1) ?>" cy="<?= round($yOf($p["n"]), 1) ?>" r="4" fill="#fff" stroke="#B11E7C" stroke-width="2">
+                            <title><?= htmlspecialchars($p["date"]) ?> — <?= htmlspecialchars($p["disp"]) ?> lines</title>
+                        </circle>
+                    <?php endforeach; ?>
+                    <text x="<?= $padL ?>" y="<?= $H - 10 ?>" font-size="12" fill="#888"><?= htmlspecialchars($chartPts[0]["date"]) ?></text>
+                    <text x="<?= $W - $padR ?>" y="<?= $H - 10 ?>" text-anchor="end" font-size="12" fill="#888"><?= htmlspecialchars($chartPts[$cCount - 1]["date"]) ?></text>
+                </svg>
+            </div>
+        <?php endif; ?>
+
         <?php foreach ($updateLogs as $index => $log): ?>
             <div class="card log-card <?= $index >= 10 ? "hidden-log" : "" ?>">
                 <div class="log-date"><?= htmlspecialchars(
