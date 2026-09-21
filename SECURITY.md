@@ -12,10 +12,14 @@
   同一オリジン EventSource（Origin ヘッダなし）で常に TypeError→500 になっていた → `Set.has()` に修正。
 - ファイル権限是正済み（本番・staging 両方）: `.env` → 600、`backups/` → 750・中身 640。
   変更後も本番/staging の `/api/health` は 200。
-- **未実施（承認待ち）**: 本番(8080)への昇格・pm2 再起動。`promote.sh feature/security-hardening-20260922` を
-  作業者の明示承認後に実行すること。
+- **本番昇格完了（2026-09-22 承認済み・実施）**: `promote.sh` で main へ ff 昇格（@2ce75f4）＋pm2再起動。
+  本番smoke 4/4 PASS、`/api/notify` tokenなし401（実送なし）、SSE上限を本番でも確認（5接続200/6・7接続目429）。
+  再起動後10分監視: エラー新規発生なし。
+  ※ promote.sh の `git push` はサーバー側にGitHub認証情報が無く失敗するため、pushのみ認証済み環境から実施する運用に注意。
 - 既知のテスト時ノイズ: 新規空DBでの初回起動時、`updateSchedule()` が `initDatabase()` のテーブル作成と
   競合し `no such table: events` を一度出すことがある（既存DBでは発生しない・本番影響なし）。
+- 参考: 修正済みの旧SSEバグ（`Set.some` → 同一オリジン EventSource が常に500）は、
+  本番エラーログに過去 **11,930件** 記録されていた（デスクトップの再接続ループで継続発火）。修正後は0件。
 
 ## 最初に読むもの
 
