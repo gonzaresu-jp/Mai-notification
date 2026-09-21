@@ -198,15 +198,15 @@ async function main() {
     // --- 6. sqlite3 ドライバ直叩き（昇格時の主要回帰ポイント） ---
     console.log("[6] sqlite3 INSERT/SELECT/lastID");
     const db = new sqlite3.Database(dbPath);
-    const ins1 = await dbRun(db, "INSERT INTO notifications (title, body, url, platform, status) VALUES (?, ?, ?, ?, ?)", ["t1", "b1", "https://example.com", "test", "success"]);
+    const ins1 = await dbRun(db, "INSERT INTO notifications (title, body, url, platform, status) VALUES (?, ?, ?, ?, ?)", ["reg-t1", "b1", "https://example.com", "reg-test", "success"]);
     ok("notifications lastID", Number.isInteger(ins1.lastID) && ins1.lastID > 0, `lastID=${ins1.lastID}`);
-    await dbRun(db, "INSERT INTO notifications (title, body, platform, status) VALUES (?, ?, ?, ?)", ["t2", "b2", "test", "success"]);
-    const rows = await dbAll(db, "SELECT id, title FROM notifications ORDER BY id");
-    ok("notifications SELECT", rows.length === 2 && rows[0].title === "t1" && rows[1].title === "t2");
-    const ins2 = await dbRun(db, "INSERT INTO subscriptions (client_id, subscription_json, settings_json) VALUES (?, ?, ?)", ["reg-client-1", JSON.stringify({ endpoint: "https://example/push" }), "{}"]);
+    await dbRun(db, "INSERT INTO notifications (title, body, platform, status) VALUES (?, ?, ?, ?)", ["reg-t2", "b2", "reg-test", "success"]);
+    const rows = await dbAll(db, "SELECT id, title FROM notifications WHERE title IN (?, ?) ORDER BY id", ["reg-t1", "reg-t2"]);
+    ok("notifications SELECT", rows.length === 2 && rows[0].title === "reg-t1" && rows[1].title === "reg-t2", JSON.stringify(rows));
+    const ins2 = await dbRun(db, "INSERT INTO subscriptions (client_id, endpoint, subscription_json, settings_json) VALUES (?, ?, ?, ?)", ["reg-client-1", "https://reg.example/push/1", JSON.stringify({ endpoint: "https://reg.example/push/1" }), "{}"]);
     ok("subscriptions lastID", Number.isInteger(ins2.lastID) && ins2.lastID > 0, `lastID=${ins2.lastID}`);
     const subs = await dbAll(db, "SELECT client_id, subscription_json FROM subscriptions WHERE client_id = ?", ["reg-client-1"]);
-    ok("subscriptions SELECT + JSON roundtrip", subs.length === 1 && JSON.parse(subs[0].subscription_json).endpoint === "https://example/push");
+    ok("subscriptions SELECT + JSON roundtrip", subs.length === 1 && JSON.parse(subs[0].subscription_json).endpoint === "https://reg.example/push/1");
     await dbRun(db, "INSERT INTO scraper_status (id, name, status, message, last_run, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status = excluded.status", ["reg-scraper", "reg", "success", "ok", new Date().toISOString(), new Date().toISOString()]);
     const scraper = await dbAll(db, "SELECT * FROM scraper_status WHERE id = ?", ["reg-scraper"]);
     ok("scraper_status UPSERT + SELECT", scraper.length === 1 && scraper[0].status === "success");
