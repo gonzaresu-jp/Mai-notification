@@ -15,6 +15,7 @@ $updateLogs = [
                 "アーカイブ管理「カテゴリ編集」を刷新 — タイトル検索をサーバー側化（新ルート /api/admin/archive/search が .70 の /api/search?kind=title を中継）＋ページング＋カテゴリフィルタ＋並び順に対応。一覧のカテゴリはチップ表示でワンクリック追加/解除でき、チェックボックスで複数選択しての一括カテゴリ適用にも対応（.70 へは直列PUT）。動画リスト1回の応答に含まれる categories をそのまま表示するため、従来の1本ごとのカテゴリ取得を廃止して大幅に軽量化",
                 "イベント管理にタイトルの絞り込み検索（クライアント側）を追加。通知フォームのプレビューに送信対象（全員/特定デバイス）と即時送信/予約時刻を表示",
                 "全ページのインラインCSSを webui/css/ 配下へ分離 — 17ファイル（admin / archive / chat / compare / download / future / guide / header / index / info / logs / rss / status / subtitle-compare / test / twitter-media / wave）の <style> を個別CSSファイルに移設し、<link> 読み込みへ一本化（PHPページは filemtime キャッシュバスター付き）。HTML/CSS/PHPの混在を解消してスタイル管理を一元化。compare.html は自動生成のため生成元 scripts/render-compare-html.js も同時に更新",
+                "インラインJSを webui/js/ 配下へ分離 — ページ固有のインライン<script>を22ファイルに移設（admin-dashboard / header-auth / twitter-media-dashboard / rss-reader / index-dashboard / index-history-tabs / index-activities / intent-redirect / logs-load-more / status-page / subtitle-compare-toggle / test-notification-anim / test-webgl / log-settings-toggle / page-fade-sw / test-oshidays / wave-log-settings / wave-oshidays / wave-page-fade / wave-layout / wave-pixi / compare-filter）。test.php 内の重複2対（L407=L616, L427=L726）は同一ファイルを共有。PHPページは filemtime、静的HTMLは ?v=20260921 のキャッシュバスター付き。CSP（script-src 'self'）と整合し、インラインブロックによるブロック問題も解消。JSON-LD（構造化データ）はデータのため意図的にインライン維持。compare.html は生成元 scripts/render-compare-html.js も更新",
             ],
             "fix" => [
                 "配信アーカイブ検索で、ページ移動やカード再構築後に字幕要約／チャプターのバッジが消える問題を修正（badgeRendered フラグのリセットとキャッシュからの即再描画）",
@@ -23,7 +24,7 @@ $updateLogs = [
                 "YouTube検知の冗長化 — PubSubHubbub（Webhook）障害で配信枠・配信開始の通知が届かなくなる問題の対策として、RSSフィード（無料）＋videos APIバッチ（1コール=1unit）による5分間隔のフォールバックスキャンを youtube.js に実装。ライブ中検知で【ライブ】通知、予定枠（published90分以内）で【予定】通知。sent_records の plannedSent/liveSent をwebhookと共有するため重複通知なし。既知の問題ページも「対策実装済み」に更新",
             ],
         ],
-        "lines" => "35,209",
+        "lines" => "34,970",
     ],
 
     [

@@ -182,27 +182,7 @@
         __DIR__ . "/dist/ui-misc.min.js",
     ) ?:
         time() ?>" defer></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const loadMoreBtn = document.getElementById('load-more-btn');
-            if (loadMoreBtn) {
-                loadMoreBtn.addEventListener('click', () => {
-                    const hiddenLogs = document.querySelectorAll('.hidden-log');
-                    let count = 0;
-                    hiddenLogs.forEach(log => {
-                        if (count < 10) {
-                            log.classList.remove('hidden-log');
-                            count++;
-                        }
-                    });
-
-                    if (document.querySelectorAll('.hidden-log').length === 0) {
-                        loadMoreBtn.style.display = 'none';
-                    }
-                });
-            }
-        });
-    </script>
+    <script src="/js/logs-load-more.js?v=<?= @filemtime(__DIR__ . '/js/logs-load-more.js') ?: time(); ?>"></script>
 </body>
 
 </html>

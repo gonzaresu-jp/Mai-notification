@@ -131,12 +131,7 @@
                         echo '</div>';
                     } ?>
                 </div>
-                <script>
-                    const cb = document.getElementById('onlyHit');
-                    cb.addEventListener('change', () => {
-                        document.getElementById('list').classList.toggle('only-hit', cb.checked);
-                    });
-                </script>
+                <script src="/js/subtitle-compare-toggle.js?v=<?= @filemtime(__DIR__ . '/js/subtitle-compare-toggle.js') ?: time(); ?>"></script>
             <?php endif; ?>
         <?php endif; ?>
     </main>
