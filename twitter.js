@@ -21,11 +21,11 @@ const MAX_AGE_HOURS = 24;
 const CHECK_INTERVAL_MS = 120 * 1000;
 const NOTIFY_ENDPOINT = 'http://localhost:8080/api/notify';
 const ICON_URL = '/icon.webp';
-const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
+const NOTIFY_TOKEN = process.env.NOTIFY_API_TOKEN || process.env.LOCAL_API_TOKEN || null;
 
 // 🔧 スケジュール自動作成関連
 const SCHEDULE_ENDPOINT = 'http://localhost:8080/api/internal/events/create';
-const SCHEDULE_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
+const SCHEDULE_TOKEN = process.env.INTERNAL_API_TOKEN || null;
 const ENABLE_SCHEDULE_AUTO_CREATE = process.env.ENABLE_SCHEDULE_AUTO_CREATE !== 'false'; // デフォルト: 有効
 const DEFAULT_SCHEDULE_USER_ID = process.env.SCHEDULE_USER_ID || 1; // デフォルト: user_id=1
 

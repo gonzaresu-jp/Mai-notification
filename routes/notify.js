@@ -1,4 +1,5 @@
 const rateLimit = require("express-rate-limit");
+const crypto = require("crypto");
 const ctx = require("../services/context");
 const notif = require("../services/notification");
 const sse = require("../services/sse");
@@ -11,19 +12,19 @@ function register(app, db) {
 
   function requireNotifyToken(req, res, next) {
     const token = req.headers["x-notify-token"] || req.headers["x-local-api-token"];
-    if (!ctx.ADMIN_NOTIFY_TOKEN) return next();
-    if (token === ctx.ADMIN_NOTIFY_TOKEN) return next();
+    if (!ctx.NOTIFY_API_TOKEN) return res.status(503).json({ error: "Notification API is not configured" });
+    if (token === ctx.NOTIFY_API_TOKEN) return next();
     return res.status(401).json({ error: "Unauthorized: invalid notify token" });
   }
 
   function verifyNotifyHmac(req, res, next) {
-    if (!ctx.NOTIFY_HMAC_SECRET) return next();
-    const hmac = req.headers["x-notify-hmac"] || req.headers["x-hmac-signature"];
+    if (!ctx.NOTIFY_HMAC_SECRET) return res.status(503).json({ error: "Notification HMAC is not configured" });
+    const hmac = String(req.headers["x-notify-hmac"] || req.headers["x-hmac-signature"] || '').replace(/^sha256=/, '');
     if (!hmac) return res.status(401).json({ error: "Missing HMAC signature" });
-    const crypto = require("crypto");
     const payload = JSON.stringify(req.body);
     const expected = crypto.createHmac("sha256", ctx.NOTIFY_HMAC_SECRET).update(payload).digest("hex");
-    if (hmac !== expected) return res.status(401).json({ error: "Invalid HMAC signature" });
+    const valid = hmac.length === expected.length && crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(expected));
+    if (!valid) return res.status(401).json({ error: "Invalid HMAC signature" });
     next();
   }
 

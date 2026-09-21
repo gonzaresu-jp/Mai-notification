@@ -19,8 +19,8 @@ const DISABLE_NOTIFICATIONS = process.env.DISABLE_NOTIFICATIONS === '1' || proce
 if (DISABLE_NOTIFICATIONS) console.log('TwitCasting: notifications disabled via DISABLE_NOTIFICATIONS');
 
 const SCHEDULE_ENDPOINT = process.env.SCHEDULE_ENDPOINT || 'http://localhost:8080/api/internal/events/create';
-const INTERNAL_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
-const NOTIFY_TOKEN = process.env.ADMIN_NOTIFY_TOKEN || null;
+const INTERNAL_TOKEN = process.env.INTERNAL_API_TOKEN || null;
+const NOTIFY_TOKEN = process.env.NOTIFY_API_TOKEN || null;
 const NOTIFY_ENDPOINT = process.env.NOTIFY_API_URL || 'http://localhost:8080/api/notify';
 const CHECK_INTERVAL_MS = 5000;
 const MAX_AGE_HOURS = 24;

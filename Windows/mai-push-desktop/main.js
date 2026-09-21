@@ -424,7 +424,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false,
+      webSecurity: true,
     },
     show: false, // ready-to-show で手動表示（自動起動時は表示しない）
   });
@@ -561,8 +561,10 @@ function updateTrayMenu() {
 
 ipcMain.handle('get-settings', () => loadSettings());
 ipcMain.handle('save-url', (event, url) => {
-  if (!url || !url.startsWith('http')) throw new Error('Invalid URL');
-  const s = loadSettings(); s.url = url; saveSettings(s);
+  let parsed;
+  try { parsed = new URL(url); } catch { throw new Error('Invalid URL'); }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error('HTTPS URL required');
+  const s = loadSettings(); s.url = parsed.origin; saveSettings(s);
   return { success: true };
 });
 ipcMain.handle('show-notification', (event, { title, body, icon, image, url }) => {
@@ -631,10 +633,14 @@ function ensureAuthServer() {
     const server = http.createServer((req, res) => {
       const url = new URL(req.url, 'http://127.0.0.1');
       if (url.pathname === '/callback') {
-        const token = url.searchParams.get('token');
-        console.log('[mai-push] Auth callback received, token:', token ? token.substring(0, 20) + '...' : 'null');
-        if (token) {
-          handleAuthCallback(token);
+        const code = url.searchParams.get('code');
+        if (code) {
+          const baseUrl = (loadSettings().url || DEFAULT_URL).replace(/\/+$/, '');
+          fetch(`${baseUrl}/auth/token-exchange`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
+          }).then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+            .then(({ token }) => { if (token) handleAuthCallback(token); })
+            .catch(e => console.error('[mai-push] Auth code exchange failed:', e.message));
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end('<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#1a1a2e;color:#fff">'
             + '<h2>ログイン完了</h2><p>このウィンドウを閉じて、アプリに戻ってください。</p>'

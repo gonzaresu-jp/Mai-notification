@@ -10,7 +10,7 @@ const context = {
   vapidConfig: {},
   fcmMessaging: null,
   fcmInitAttempted: false,
-  ADMIN_NOTIFY_TOKEN: process.env.ADMIN_NOTIFY_TOKEN || null,
+  NOTIFY_API_TOKEN: process.env.NOTIFY_API_TOKEN || null,
   NOTIFY_HMAC_SECRET: process.env.NOTIFY_HMAC_SECRET || null,
   LOCAL_API_TOKEN: process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null,
   DEFAULT_PLATFORM_SETTINGS: Object.freeze({

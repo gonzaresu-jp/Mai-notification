@@ -17,7 +17,7 @@ function toNaiveJst(d) {
 
 function register(app, db) {
   function getInternalToken(req) {
-    const token = process.env.ADMIN_NOTIFY_TOKEN || null;
+    const token = process.env.INTERNAL_API_TOKEN || null;
     const authToken = req.headers['x-notify-token'] || req.query.token || '';
     if (!token) return { authorized: false, error: 'Internal API not configured' };
     if (authToken !== token) return { authorized: false, error: 'Unauthorized' };

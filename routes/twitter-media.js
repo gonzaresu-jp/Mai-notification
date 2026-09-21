@@ -40,6 +40,10 @@ function register(app, db) {
         const parts = range.replace(/bytes=/, "").split("-");
         const start = parseInt(parts[0], 10);
         const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+        if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end >= stat.size) {
+          res.set("Content-Range", `bytes */${stat.size}`);
+          return res.sendStatus(416);
+        }
         res.status(206);
         res.set({ "Content-Range": `bytes ${start}-${end}/${stat.size}`, "Accept-Ranges": "bytes", "Content-Length": end - start + 1 });
         fs.createReadStream(filePath, { start, end }).pipe(res);
