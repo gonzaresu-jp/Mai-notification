@@ -119,7 +119,13 @@ app.post("/api/notify", (req, res) => {
       req.headers["x-local-api-token"] ||
       req.headers["x-notify-token"] ||
       req.body?.token;
-    if (!token || token !== LOCAL_API_TOKEN) {
+    // タイミング攻撃面を減らすため timingSafeEqual で比較する
+    const provided = String(token || "");
+    const expected = String(LOCAL_API_TOKEN);
+    const valid =
+      provided.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+    if (!valid) {
       console.warn("Unauthorized /api/notify attempt");
       return res.status(401).send("Unauthorized");
     }

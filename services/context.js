@@ -12,7 +12,9 @@ const context = {
   fcmInitAttempted: false,
   NOTIFY_API_TOKEN: process.env.NOTIFY_API_TOKEN || null,
   NOTIFY_HMAC_SECRET: process.env.NOTIFY_HMAC_SECRET || null,
-  LOCAL_API_TOKEN: process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null,
+  // トークン分離（2026-09 セキュリティ改修）: 通知/内部APIは NOTIFY_API_TOKEN のみ。
+  // 旧互換フォールバック（ADMIN_NOTIFY_TOKEN / LOCAL_API_TOKEN）は廃止した。
+  LOCAL_API_TOKEN: process.env.LOCAL_API_TOKEN || null,
   DEFAULT_PLATFORM_SETTINGS: Object.freeze({
     twitcasting: true,
     youtube: true,

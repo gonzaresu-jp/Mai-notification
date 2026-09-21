@@ -119,16 +119,70 @@ const archiveLimiter = rateLimit({
 app.use("/api/archive", archiveLimiter);
 
 // --- SSE endpoint (must be before /api/events/:id) ---
+// SSE保護: 全体/同一送信元ごとの接続数上限・接続寿命の上限を設ける。
+// 送信元キーは信頼できる前段(nginx/cloudflared)からの接続のみ X-Forwarded-For の
+// 末尾要素（= 実クライアントIP）を使い、直接接続は TCP ピアアドレスを使う。
+// （XFF は直結クライアントには偽造可能なため、前段経由以外では参照しない）
+const SSE_MAX_CLIENTS = Math.max(1, parseInt(process.env.SSE_MAX_CLIENTS, 10) || 500);
+const SSE_MAX_PER_CLIENT = Math.max(1, parseInt(process.env.SSE_MAX_PER_CLIENT, 10) || 5);
+const SSE_MAX_AGE_MS = Math.max(60 * 1000, parseInt(process.env.SSE_MAX_AGE_MS, 10) || 30 * 60 * 1000);
+const sseConnectionCounts = new Map();
+
+function sseClientKey(req) {
+  const peer = req.socket?.remoteAddress || "unknown";
+  const isLocalProxy = peer === "127.0.0.1" || peer === "::1" || peer === "::ffff:127.0.0.1";
+  if (isLocalProxy) {
+    const xff = String(req.headers["x-forwarded-for"] || "");
+    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    return "xff:" + (parts.length ? parts[parts.length - 1] : peer);
+  }
+  return "peer:" + peer;
+}
+
+function sseTrackAdd(key) {
+  const n = (sseConnectionCounts.get(key) || 0) + 1;
+  sseConnectionCounts.set(key, n);
+  return n;
+}
+
+function sseTrackRemove(key) {
+  const n = (sseConnectionCounts.get(key) || 1) - 1;
+  if (n <= 0) sseConnectionCounts.delete(key);
+  else sseConnectionCounts.set(key, n);
+}
+
 app.get("/api/events/stream", (req, res) => {
   const sseOrigin = req.headers.origin;
   const sseHost = req.get("host");
   const sseSameOrigin = !!sseOrigin && !!sseHost && (sseOrigin === `http://${sseHost}` || sseOrigin === `https://${sseHost}`);
   const sseAllowed = sseSameOrigin || allowedCorsOrigins.some((o) => !!o && sseOrigin === o);
   const acao = sseAllowed ? (sseOrigin || "*") : undefined;
+
+  const clientKey = sseClientKey(req);
+  if (ctx.sseClients.size >= SSE_MAX_CLIENTS || (sseConnectionCounts.get(clientKey) || 0) >= SSE_MAX_PER_CLIENT) {
+    res.writeHead(429, { "Content-Type": "application/json", "Retry-After": "30", ...(acao ? { "Access-Control-Allow-Origin": acao } : {}) });
+    res.end(JSON.stringify({ error: "Too many stream connections, please retry later." }));
+    return;
+  }
+
   res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive", ...(acao ? { "Access-Control-Allow-Origin": acao } : {}) });
   res.write(": connected\n\n");
+  res.write(`retry: 5000\n\n`);
   ctx.sseClients.add(res);
-  req.on("close", () => { ctx.sseClients.delete(res); try { res.end(); } catch {} });
+  sseTrackAdd(clientKey);
+
+  // 接続寿命の上限（到達で切断。EventSource は自動再接続する）
+  const lifetimeTimer = setTimeout(() => {
+    try { res.end(); } catch {}
+  }, SSE_MAX_AGE_MS);
+  if (typeof lifetimeTimer.unref === "function") lifetimeTimer.unref();
+
+  req.on("close", () => {
+    clearTimeout(lifetimeTimer);
+    ctx.sseClients.delete(res);
+    sseTrackRemove(clientKey);
+    try { res.end(); } catch {}
+  });
 });
 
 // --- User routes (existing module) ---

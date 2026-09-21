@@ -13,7 +13,10 @@ function register(app, db) {
   function requireNotifyToken(req, res, next) {
     const token = req.headers["x-notify-token"] || req.headers["x-local-api-token"];
     if (!ctx.NOTIFY_API_TOKEN) return res.status(503).json({ error: "Notification API is not configured" });
-    if (token === ctx.NOTIFY_API_TOKEN) return next();
+    const provided = String(token || "");
+    const expected = String(ctx.NOTIFY_API_TOKEN);
+    const valid = provided.length === expected.length && crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+    if (valid) return next();
     return res.status(401).json({ error: "Unauthorized: invalid notify token" });
   }
 
