@@ -38,7 +38,7 @@ initDatabase();
 loadVapid();
 
 // --- Rate Limiters ---
-const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, keyGenerator: (req) => ipKeyGenerator(req), standardHeaders: true, legacyHeaders: false });
+const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, keyGenerator: (req) => ipKeyGenerator(req), standardHeaders: true, legacyHeaders: false });
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 300,
@@ -58,19 +58,23 @@ app.use(express.urlencoded({ extended: true }));
 // 同一オリジンの Web UI / デスクトップアプリ / ローカル開発のみ許可する、オリジン制限付き CORS。
 // ブラウザは credentials 付きリクエストに `*` を許さないため、実際の送信元を echo する形にし、
 // 許可外のオリジンにはヘッダーを付与しない（= ブラウザがブロックする）。
-const allowedCorsOrigins = [
+function normalizeOrigin(value) {
+  try {
+    const url = new URL(value);
+    return (url.protocol === "https:" || url.protocol === "http:") ? url.origin : null;
+  } catch { return null; }
+}
+const allowedCorsOrigins = new Set([
   (process.env.PUBLIC_URL || "").replace(/\/+$/, ""),
   "http://localhost:8080",
   "http://127.0.0.1:8080",
   "http://localhost:3008",
   "http://127.0.0.1:3008",
-].filter(Boolean);
+].map(normalizeOrigin).filter(Boolean));
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  const host = req.get("host");
-  const sameOrigin = !!origin && !!host && (origin === `http://${host}` || origin === `https://${host}`);
-  const allowed = sameOrigin || allowedCorsOrigins.some((o) => !!o && origin === o);
+  const allowed = !!origin && allowedCorsOrigins.has(origin);
   if (allowed) {
     res.set("Access-Control-Allow-Origin", origin || "*");
     res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -94,9 +98,9 @@ app.use("/api/", (req, res, next) => {
   if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
     const origin = req.headers.origin;
     const referer = req.headers.referer;
-    const allowedOrigin = process.env.PUBLIC_URL || req.protocol + "://" + req.get("host");
-    if (origin && !origin.startsWith(allowedOrigin)) return res.status(403).json({ error: "CSRF token mismatch or unauthorized origin" });
-    if (!origin && referer && !referer.startsWith(allowedOrigin)) return res.status(403).json({ error: "CSRF token mismatch or unauthorized referer" });
+    const requestOrigin = normalizeOrigin(process.env.PUBLIC_URL || `${req.protocol}://${req.get("host")}`);
+    const sourceOrigin = normalizeOrigin(origin || referer);
+    if (sourceOrigin && sourceOrigin !== requestOrigin) return res.status(403).json({ error: "CSRF token mismatch or unauthorized origin" });
   }
   next();
 });

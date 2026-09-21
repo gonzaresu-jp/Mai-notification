@@ -52,7 +52,7 @@ const YT_WEBHOOK_PORT = process.env.YT_WEBHOOK_PORT
   ? Number(process.env.YT_WEBHOOK_PORT)
   : 3001;
 const LOCAL_API_TOKEN =
-  process.env.ADMIN_NOTIFY_TOKEN || process.env.LOCAL_API_TOKEN || null;
+  process.env.NOTIFY_API_TOKEN || process.env.LOCAL_API_TOKEN || null;
 const MONITOR_TWITTER = ["koinoyamai17", "koinoya_mai"];
 
 let started = false;
@@ -154,6 +154,39 @@ function cleanupPuppeteerLocks() {
 async function main() {
   if (started) return;
   started = true;
+  // ===== [StartGuard] プロセス間 二重起動防止(自己完結・冪等) =====
+  // 目的: pm2 自動再起動と手動 node main.js が重なっても、バックグラウンド
+  //       処理(milestone/periodic/vector/YouTube RSS/Webhook)の二重実行を防ぐ。
+  // 方式: os.tmpdir() にロックファイルを書き、古いpidへSIGTERMで後勝ち引継ぎ。
+  // 安全: os を実行時 require。isTestInstance には依存しない。
+  (function () {
+    try {
+      var osm = require("os");
+      var envKey = process.env.NODE_ENV === "development" ? "test" : "prod";
+      var lockPath = require("path").join(osm.tmpdir(), "mai-push-" + envKey + ".lock");
+      if (fs.existsSync(lockPath)) {
+        var oldPid = Number(fs.readFileSync(lockPath, "utf8") || 0);
+        if (oldPid && oldPid !== process.pid) {
+          try { process.kill(oldPid, "SIGTERM"); console.log("[StartGuard] 旧プロセス終了 pid=" + oldPid); } catch (_) {}
+        }
+      }
+      fs.writeFileSync(lockPath, String(process.pid));
+      console.log("[StartGuard] ロック取得 pid=" + process.pid + " key=" + envKey);
+      var release = function () {
+        try {
+          if (fs.existsSync(lockPath)) {
+            var cur = Number(fs.readFileSync(lockPath, "utf8") || 0);
+            if (cur === process.pid) fs.unlinkSync(lockPath);
+          }
+        } catch (_) {}
+      };
+      process.on("exit", release);
+      process.on("SIGINT", release);
+      process.on("SIGTERM", release);
+    } catch (e) {
+      console.error("[StartGuard] ロック失敗(続行): " + (e && e.message));
+    }
+  })();
 
   cleanupPuppeteerLocks();
 
@@ -282,7 +315,7 @@ async function main() {
   // --- Twitch 設定 ---
   const scheduleConfig = {
     apiUrl: process.env.SCHEDULE_ENDPOINT || 'http://localhost:8080/api/internal/events/create',
-    token: process.env.ADMIN_NOTIFY_TOKEN || null,
+    token: process.env.INTERNAL_API_TOKEN || null,
   };
 
   const twitchConfig = {
@@ -295,8 +328,6 @@ async function main() {
     interval: 2000, // 2秒間隔
   };
 
-  console.log("ADMIN_NOTIFY_TOKEN:", process.env.ADMIN_NOTIFY_TOKEN);
-  console.log("Worker notify token:", notifyConfig.token);
   console.log(
     "notifyConfig.token (masked):",
     notifyConfig.token ? `${notifyConfig.token.slice(0, 8)}...` : "null",
