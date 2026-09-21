@@ -333,7 +333,7 @@ function startWebhook(port = 3001) {
                         if (ev) {
                             try { await upsertEvent(ev); } catch (e) { console.error('upsertEvent(planned) failed:', e.message || e); }
                         }
-                        records[videoId] = { ...rec, plannedSent: true, plannedAt: new Date().toISOString() };
+                        records[videoId] = { ...rec, plannedSent: true, plannedAt: new Date().toISOString(), plannedStart: (live && live.scheduledStartTime) || null };
                         console.log(`Planned notify (using 5min-threshold) sent for ${videoId}`);
                     } else {
                         console.error(`Failed to send planned notify for ${videoId}`);
@@ -542,16 +542,238 @@ async function pollForEndedLives() {
     }
 }
 
+// ========= RSSポーリング（PubSubHubbub障害時の検知冗長化） =========
+// Webhook配信が遅延・停止した場合でも、配信枠（予定）と配信開始（ライブ）を通知するためのフォールバック。
+// RSSフィードは無料（クォータ消費なし）、videos API はバッチ化して1フェッチ=1unitに抑える。
+const RSS_URL = 'https://www.youtube.com/feeds/videos.xml?channel_id=';
+const RSS_MAX_ITEMS = 15;
+const RSS_POLL_INTERVAL_MS = 5 * 60 * 1000; // 5分おき
+// 予定枠の通知は「publishedから90分以内」に限る（再起動直後のバックフィルで過去分を通知しないため）
+const RSS_PLANNED_FRESH_MS = 90 * 60 * 1000;
+// ライブ開始チェックは予定時刻の15分前から開始する
+const RSS_LIVE_CHECK_AHEAD_MS = 15 * 60 * 1000;
+
+async function fetchRssVideoIds(channelId) {
+    try {
+        const resp = await axios.get(`${RSS_URL}${channelId}`, { timeout: 10000 });
+        const parsed = await parseStringPromise(resp.data);
+        const entries = parsed?.feed?.entry || [];
+        const list = [];
+        for (const entry of entries.slice(0, RSS_MAX_ITEMS)) {
+            const videoId = entry?.['yt:videoId']?.[0];
+            if (!videoId) continue;
+            list.push({
+                videoId,
+                published: entry?.published?.[0] || null,
+                title: entry?.title?.[0] || null
+            });
+        }
+        return list;
+    } catch (err) {
+        console.error(`[YouTube RSS] Error for ${channelId}:`, err.message || err);
+        return [];
+    }
+}
+
+/** videos API をバッチ化して一括取得（最大50件/コール） */
+async function fetchVideoStatusesBatch(ids) {
+    if (!API_KEY) return new Map();
+    if (!ids.length) return new Map();
+    const result = new Map();
+    for (let i = 0; i < ids.length; i += 50) {
+        const batch = ids.slice(i, i + 50);
+        try {
+            const resp = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+                params: {
+                    id: batch.join(','),
+                    part: 'snippet,liveStreamingDetails,status',
+                    key: API_KEY
+                },
+                timeout: 10000
+            });
+            for (const item of (resp.data?.items || [])) {
+                result.set(item.id, item);
+            }
+        } catch (e) {
+            console.error('[YouTube RSS] videos API batch error:', e.message || e);
+        }
+    }
+    return result;
+}
+
+/** 予定通知（webhook と同じペイロード構造） */
+async function notifyPlannedFromRss(item, publishedStr, title) {
+    const videoId = item.id;
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const thumbnail =
+        item.snippet?.thumbnails?.maxres?.url ||
+        item.snippet?.thumbnails?.high?.url ||
+        item.snippet?.thumbnails?.medium?.url ||
+        `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+    const payload = {
+        type: 'youtube',
+        settingKey: 'youtube',
+        data: {
+            title: `【予定】`,
+            body: `${title}`,
+            url,
+            icon: ICON_URL,
+            image: thumbnail,
+            published: publishedStr || null
+        }
+    };
+    const ok = await sendNotifyApi(payload);
+    if (ok) {
+        const ev = buildEventFromVideoItem(item, title);
+        if (ev) {
+            try { await upsertEvent(ev); } catch (e) { console.error('upsertEvent(planned/RSS) failed:', e.message || e); }
+        }
+        return true;
+    }
+    return false;
+}
+
+/** ライブ開始通知（webhook と同じペイロード構造） */
+async function notifyLiveFromRss(item, title) {
+    const videoId = item.id;
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const thumbnail =
+        item.snippet?.thumbnails?.maxres?.url ||
+        item.snippet?.thumbnails?.high?.url ||
+        item.snippet?.thumbnails?.medium?.url ||
+        `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+    const payload = {
+        type: 'youtube',
+        settingKey: 'youtube',
+        data: {
+            title: `【ライブ】`,
+            body: `${title}`,
+            url,
+            icon: ICON_URL,
+            image: thumbnail,
+            published: null
+        }
+    };
+    const ok = await sendNotifyApi(payload);
+    if (ok) {
+        const ev = buildEventFromVideoItem(item, title);
+        if (ev) {
+            try { await upsertEvent(ev); } catch (e) { console.error('upsertEvent(live/RSS) failed:', e.message || e); }
+        }
+        return true;
+    }
+    return false;
+}
+
+/** ライブ開始チェック対象かどうか（予定枠の配信開始検知） */
+function plannedDueForLiveCheck(rec, now) {
+    if (rec.plannedStart) {
+        const s = Date.parse(rec.plannedStart);
+        if (!isNaN(s)) return now >= s - RSS_LIVE_CHECK_AHEAD_MS;
+    }
+    // 旧record（plannedStartなし）は plannedAt から24h以内を対象にする
+    const p = rec.plannedAt ? Date.parse(rec.plannedAt) : NaN;
+    return !isNaN(p) && (now - p) < 24 * 60 * 60 * 1000;
+}
+
+async function runRssFallbackScan() {
+    try {
+        const records = loadSentRecords();
+        const now = Date.now();
+
+        // 1) RSSフィードから直近のvideoIdを収集（クォータ消費なし）
+        const seen = new Map();
+        for (const channelId of CHANNEL_IDS) {
+            const entries = await fetchRssVideoIds(channelId);
+            for (const e of entries) {
+                if (!seen.has(e.videoId)) seen.set(e.videoId, e);
+            }
+        }
+        if (seen.size === 0) return;
+
+        // 2) ステータス確認が必要なものだけ抽出（liveSent済みは対象外）
+        const needCheck = [];
+        for (const [videoId, e] of seen) {
+            const rec = records[videoId] || {};
+            if (rec.liveSent) continue;
+            const isUnhandled =
+                !rec.plannedSent && !rec.liveSent && !rec.newVideoSent && !rec.notifiedAt;
+            const isPlanned = rec.plannedSent && !rec.liveSent && plannedDueForLiveCheck(rec, now);
+            if (isUnhandled || isPlanned) needCheck.push(videoId);
+        }
+        if (needCheck.length === 0) return;
+
+        // 3) バッチで詳細取得
+        const items = await fetchVideoStatusesBatch(needCheck);
+
+        // 4) 分類して通知
+        let changed = false;
+        for (const [videoId, e] of seen) {
+            const item = items.get(videoId);
+            if (!item) continue;
+            const live = item.liveStreamingDetails || null;
+            const isLive = live && live.actualStartTime && !live.actualEndTime;
+            const isScheduled = live && live.scheduledStartTime && !live.actualStartTime;
+            const title = item.snippet?.title || e.title || 'YouTube動画';
+            const rec = records[videoId] || {};
+
+            if (rec.liveSent) continue;
+
+            // ライブ開始（予定枠の開始もここで検知）
+            if (isLive && !rec.liveSent) {
+                const ok = await notifyLiveFromRss(item, title);
+                if (ok) {
+                    records[videoId] = { ...rec, liveSent: true, liveAt: new Date().toISOString() };
+                    console.log(`[RSS] Live notify sent for ${videoId} (${title})`);
+                    changed = true;
+                }
+                continue;
+            }
+
+            // 予定枠（webhookが検知できなかった場合のみ）
+            if (isScheduled && !rec.plannedSent) {
+                let publishedMs = NaN;
+                if (e.published) publishedMs = Date.parse(e.published);
+                if (!isNaN(publishedMs) && now - publishedMs <= RSS_PLANNED_FRESH_MS) {
+                    const ok = await notifyPlannedFromRss(item, e.published, title);
+                    if (ok) {
+                        records[videoId] = {
+                            ...rec,
+                            plannedSent: true,
+                            plannedAt: new Date().toISOString(),
+                            plannedStart: live.scheduledStartTime || null
+                        };
+                        console.log(`[RSS] Planned notify sent for ${videoId} (${title})`);
+                        changed = true;
+                    }
+                }
+                continue;
+            }
+        }
+
+        if (changed) saveSentRecords(records);
+    } catch (e) {
+        console.error('[YouTube RSS] fallback scan error:', e.message || e);
+    }
+}
+
 function startPolling() {
     console.log(`[YouTube Poll] Starting live-end poller (interval: ${POLL_INTERVAL_MS / 1000}s)`);
     setInterval(pollForEndedLives, POLL_INTERVAL_MS);
     // 起動後初回は少し遅延して実行
     setTimeout(pollForEndedLives, 30 * 1000);
+
+    console.log(`[YouTube RSS] Starting fallback scan (interval: ${RSS_POLL_INTERVAL_MS / 1000}s)`);
+    setInterval(runRssFallbackScan, RSS_POLL_INTERVAL_MS);
+    setTimeout(runRssFallbackScan, 60 * 1000);
 }
 
 module.exports = {
     startPolling,
     pollForEndedLives,
+    runRssFallbackScan,
     init,
     startWebhook,
     subscribeAllChannels,

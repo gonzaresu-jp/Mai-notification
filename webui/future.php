@@ -112,8 +112,8 @@
                     <span class="note">チャンネル登録者推移のグラフが今日までの最新データになっていない問題を調査中です（「登録者推移データの自動更新」で解消予定）。</span>
                 </li>
                 <li>
-                    <strong>PubSubHubbub障害でYTの通知が届かなくなる</strong>
-                    <span class="note">YouTubeの配信枠（待機所）・配信開始の検知はpubsubhubbub（Webhook購読）に依存しており、このサービスが障害になると通知が届かなくなる問題を調査中です。対策として、RSSフィード＋videos APIによる定期ポーリング（配信枠を取得する仕組みは実装済み）を併用し、PubSubHubbubより先に枠を検知してまだ通知していない場合はこちらから通知する仕組みへの変更を検討しています。配信開始（ライブ開始）の通知も同様に対応予定です。</span>
+                    <strong><s>PubSubHubbub障害でYTの通知が届かなくなる</s></strong>
+                    <span class="note"><s>YouTubeの配信枠（待機所）・配信開始の検知はpubsubhubbub（Webhook購読）に依存しており、このサービスが障害になると通知が届かなくなる問題を調査中でした。対策として、RSSフィード＋videos APIによる定期ポーリング（配信枠を取得する仕組みは実装済み）を併用し、PubSubHubbubより先に枠を検知してまだ通知していない場合はこちらから通知する仕組みへの変更を検討していました。RSSフォールバックスキャンを5分間隔で常時稼働させ、配信枠【予定】と配信開始【ライブ】の通知を冗長化する実装を完了しました（webhook と records フラグを共有するため重複通知なし）。</s></span>
                 </li>
                 <li>
                     <strong><s>YTコミュニティやbilibiliの検出</s></strong>
