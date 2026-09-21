@@ -155,7 +155,7 @@ app.get("/api/events/stream", (req, res) => {
   const sseOrigin = req.headers.origin;
   const sseHost = req.get("host");
   const sseSameOrigin = !!sseOrigin && !!sseHost && (sseOrigin === `http://${sseHost}` || sseOrigin === `https://${sseHost}`);
-  const sseAllowed = sseSameOrigin || allowedCorsOrigins.some((o) => !!o && sseOrigin === o);
+  const sseAllowed = sseSameOrigin || allowedCorsOrigins.has(sseOrigin);
   const acao = sseAllowed ? (sseOrigin || "*") : undefined;
 
   const clientKey = sseClientKey(req);
