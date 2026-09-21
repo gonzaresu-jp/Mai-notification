@@ -599,6 +599,16 @@ async function check(username, isRetry = false) {
             try {
               const analysis = await analyzeTweet(t.text);
               console.log(`[${username}] Gemma analysis: category=${analysis.category}, status=${analysis.status}, time=${analysis.start_time}`);
+              // 💾 分析結果をnotifications.dataへ保存（ツイート統計用）
+              try {
+                await fetch('http://localhost:8080/api/internal/twitter/analysis', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-Notify-Token': NOTIFY_TOKEN },
+                  body: JSON.stringify({ tweet_id: t.id, platform: settingKey, analysis }),
+                  agent: _httpAgent,
+                  timeout: 10000,
+                }).catch(() => {});
+              } catch (saveErr) { console.warn(`[${username}] analysis save error:`, saveErr.message); }
               // 📅 分析結果からスケジュール作成
               if (analysis) {
                 await createScheduleFromTweet(username, t, analysis);
