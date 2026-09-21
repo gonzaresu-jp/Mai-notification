@@ -5,62 +5,7 @@
     <?php
     $pageTitle = "このサービスについて";
     $pageDesc = "まいちゃん通知（恋乃夜まい非公式通知サービス）の概要や開発履歴、利用規約などの情報について説明しています。";
-  $extraHead = '
-  <style type="text/css">
-    .service-intro {
-      font-size: 1rem;
-      background: rgba(250, 250, 250, 0.85);
-      color: #000;
-      border-radius: 12px;
-      padding: 32px;
-      margin-bottom: 20px;
-      line-height: 1.7;
-    }
-
-    .intro-text {
-      font-size: 24px;
-      font-weight: bold;
-    }
-
-    .platform-list {
-      margin: 16px 0;
-      padding-left: 1.2em;
-    }
-
-    .platform-list li {
-      margin-bottom: 8px;
-    }
-
-    .note {
-      display: block;
-      font-size: 1em;
-      color: #444;
-      margin-top: 4px;
-    }
-
-    .latency {
-      margin-top: 24px;
-    }
-
-    .latency h3 {
-      font-size: 1.1em;
-      margin-bottom: 8px;
-    }
-
-    .latency ul {
-      padding-left: 1.2em;
-    }
-
-    .future {
-      margin-top: 16px;
-      font-style: italic;
-    }
-
-    .link {
-      margin-top: 20px;
-    }
-  </style>
-  ';
+  $extraHead = '<link rel="stylesheet" href="/css/info.css?v=' . @filemtime(__DIR__ . '/css/info.css') . '>';
   include __DIR__ . '/head.php';
   ?>
 </head>

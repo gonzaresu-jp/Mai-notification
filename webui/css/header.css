@@ -1,0 +1,281 @@
+/* ========================================
+   ナビ セクション見出し
+======================================== */
+    .nav-list li.nav-section-label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 14px 20px 4px;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        color: rgba(255, 255, 255, 0.55);
+        pointer-events: none;
+        border-bottom: none;
+    }
+
+    #nav-menu>.nav-list>li.nav-section-label:hover {
+        background: none;
+        padding-left: 20px;
+    }
+
+    .nav-section-label i {
+        font-size: 0.78rem;
+        opacity: 0.9;
+    }
+
+    .nav-list a i {
+        display: inline-block;
+        width: 1.5em;
+        text-align: center;
+        margin-right: 3px;
+        opacity: 0.92;
+        font-size: 0.92em;
+    }
+
+    /* ========================================
+   ヘッダー認証UI
+======================================== */
+
+    /* ヘッダー右側の認証エリア */
+    .header-auth {
+        display: flex;
+        align-items: center;
+        margin-right: 8px;
+        flex-shrink: 0;
+    }
+
+    /* システムステータス */
+    .header-status-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 8px;
+        padding: 4px;
+        border-radius: 50%;
+        transition: background 0.2s;
+        text-decoration: none;
+    }
+
+    .header-status-link:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #999;
+        /* 初期値: 不明 */
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    .status-dot.ok {
+        background: #4caf50;
+        box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+    }
+
+    .status-dot.warning {
+        background: #ff9800;
+        box-shadow: 0 0 8px rgba(255, 152, 0, 0.6);
+    }
+
+    .status-dot.error {
+        background: #f44336;
+        box-shadow: 0 0 8px rgba(244, 67, 54, 0.6);
+    }
+
+    .status-dot.running {
+        background: #2196f3;
+        animation: status-pulse 1.5s infinite;
+    }
+
+    @keyframes status-pulse {
+        0% {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: 0.6;
+            transform: scale(0.9);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    /* Googleログインボタン（ヘッダー） */
+    .auth-login-btn {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 13px;
+        border-radius: 20px;
+        border: 1.5px solid rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.18s, border-color 0.18s, transform 0.1s;
+        backdrop-filter: blur(6px);
+        letter-spacing: 0.01em;
+    }
+
+    .auth-login-btn:hover {
+        background: rgba(255, 255, 255, 0.22);
+        border-color: rgba(255, 255, 255, 0.55);
+    }
+
+    .auth-login-btn:active {
+        transform: scale(0.96);
+    }
+
+    .auth-login-btn:hover {
+        background: rgba(255, 255, 255, 0.22);
+        border-color: rgba(255, 255, 255, 0.55);
+    }
+
+    .auth-login-btn:active {
+        transform: scale(0.96);
+    }
+
+    /* ログイン済みユーザーチップ */
+    .auth-user-chip {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.14);
+        border: 1.5px solid rgba(255, 255, 255, 0.28);
+        backdrop-filter: blur(6px);
+        cursor: default;
+    }
+
+    .auth-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1.5px solid rgba(255, 255, 255, 0.5);
+        flex-shrink: 0;
+    }
+
+    .nav-logout-btn {
+        width: 100%;
+        padding: 12px 16px;
+        background: none;
+        border: none;
+        color: #e57373 !important;
+
+        align-items: center;
+        gap: 10px;
+
+        text-align: left;
+        font-size: 0.9rem;
+        cursor: pointer;
+        display: flex !important;
+    }
+
+    .nav-logout-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .nav-logout-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+        border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+
+    /* 読み込み中ドット */
+    .auth-loading {
+        display: flex;
+        align-items: center;
+    }
+
+    .auth-loading-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.5);
+        animation: authDotPulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes authDotPulse {
+
+        0%,
+        100% {
+            opacity: 0.3;
+            transform: scale(0.85);
+        }
+
+        50% {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+    }
+
+    /* ========================================
+   ナビメニュー内のユーザー情報
+======================================== */
+    .nav-auth-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid rgba(255, 255, 255, 0.4);
+        flex-shrink: 0;
+    }
+
+    /* 推し日数バッジ */
+    .nav-oshi-info {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 4px;
+        font-size: 0.78rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    /* ========================================
+   ログインCTA（未ログイン時）
+======================================== */
+    .nav-login-prompt {
+        padding: 4px 0 6px;
+    }
+
+    .nav-login-desc {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.65);
+        line-height: 1.55;
+        margin: 0 0 10px;
+    }
+
+    .nav-auth-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1.5px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .nav-auth-btn.google:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.4);
+    }

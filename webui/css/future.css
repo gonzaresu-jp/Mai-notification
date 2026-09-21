@@ -1,0 +1,57 @@
+.future-intro {
+            font-size: 1rem;
+            background: rgba(250, 250, 250, 0.85);
+            color: #000;
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 20px;
+            line-height: 1.7;
+        }
+
+        .future-intro h2 {
+            font-size: 1.4rem;
+            color: var(--color-primary, #b48cff);
+            margin-top: 32px;
+            margin-bottom: 16px;
+            border-bottom: 2px solid var(--color-primary, #b48cff);
+            padding-bottom: 6px;
+            font-weight: bold;
+        }
+
+        .future-intro h2:first-child {
+            margin-top: 0;
+        }
+
+        .plan-list {
+            margin: 16px 0;
+            padding-left: 0;
+            list-style: none;
+        }
+
+        .plan-list li {
+            margin-bottom: 20px;
+            padding-left: 1.2em;
+            position: relative;
+        }
+
+        .plan-list li::before {
+            content: "・";
+            position: absolute;
+            left: 0;
+            color: var(--color-primary, #b48cff);
+            font-weight: bold;
+        }
+
+        .plan-list li strong {
+            display: inline-block;
+            margin-bottom: 6px;
+            font-size: 1.1rem;
+        }
+
+        .note {
+            display: block;
+            font-size: 0.95em;
+            color: #444;
+            margin-top: 4px;
+            line-height: 1.5;
+        }

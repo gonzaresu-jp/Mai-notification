@@ -12,22 +12,7 @@
 
 
     <script src="https://unpkg.com/@lottiefiles/lottie-player@2.0.2/dist/lottie-player.js"></script>
-    <style type="text/css">
-        /* 非表示にするためのクラス */
-        .hidden {
-            display: none !important;
-        }
-
-        /* 表示を制御するコンテナ */
-        #animation-container,
-        #animation-container-other {
-            display: flex;
-            justify-content: flex-end;
-            align-items: flex-start;
-            width: 100%;
-            height: 90vh;
-        }
-    </style>
+    <link rel="stylesheet" href="/css/test.css?v=<?= @filemtime(__DIR__ . '/css/test.css') ?: time() ?>" />
 </head>
 
 <body id="app-body">
