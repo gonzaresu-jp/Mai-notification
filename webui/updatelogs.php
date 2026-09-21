@@ -1,6 +1,27 @@
 <?php
 $updateLogs = [
     [
+        "date" => "2026-09-22",
+        "details" => [
+            "add" => [
+                "SSE（/api/events/stream）に接続保護を実装 — 全体接続数上限（SSE_MAX_CLIENTS、既定500）・同一送信元ごとの上限（SSE_MAX_PER_CLIENT、既定5）・接続寿命（SSE_MAX_AGE_MS、既定30分、EventSourceは自動再接続）を設け、超過は429を返す。送信元の判定は前段（nginx/cloudflared）経由のときだけ X-Forwarded-For の末尾要素（実クライアントIP）を使い、直結接続ではTCPピアアドレスを使う（XFF偽造対策）",
+                "回帰テスト scripts/regression-test.js を新設 — sqlite3@6 への昇格前に必須のゲート。一時DB＋実push抑止（DISABLE_NOTIFICATIONS=1）で子プロセス起動し、/api/health、notify認証（tokenなし401／HMACなし401／誤HMAC401／完全認証でsuppressed:true）、内部scraper-status認証、token-exchangeの無効code 400、SSE上限429、sqlite3のINSERT/SELECT/lastID/UPSERTを自動検証（stagingで19/19 PASS）",
+                "セキュリティ運用ドキュメント SECURITY.md を整備（旧 SECURITY_HANDOFF.txt を移行・改善）— 済み対策の検証結果、innerHTML棚卸し表、trust proxy評価、sqlite3@6昇格手順、ポート/権限の確認手順を記載",
+            ],
+            "change" => [
+                "トークン比較をすべて timingSafeEqual に統一 — /api/notify（routes/notify.js）・内部scraper-status（routes/scraper-status.js）・ワーカー内 /api/notify（main.js）",
+                "POST /api/internal/scraper-status の認証を NOTIFY_API_TOKEN に統一し、未設定時は503で閉じるように変更 — 旧実装はトークン未設定だと認証なしで書込可能で、かつ ADMIN_NOTIFY_TOKEN を受入れていた。services/context.js の ADMIN_NOTIFY_TOKEN フォールバックも廃止（API経由の送信者はコード上存在せず、ワーカーは直接DB更新のため影響なし）",
+                "秘密情報・バックアップのファイル権限を是正 — 本番・staging の .env を600、backups/ を750（中身は640）に変更。nginxは既に /mai-push/ へのdeny・拡張子deny（.env/.db/.bak等）が有効で、外部からの /backups/*.db や /.env は404になることを実測確認",
+            ],
+            "fix" => [
+                "rss-reader.js のXSSを修正 — 外部RSSの title/description/link/enclosure を未エスケープのまま innerHTML に流し込んでいたため、エスケープ＋ http(s): URL検証＋ textContent 描画に変更",
+                "SSEのOrigin判定バグを修正 — 許可オリジンは Set なのに .some() を呼んでおり、同一オリジンの EventSource（Originヘッダなし）で常に TypeError→500 になる潜在バグだった（本番エラーログに過去11,930件記録、デスクトップアプリの再接続ループの原因）。.has() に修正して解消",
+            ],
+        ],
+        "lines" => "35,467",
+    ],
+
+    [
         "date" => "2026-09-21",
         "details" => [
             "add" => [
