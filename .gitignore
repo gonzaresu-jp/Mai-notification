@@ -70,3 +70,4 @@ Windows/mai-push-desktop/dist/
 Windows/**/node_modules/
 Windows/mai-push-desktop/out/Windows/mai-push-desktop/bin/
 Windows/mai-push-desktop/obj/
+!AGENTS.md
