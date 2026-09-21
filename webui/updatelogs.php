@@ -22,7 +22,7 @@ $updateLogs = [
                 "YouTube検知の冗長化 — PubSubHubbub（Webhook）障害で配信枠・配信開始の通知が届かなくなる問題の対策として、RSSフィード（無料）＋videos APIバッチ（1コール=1unit）による5分間隔のフォールバックスキャンを youtube.js に実装。ライブ中検知で【ライブ】通知、予定枠（published90分以内）で【予定】通知。sent_records の plannedSent/liveSent をwebhookと共有するため重複通知なし。既知の問題ページも「対策実装済み」に更新",
             ],
         ],
-        "lines" => "35,288",
+        "lines" => "35,198",
     ],
 
     [
