@@ -5,7 +5,7 @@
     <?php
     $pageTitle = "今後の開発予定";
     $pageDesc = "まいちゃん通知の今後の開発予定、新機能追加、既知の問題に対する修正などをまとめています。";
-    $extraHead = '<link rel="stylesheet" href="/css/future.css?v=' . @filemtime(__DIR__ . '/css/future.css') . '>';
+    $extraHead = '<link rel="stylesheet" href="/css/future.css?v=' . @filemtime(__DIR__ . '/css/future.css') . '" />';
     include __DIR__ . '/head.php';
     ?>
 </head>

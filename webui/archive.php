@@ -66,7 +66,7 @@
             ),
         ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
-    $extraHead = '<link rel="stylesheet" href="/css/archive.css?v=' . @filemtime(__DIR__ . '/css/archive.css') . '>';
+    $extraHead = '<link rel="stylesheet" href="/css/archive.css?v=' . @filemtime(__DIR__ . '/css/archive.css') . '" />';
     include __DIR__ . '/head.php';
     if (!empty($seoJsonLd)) {
         echo "<script type=\"application/ld+json\">" . $seoJsonLd . "</script>\n";

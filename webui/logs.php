@@ -6,7 +6,7 @@
     <?php
     $pageTitle = "アップデート履歴";
     $pageDesc = "まいちゃん通知の更新ログ・アップデート履歴です。";
-    $extraHead = '<link rel="stylesheet" href="/css/logs.css?v=' . @filemtime(__DIR__ . '/css/logs.css') . '>';
+    $extraHead = '<link rel="stylesheet" href="/css/logs.css?v=' . @filemtime(__DIR__ . '/css/logs.css') . '" />';
     include __DIR__ . "/head.php";
     ?>
 </head>

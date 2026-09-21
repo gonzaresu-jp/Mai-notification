@@ -7,7 +7,7 @@
     $topCardCss = './top-card.min.css?v=' . (@filemtime(__DIR__ . '/top-card.min.css') ?: time());
     $extraHead = '<link rel="preload" href="' . $topCardCss . '" as="style" onload="this.onload=null;this.rel=\'stylesheet\'" />'
         . '<noscript><link rel="stylesheet" href="' . $topCardCss . '" /></noscript>';
-    $extraHead .= '<link rel="stylesheet" href="/css/index.css?v=' . @filemtime(__DIR__ . '/css/index.css') . '>';
+    $extraHead .= '<link rel="stylesheet" href="/css/index.css?v=' . @filemtime(__DIR__ . '/css/index.css') . '" />';
 
     include __DIR__ . '/head.php';
     ?>

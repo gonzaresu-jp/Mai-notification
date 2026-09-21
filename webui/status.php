@@ -1,6 +1,6 @@
 <?php
 // status.php
-$extraHead = '<link rel="stylesheet" href="/css/status.css?v=' . @filemtime(__DIR__ . '/css/status.css') . '>';
+$extraHead = '<link rel="stylesheet" href="/css/status.css?v=' . @filemtime(__DIR__ . '/css/status.css') . '" />';
 include __DIR__ . '/head.php';
 ?>
 <title>システム稼働状況 - まいちゃん通知</title>

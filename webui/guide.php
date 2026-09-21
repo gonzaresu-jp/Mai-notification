@@ -62,7 +62,7 @@
         ),
     ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-    $extraHead = '<link rel="stylesheet" href="/css/guide.css?v=' . @filemtime(__DIR__ . '/css/guide.css') . '>';
+    $extraHead = '<link rel="stylesheet" href="/css/guide.css?v=' . @filemtime(__DIR__ . '/css/guide.css') . '" />';
     include __DIR__ . '/head.php';
     ?>
     <?php if ($faqJsonLd !== ''): ?>

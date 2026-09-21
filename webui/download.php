@@ -5,7 +5,7 @@
     <?php
     $pageTitle = "Androidアプリをダウンロード";
     $pageDesc = "まいちゃん通知のAndroid版公式アプリのダウンロードページです。アプリ版ではさらに便利にプッシュ通知を受け取れます。";
-    $extraHead = '<link rel="stylesheet" href="/css/download.css?v=' . @filemtime(__DIR__ . '/css/download.css') . '>';
+    $extraHead = '<link rel="stylesheet" href="/css/download.css?v=' . @filemtime(__DIR__ . '/css/download.css') . '" />';
     include __DIR__ . '/head.php';
     ?>
 </head>

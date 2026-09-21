@@ -22,6 +22,7 @@ $updateLogs = [
                 "管理画面「アーカイブ管理」で「もっと読み込む」時にカテゴリ表示が「-」に戻る問題を修正（カテゴリ表示を catCache で保持し再描画時も復元）",
                 "管理画面のJSをキャッシュバスター付き参照に変更（/js/ は 1年 immutable のため ?v= で即反映）、公開アーカイブのJSはビルドして filemtime ベースで自動更新されることを確認",
                 "YouTube検知の冗長化 — PubSubHubbub（Webhook）障害で配信枠・配信開始の通知が届かなくなる問題の対策として、RSSフィード（無料）＋videos APIバッチ（1コール=1unit）による5分間隔のフォールバックスキャンを youtube.js に実装。ライブ中検知で【ライブ】通知、予定枠（published90分以内）で【予定】通知。sent_records の plannedSent/liveSent をwebhookと共有するため重複通知なし。既知の問題ページも「対策実装済み」に更新",
+                "CSS分離時の <link> タグ生成に閉じ引用符欠落のバグ — $extraHead 系9ページ（archive / download / future / guide / index / info / logs / status / twitter-media）で href=\"/css/X.css?v=…\" の末尾二重引用符を付け忘れており、HTMLの属性値解析が後続タグまで巻き込んでページ固有CSSが全く読み込まれずレイアウトが崩れていた問題を修正（\" /> に統一）",
             ],
         ],
         "lines" => "34,970",

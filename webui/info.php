@@ -5,7 +5,7 @@
     <?php
     $pageTitle = "このサービスについて";
     $pageDesc = "まいちゃん通知（恋乃夜まい非公式通知サービス）の概要や開発履歴、利用規約などの情報について説明しています。";
-  $extraHead = '<link rel="stylesheet" href="/css/info.css?v=' . @filemtime(__DIR__ . '/css/info.css') . '>';
+  $extraHead = '<link rel="stylesheet" href="/css/info.css?v=' . @filemtime(__DIR__ . '/css/info.css') . '" />';
   include __DIR__ . '/head.php';
   ?>
 </head>

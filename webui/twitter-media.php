@@ -1,7 +1,7 @@
 <?php
 $pageTitle = "メディアアーカイブ";
 $pageDesc = "保存されたTwitterメディア（画像・動画）のアーカイブ";
-$extraHead = '<link rel="stylesheet" href="/css/twitter-media.css?v=' . @filemtime(__DIR__ . '/css/twitter-media.css') . '>';
+$extraHead = '<link rel="stylesheet" href="/css/twitter-media.css?v=' . @filemtime(__DIR__ . '/css/twitter-media.css') . '" />';
 include __DIR__ . '/head.php';
 ?>
 </head>
