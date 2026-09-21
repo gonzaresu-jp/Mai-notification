@@ -3,6 +3,20 @@
 更新日: 2026-09-22（旧 SECURITY_HANDOFF.txt を検証結果込みで本ファイルへ移行・改善）
 ブランチ: `feature/security-hardening-20260922`
 
+## 検証結果（2026-09-22 時点）
+
+- staging(8081) に本ブランチをデプロイ済み。deploy-staging.sh の smoke 全 PASS。
+- **回帰テスト 19/19 PASS**（`node scripts/regression-test.js --port 18099`、一時DB・実push抑止）。
+- SSE 保護を 8081 実プロセスで確認: 同一クライアント 5接続まで 200 / 6・7接続目 429 / 解放後 200 復帰。
+- 回帰テストが**既存潜在バグを検出・修正**: SSE の Origin 判定が `Set.some()` を呼んでおり、
+  同一オリジン EventSource（Origin ヘッダなし）で常に TypeError→500 になっていた → `Set.has()` に修正。
+- ファイル権限是正済み（本番・staging 両方）: `.env` → 600、`backups/` → 750・中身 640。
+  変更後も本番/staging の `/api/health` は 200。
+- **未実施（承認待ち）**: 本番(8080)への昇格・pm2 再起動。`promote.sh feature/security-hardening-20260922` を
+  作業者の明示承認後に実行すること。
+- 既知のテスト時ノイズ: 新規空DBでの初回起動時、`updateSchedule()` が `initDatabase()` のテーブル作成と
+  競合し `no such table: events` を一度出すことがある（既存DBでは発生しない・本番影響なし）。
+
 ## 最初に読むもの
 
 - **AGENTS.md は必読。** ポート位相、通知テスト禁止、本番再起動の承認制、依存関係更新の禁止事項がある。
@@ -28,7 +42,7 @@ readlink /proc/<pid>/cwd
 - CSRF Origin 判定は完全一致。DB/JSバックアップの誤コミット抑止済み。`package-lock.json` はGit管理。
 - **nginx（2026-09-22 外部実測 404）**: `location ^~ /mai-push/ { deny all; }`、ドットファイル deny、
   `.env|.db|.bak|...` 拡張子 deny が有効 → `/backups/*.db`・`/.env`・`/data.db` はWeb非公開。
-- **データ保護（2026-09-22 実施）**: 本番 `.env` を 600 へ、`backups/` を 750・中身 640 へ変更済み。
+- **データ保護（2026-09-22 実施）**: 本番・staging の `.env` を 600 へ、`backups/` を 750・中身 640 へ変更済み。
   ※ `backups/` は gitignore 済みだが **Web公開ツリー内（/var/www/html 配下）** にある。
   nginx の deny で守られているが、`backup.sh` の出力先を Web 外（例: `/var/lib/mai-push/backups`）へ移すのが望ましい。
 
@@ -56,7 +70,7 @@ nginx 設定変更時は `proxy_set_header X-Forwarded-For $proxy_add_x_forwarde
 **`npm audit fix --force` をテストなしで実行しない（AGENTS.md）**
 
 1. 本番 `data.db` と staging `data-test.db` を Web公開外・制限付きの場所へバックアップ。
-2. ✅ 回帰テスト実装済み: `scripts/regression-test.js`
+2. ✅ 回帰テスト実装済み・**staging で 19/19 PASS（2026-09-22）**: `scripts/regression-test.js`
    （notifications / subscriptions / scraper_status の INSERT/SELECT/lastID・UPSERT、
    `/api/health`、notify: tokenなし401 / HMACなし401 / 誤HMAC 401 / 完全認証で `suppressed:true`、
    内部scraper-status認証、token-exchange 無効code 400、SSE 上限429）
