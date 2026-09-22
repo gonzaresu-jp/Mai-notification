@@ -7,18 +7,27 @@ $updateLogs = [
                 "SSE（/api/events/stream）に接続保護を実装 — 全体接続数上限（SSE_MAX_CLIENTS、既定500）・同一送信元ごとの上限（SSE_MAX_PER_CLIENT、既定5）・接続寿命（SSE_MAX_AGE_MS、既定30分、EventSourceは自動再接続）を設け、超過は429を返す。送信元の判定は前段（nginx/cloudflared）経由のときだけ X-Forwarded-For の末尾要素（実クライアントIP）を使い、直結接続ではTCPピアアドレスを使う（XFF偽造対策）",
                 "回帰テスト scripts/regression-test.js を新設 — sqlite3@6 への昇格前に必須のゲート。一時DB＋実push抑止（DISABLE_NOTIFICATIONS=1）で子プロセス起動し、/api/health、notify認証（tokenなし401／HMACなし401／誤HMAC401／完全認証でsuppressed:true）、内部scraper-status認証、token-exchangeの無効code 400、SSE上限429、sqlite3のINSERT/SELECT/lastID/UPSERTを自動検証（stagingで19/19 PASS）",
                 "セキュリティ運用ドキュメント SECURITY.md を整備（旧 SECURITY_HANDOFF.txt を移行・改善）— 済み対策の検証結果、innerHTML棚卸し表、trust proxy評価、sqlite3@6昇格手順、ポート/権限の確認手順を記載",
+                "通知APIのHMAC署名を送信側で統一 — notify-sign.js（signNotifyPayload）を新設し、twitter / twitcasting / fanbox / youtube / bilibili / ワーカー内通知が /api/notify へ必ず X-Notify-Hmac（HMAC-SHA256生hex）を付与するよう修正。従来信じられていた X-Signature は API 側で読まれず、HMAC必須化後に送信側が未追随のまま全配信が401で失敗し続けていた潜在事故を解消",
+                "staging の node_modules を本番への symlink から実体化（依存変更の検証を独立して実行可能に）",
             ],
             "change" => [
                 "トークン比較をすべて timingSafeEqual に統一 — /api/notify（routes/notify.js）・内部scraper-status（routes/scraper-status.js）・ワーカー内 /api/notify（main.js）",
                 "POST /api/internal/scraper-status の認証を NOTIFY_API_TOKEN に統一し、未設定時は503で閉じるように変更 — 旧実装はトークン未設定だと認証なしで書込可能で、かつ ADMIN_NOTIFY_TOKEN を受入れていた。services/context.js の ADMIN_NOTIFY_TOKEN フォールバックも廃止（API経由の送信者はコード上存在せず、ワーカーは直接DB更新のため影響なし）",
                 "秘密情報・バックアップのファイル権限を是正 — 本番・staging の .env を600、backups/ を750（中身は640）に変更。nginxは既に /mai-push/ へのdeny・拡張子deny（.env/.db/.bak等）が有効で、外部からの /backups/*.db や /.env は404になることを実測確認",
+                "sqlite3 を 6.0.1 へ昇格（npm audit critical 解消）— Node v22 でネイティブビルドし、回帰テスト19/19・本番smoke を通過後、本番反映",
+                "ワーカー内 /api/notify を fail-closed 化（NOTIFY_API_TOKEN未設定時は503で閉じる）。/api/internal/twitter/analysis にもトークン＋HMAC必須化",
+                "trust proxy を \"loopback\" に設定し、helmet を全 static（/pushweb /admin /webui）より前へ移動 — 共通セキュリティヘッダの欠落防止",
+                "本番・staging の .env から重複キーを除去（dotenvは先頭勝ちで後発行が無効化される罠）。RAG_CHAT_MODEL を gemini-3.5-flash-lite に一本化",
+                "DBバックアップの保存先を Web公開ツリー外 /var/lib/mai-push/backups へ移行 — 日次cron（03:00）の出力・履歴23日分＋env を統合し、Webツリー内 backups/ を削除",
+                "SMB共有（[html]）から .env / *.db / *.bak / backups を veto files で除外 — LAN共有経由の秘密情報・DBの漏えいを遮断",
             ],
             "fix" => [
                 "rss-reader.js のXSSを修正 — 外部RSSの title/description/link/enclosure を未エスケープのまま innerHTML に流し込んでいたため、エスケープ＋ http(s): URL検証＋ textContent 描画に変更",
                 "SSEのOrigin判定バグを修正 — 許可オリジンは Set なのに .some() を呼んでおり、同一オリジンの EventSource（Originヘッダなし）で常に TypeError→500 になる潜在バグだった（本番エラーログに過去11,930件記録、デスクトップアプリの再接続ループの原因）。.has() に修正して解消",
+                "朝の新着ツイート通知が届かない問題を修正 — HMAC必須化直後の送信側未追随（HMAC付与漏れ）で /api/notify が401になり、ログ上の成功行とは裏腹に実送だけが失敗していた。送信側HMAC統一で解消（修正後の実機配信を確認済み）",
             ],
         ],
-        "lines" => "35,467",
+        "lines" => "54,179",
     ],
 
     [
@@ -43,7 +52,7 @@ $updateLogs = [
                 "管理画面「アーカイブ管理」で「もっと読み込む」時にカテゴリ表示が「-」に戻る問題を修正（カテゴリ表示を catCache で保持し再描画時も復元）",
                 "管理画面のJSをキャッシュバスター付き参照に変更（/js/ は 1年 immutable のため ?v= で即反映）、公開アーカイブのJSはビルドして filemtime ベースで自動更新されることを確認",
                 "YouTube検知の冗長化 — PubSubHubbub（Webhook）障害で配信枠・配信開始の通知が届かなくなる問題の対策として、RSSフィード（無料）＋videos APIバッチ（1コール=1unit）による5分間隔のフォールバックスキャンを youtube.js に実装。ライブ中検知で【ライブ】通知、予定枠（published90分以内）で【予定】通知。sent_records の plannedSent/liveSent をwebhookと共有するため重複通知なし。既知の問題ページも「対策実装済み」に更新",
-                "CSS分離時の <link> タグ生成に閉じ引用符欠落のバグ — $extraHead 系9ページ（archive / download / future / guide / index / info / logs / status / twitter-media）で href=\"/css/X.css?v=…\" の末尾二重引用符を付け忘れており、HTMLの属性値解析が後続タグまで巻き込んでページ固有CSSが全く読み込まれずレイアウトが崩れていた問題を修正（\" /> に統一）",
+                "CSS分離時の <link> タグ生成に閉じ引用符欠落のバグ — \$extraHead 系9ページ（archive / download / future / guide / index / info / logs / status / twitter-media）で href=\"/css/X.css?v=…\" の末尾二重引用符を付け忘れており、HTMLの属性値解析が後続タグまで巻き込んでページ固有CSSが全く読み込まれずレイアウトが崩れていた問題を修正（\" /> に統一）",
             ],
         ],
         "lines" => "34,970",
@@ -122,7 +131,7 @@ $updateLogs = [
                 "ヘッダーナビに「使い方・対応一覧」リンクを追加、sitemap.xml を刷新（/archive・/guide.php・/twitter-media/ 等を追加し lastmod を更新）",
             ],
             "change" => [
-                "robots meta を条件分岐化（$robotsNoindex で noindex,follow に切替）。?q= 付き検索URLは noindex 化し canonical は /archive/ に集約",
+                "robots meta を条件分岐化（\$robotsNoindex で noindex,follow に切替）。?q= 付き検索URLは noindex 化し canonical は /archive/ に集約",
             ],
             "fix" => [
                 "全ページの空/欠落した <img alt> を修正 — フッターのプラットフォームアイコン・ヘッダーの通知トグル/アバター・アーカイブのサムネイル/立ち絵・メディア/次回予定サムネイル等に説明的な代替テキストを付与（Bingの画像Alt指摘13件対応）",
