@@ -8,8 +8,9 @@
 #     --sync-db    先に本番 data.db を data-test.db へスナップショットする
 #     --dry-run    実行せずに手順だけ表示
 #
-# 前提: staging worktree は /home/yuzuki/mai-push-test、
-#       node_modules/.env は本番へのシンボリックリンク（worktreeに実体を持たない）
+# 前提: staging worktree は /home/yuzuki/mai-push-test。
+#       node_modules は 2026-09-22 から staging 独自の実体（sqlite3@6 で npm install）。
+#       .env は staging 実体（600）、本番と別値。※以前は node_modules/.env が本番への symlink だった
 
 set -euo pipefail
 

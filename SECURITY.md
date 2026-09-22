@@ -1,7 +1,7 @@
 # セキュリティ引き継ぎ・現状（SECURITY.md）
 
 更新日: 2026-09-22（旧 SECURITY_HANDOFF.txt を検証結果込みで本ファイルへ移行・改善）
-ブランチ: `feature/security-hardening-20260922`
+ブランチ: `feature/security-hardening-20260922`（第1弾・本番昇格済み）→ `feature/sec-round2-20260922`（第2弾・検証中）
 
 ## 検証結果（2026-09-22 時点）
 
@@ -108,9 +108,46 @@ node scripts/regression-test.js --port 18099
     今後外部入力を扱う場合は escapeHtml 経由に統一。
 - 運用ルール: 新規コードで外部/DB由来の文字列を innerHTML に入れない（textContent か escapeHtml）。
 
+## 2026-09-22 第2弾ハードニング（feature/sec-round2-20260922・本番未反映）
+
+### 重大回帰の発見（HMAC必須化の送信側未追従）
+- `/api/notify`/`/api/internal/twitter/analysis` はトークン＋HMAC必須だが、**全送信モジュールが未追随**。
+- 実測（本番8080にライブプローブ）: 正トークン＋誤HMAC→401 Invalid、正トークン＋HMACなし→401 Missing。
+  送信側コード（twitter.js: `X-Notify-Token` のみ / main.js: `X-Signature` はAPIの受付ヘッダ `x-notify-hmac|x-hmac-signature` 外）は**必ず401になる**。
+- ログ上は最後の再起動（2026-09-22 03:37JST）より前の成功行が残存して見えていただけで、
+  以降は新着が無く送信試行ゼロのため失敗が可視化されていない（= 次の新着で静かに失敗する状態）。
+- 本作業で修正: `notify-sign.js`（共通HMAC署名ヘルパー）を新設し、
+  twitter/twitcasting/fanbox/youtube/bilibili/main.js の全送信を `X-Notify-Hmac`（生hex）に統一。
+  **staging(8081) で実環境E2E確認済み**: 送信者形式のHMAC付与で `suppressed:true`(200)、
+  HMACなしで401。`/api/internal/twitter/analysis` も同様に200/401を確認。
+
+### その他の変更（本ブランチ・本番未反映）
+| 対象 | 変更 |
+|---|---|
+| `package.json` | `"sqlite3": "^6.0.1"`（**staging で実体 npm install 済み・回帰テスト 19/19 PASS**、本番は承認後に反映） |
+| `scripts/backup.sh` | DB/.env の保存先を Web公開ツリー外 `/var/lib/mai-push/backups` へ移動（nginx deny 単一依存を解消） |
+| `main.js` | ワーカー内 `/api/notify` を **fail-closed**（トークン未設定時 503、server.js と統一） |
+| `server.js` | `trust proxy 1` → `"loopback"` に限定（同一ホスト前段のみ信頼、直結クライアントの XFF 偽造を無効化）。SSE送信元キーと同じ方針 |
+| `server.js` | **helmet を全 static マウント（/pushweb /admin /webui）より前に移動**（従来は /pushweb・/admin が非防備だった） |
+| `routes/notify.js` | `/api/internal/twitter/analysis` に `verifyNotifyHmac` を追加（旧: トークンのみ） |
+
+### .env 重複キー除去（本番・staging 両方、2026-09-22 実施）
+- `ADMIN_USERNAME` / `SESSION_SECRET` が2重定義（dotenv先頭勝ち）。両者の値は**同一**だったため後発行のみ削除。
+- ⚠️ **`RAG_CHAT_MODEL` も重複し値が異なる**（dotenvは先頭勝ちのため 2 個目の値は無効）。
+  実効値のまま据え置き（判断保留）。**モデル変更を試みた痕跡なら意図が反映されていない**ので要確認。
+- 編集前ファイル: `~/.env.bak-dupkeys-20260922`（本番・staging 各自）。
+- 注: .env はプロセス起動時読込のため、この編集の実効は次回の `pm2 restart --update-env` 時。
+
+### staging の node_modules 構成変更（2026-09-22）
+- 従来: staging の `node_modules` は本番への **symlink**（deploy-staging.sh が npm install を行わない前提）。
+- 今回: staging の symlink を外し **実体 npm install（sqlite3@6）** に変更。以後 staging で依存を変える場合は
+  `/home/yuzuki/mai-push-test` で `npm install` し、`package-lock.json` の反映分を本番ツリーでコミットする。
+
 ## 追加で残っているリスク
 
-- [ ] `backup.sh` の出力先を Web公開ツリー外へ移す（nginx deny は現状有効だが単一防御点に依存）。
+- [ ] **`RAG_CHAT_MODEL` の .env 重複**（値が不一致のまま。実効 = 先頭行）。どちらを採用するか要判断。
+- [ ] `backup.sh` は `/var/lib/mai-push/backups` への移動を**反映済み**だが、サーバー側で
+      `mkdir -p /var/lib/mai-push/backups` と旧 `$BASE/backups` の退避・cron 動作確認は未実施（承認後に実施）。
 - [ ] SSE 429 時のクライアント挙動（EventSource 自動再接続）を実デバイスで一応確認。
 - [ ] `services/context.js` の `LOCAL_API_TOKEN`（現環境変数 `LOCAL_API_TOKEN` のみ）を使う箇所が
       将来出たら、`NOTIFY_API_TOKEN` へ統一する。
