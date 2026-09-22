@@ -27,13 +27,29 @@
 - **pm2稼働中に手で `node main.js` を起動するとロックで拒否される**（仕様）。検証で二重起動させるな。
 
 ## 5. 依存関係
-- 残存脆弱性 **critical 1（sqlite3 経由の tar）/ high 9**。
-- **`npm audit fix --force`（sqlite3@6 破壊的更新）は回帰テスト整備完了まで禁止**。
-- `package-lock.json` は Git 管理対象。除外するな。
+- **sqlite3 は 6.0.1 に昇格済み（2026-09-22 本番反映）**。npm audit critical は解消。
+  依存を触る際は必ず staging で「実体 node_modules の npm install → 回帰テスト(19/19) → smoke」を通すこと。
+- 本番プロセスは **Node v22.12.0**（nvm）で稼働。ネイティブモジュールをビルドする際は
+  `PATH` を v22 優先にして `npm install` すること（v18 でビルドするとABI不一致が起きる）。
+- `package-lock.json` は Git 管理対象。除外するな。`npm audit fix --force` は回帰テスト通過後にのみ。
 
 ## 6. 検証の作法
 - 変更後は `node --check <file>` → pm2 再起動（`--update-env`）→ **正しいポート**で `/api/health`。
 - 本番 pm2 再起動は作業者の明示承認後にのみ実施。
 - DB・history.json を触るテストは本番でやるな。staging でやれ。
+
+## 6.5 第2ラウンド反映（2026-09-22、本番昇格済み main @ fb4449f）
+- **HMAC 送信側は `notify-sign.js`（`signNotifyPayload`）で統一済み**。`/api/notify` へ送る
+  コードを書くなら必ず `X-Notify-Hmac`（生hex）を付けること。`X-Signature` は API 側で読まれない。
+  ※ 2026-09 の HMAC 必須化直後は全送信モジュールが未追随で、実は next-new-content で401する状態だった（修正済み）。
+- `/api/internal/twitter/analysis` もトークン + HMAC 必須（twitter.js 送信側は同期済み）。
+- `main.js` のワーカー内 `/api/notify` は **fail-closed（トークン未設定時 503）**。
+- **sqlite3 は 6.0.1 に昇格済み**（npm audit critical 解消）。`npm audit fix --force` 禁止は解除されたが、
+  依存を触る際は必ず staging で「実体 node_modules の npm install → 回帰テスト → smoke」を通すこと。
+- **staging の node_modules は実体**（本番への symlink を廃止）。staging で依存変更した場合、
+  `package-lock.json` の反映分を本番ツリーでコミットすること。
+- **backups は `/var/lib/mai-push/backups`**（Web公開ツリー外）。`backup.sh` が日次 03:00 に保存。
+  Web ツリー内の `backups/` は存在しない（退避済み）。
+- `trust proxy` は `"loopback"`、helmet は全 static より前。`.env` は重複キー禁止（先頭勝ちで無効化される罠）。
 
 最終更新: 2026-09-22（実事故ベース）
