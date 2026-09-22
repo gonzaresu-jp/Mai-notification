@@ -122,7 +122,8 @@ function register(app, db) {
   // 内部API: 新着ツイートのGemma/Gemini分析結果をnotifications.dataに保存する。
   // POST /api/internal/twitter/analysis { tweet_id, platform, analysis }
   // twitter.js のgemmaPromiseから送信され、以降ツイート統計はログなしでこのカラムから集計できる。
-  app.post("/api/internal/twitter/analysis", requireNotifyToken, (req, res) => {
+  // 認証は /api/notify と同じ（トークン + HMAC 署名必須）で受ける。
+  app.post("/api/internal/twitter/analysis", requireNotifyToken, verifyNotifyHmac, (req, res) => {
     const { tweet_id, platform } = req.body || {};
     const analysis = req.body?.analysis;
     if (!tweet_id || !platform || !analysis || typeof analysis !== "object") {

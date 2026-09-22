@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const { signNotifyPayload } = require('./notify-sign');
 
 const LOCAL_API_URL = 'http://127.0.0.1:8080/api/notify';
 const FANBOX_USER = 'koinoya-mai';
@@ -117,11 +118,14 @@ async function checkFanboxPosts() {
       };
 
       try {
+        const bodyString = JSON.stringify(payload);
+        const notifyHmac = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, bodyString);
         await axios.post(LOCAL_API_URL, payload, {
           timeout: 10000,
           headers: {
             'Content-Type': 'application/json',
-            'X-Notify-Token': NOTIFY_TOKEN
+            'X-Notify-Token': NOTIFY_TOKEN,
+            ...(notifyHmac ? { 'X-Notify-Hmac': notifyHmac } : {})
           }
         });
         console.log('Fanbox -> /api/notify sent:', newPostUrl);

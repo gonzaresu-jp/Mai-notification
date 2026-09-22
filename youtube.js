@@ -134,10 +134,13 @@ function buildEventFromVideoItem(item, fallbackTitle) {
 /** 内部通知サーバ（NOTIFY_CONFIG.apiUrl）へ送る汎用関数 */
 async function sendNotifyApi(payload) {
     try {
+        const bodyString = JSON.stringify(payload);
+        const notifyHmac = require('./notify-sign').signNotifyPayload(NOTIFY_CONFIG.hmacSecret || null, bodyString);
         await axios.post(NOTIFY_CONFIG.apiUrl, payload, {
             headers: {
                 'Content-Type': 'application/json',
-                'X-Notify-Token': NOTIFY_CONFIG.token || ''
+                'X-Notify-Token': NOTIFY_CONFIG.token || '',
+                ...(notifyHmac ? { 'X-Notify-Hmac': notifyHmac } : {})
             },
             timeout: 8000
         });

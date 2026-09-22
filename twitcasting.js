@@ -6,6 +6,7 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { signNotifyPayload } = require('./notify-sign');
 const PUPPETEER_EXECUTABLE_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || null;
 
 const SEEN_PATH = path.join(__dirname, 'twicas_seen.json');
@@ -91,13 +92,16 @@ async function sendNotify(screenId, movieId, title = '【ツイキャス】ラ�
     }
 
     try {
+        const bodyString = JSON.stringify(payload);
+        const notifyHmac = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, bodyString);
         const res = await retryAsync(() => fetch(NOTIFY_ENDPOINT, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
-                'X-Notify-Token': NOTIFY_TOKEN 
+                'X-Notify-Token': NOTIFY_TOKEN,
+                ...(notifyHmac ? { 'X-Notify-Hmac': notifyHmac } : {})
             },
-            body: JSON.stringify(payload),
+            body: bodyString,
             agent,
             timeout: 15000
         }), 3, 300);

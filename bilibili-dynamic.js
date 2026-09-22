@@ -296,10 +296,10 @@ async function sendNotify(parsed) {
     'X-Notify-Token': notifyConfig.token || ''
   };
 
-  if (notifyConfig.hmacSecret) {
+if (notifyConfig.hmacSecret) {
     const hmac = crypto.createHmac('sha256', notifyConfig.hmacSecret);
     hmac.update(bodyString);
-    headers['X-Signature'] = `sha256=${hmac.digest('hex')}`;
+    headers['X-Notify-Hmac'] = hmac.digest('hex');
   }
 
   try {

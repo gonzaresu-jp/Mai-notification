@@ -20,7 +20,10 @@ const { updateSchedule } = require("./weekly");
 
 const app = express();
 ctx.app = app;
-app.set("trust proxy", 1);
+// 前段（nginx/cloudflared）は同一ホストの loopback から接続するため、
+// trust proxy は loopback のみ信用する（LAN 直結クライアントが XFF を偽造できても無効）。
+// ※ SSE の送信元キー判定（sseClientKey）もこれと同じ方針。
+app.set("trust proxy", "loopback");
 
 const dbPath = path.join(__dirname, process.env.DB_FILE_NAME || "data.db");
 const db = new sqlite3.Database(dbPath);
@@ -83,14 +86,14 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(allowed ? 204 : 403);
   next();
 });
-app.use("/pushweb", express.static(path.join(__dirname, "pushweb")));
-app.use("/admin", express.static(path.join(__dirname, "admin")));
 app.use(helmet({
   contentSecurityPolicy: { directives: { "default-src": ["'self'"], "script-src": ["'self'", "https://static.cloudflareinsights.com"], "style-src": ["'self'", "'unsafe-inline'"], "img-src": ["'self'", "data:", "https:"], "connect-src": ["'self'", "https:"], "font-src": ["'self'"], "frame-ancestors": ["'self'"], "form-action": ["'self'"], "base-uri": ["'self'"], "object-src": ["'none'"] } },
   strictTransportSecurity: { maxAge: 63072000, includeSubDomains: true },
   xFrameOptions: { action: "deny" },
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
 }));
+app.use("/pushweb", express.static(path.join(__dirname, "pushweb")));
+app.use("/admin", express.static(path.join(__dirname, "admin")));
 app.use("/webui", express.static(path.join(__dirname, "webui")));
 
 // --- CSRF Protection ---

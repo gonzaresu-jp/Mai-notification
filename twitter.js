@@ -11,6 +11,7 @@ const fs = require('fs');
 const { analyzeTweet, extractScheduleFromAnalysis, extractUrlsFromTweet } = require('./gemma-analyzer');
 const { checkScheduleDrift } = require('./schedule-drift-monitor');
 const twitterMediaSaver = require('./twitter-media-saver');
+const { signNotifyPayload } = require('./notify-sign');
 
 const PROFILE_PATH = '/var/lib/mai-push/puppeteer-profile';
 const COOKIE_DB = path.join(PROFILE_PATH, 'cookies.sqlite');
@@ -200,15 +201,18 @@ async function sendNotify(username, tweet, settingKey, sendText) {
   };
 
   const agent = (new URL(NOTIFY_ENDPOINT).protocol === 'https:') ? _httpsAgent : _httpAgent;
+  const bodyString = JSON.stringify(payload);
+  const notifyHmac = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, bodyString);
 
   try {
     const res = await retryAsync(() => fetch(NOTIFY_ENDPOINT, {
       method: 'POST',
         headers: {
         'Content-Type': 'application/json',
-        'X-Notify-Token': NOTIFY_TOKEN
+        'X-Notify-Token': NOTIFY_TOKEN,
+        ...(notifyHmac ? { 'X-Notify-Hmac': notifyHmac } : {}),
       },
-      body: JSON.stringify(payload),
+      body: bodyString,
       agent,
       timeout: 15000
     }), 3, 300);
@@ -601,10 +605,17 @@ async function check(username, isRetry = false) {
               console.log(`[${username}] Gemma analysis: category=${analysis.category}, status=${analysis.status}, time=${analysis.start_time}`);
               // 💾 分析結果をnotifications.dataへ保存（ツイート統計用）
               try {
+                const analysisBody = { tweet_id: t.id, platform: settingKey, analysis };
+                const analysisPayload = JSON.stringify(analysisBody);
+                const analysisHmac = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, analysisPayload);
                 await fetch('http://localhost:8080/api/internal/twitter/analysis', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'X-Notify-Token': NOTIFY_TOKEN },
-                  body: JSON.stringify({ tweet_id: t.id, platform: settingKey, analysis }),
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Notify-Token': NOTIFY_TOKEN,
+                    ...(analysisHmac ? { 'X-Notify-Hmac': analysisHmac } : {}),
+                  },
+                  body: analysisPayload,
                   agent: _httpAgent,
                   timeout: 10000,
                 }).catch(() => {});

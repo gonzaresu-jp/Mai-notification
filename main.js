@@ -114,21 +114,23 @@ app.get("/api/health/ready", (req, res) => {
 
 // --- API (モジュールからの POST を受ける) ---
 app.post("/api/notify", (req, res) => {
-  if (LOCAL_API_TOKEN) {
-    const token =
-      req.headers["x-local-api-token"] ||
-      req.headers["x-notify-token"] ||
-      req.body?.token;
-    // タイミング攻撃面を減らすため timingSafeEqual で比較する
-    const provided = String(token || "");
-    const expected = String(LOCAL_API_TOKEN);
-    const valid =
-      provided.length === expected.length &&
-      crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
-    if (!valid) {
-      console.warn("Unauthorized /api/notify attempt");
-      return res.status(401).send("Unauthorized");
-    }
+  // fail-closed: トークン未設定時は 503 で閉じる（server.js 側 /api/notify と同じ挙動に統一）
+  if (!LOCAL_API_TOKEN) {
+    return res.status(503).json({ error: "Notification API is not configured" });
+  }
+  const token =
+    req.headers["x-local-api-token"] ||
+    req.headers["x-notify-token"] ||
+    req.body?.token;
+  // タイミング攻撃面を減らすため timingSafeEqual で比較する
+  const provided = String(token || "");
+  const expected = String(LOCAL_API_TOKEN);
+  const valid =
+    provided.length === expected.length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  if (!valid) {
+    console.warn("Unauthorized /api/notify attempt");
+    return res.status(401).send("Unauthorized");
   }
   console.log("[API通知] 受信:", req.body);
   res.status(200).send("OK");
@@ -243,7 +245,7 @@ async function main() {
             process.env.NOTIFY_HMAC_SECRET,
           );
           hmac.update(bodyString);
-          headers["X-Signature"] = `sha256=${hmac.digest("hex")}`;
+          headers["X-Notify-Hmac"] = hmac.digest("hex");
         }
 
         await axios.post(
