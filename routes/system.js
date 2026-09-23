@@ -1,11 +1,11 @@
 const os = require("os");
 
 const cpu = require("../services/system-cpu");
-const adminAuth = require("../lib/admin");
 
 function register(app) {
-  // CPU/メモリ等の機密情報を返すため管理者専用。公開ステータスページは 403 時は表示を省略する。
-  app.get("/api/system-info", adminAuth.requireAuth, (req, res) => {
+  // 公開ステータスページ用。返すのは使用率・loadavg・稼働時間・メモリ/プロセス使用量のみ。
+  // ホスト名・ディスク・OS詳細・ネットワーク等は返さない（情報漏えい対策）。
+  app.get("/api/system-info", (req, res) => {
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const usedMem = totalMem - freeMem;

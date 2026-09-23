@@ -138,7 +138,7 @@ crontab -l | grep mai-push   # 3本すべて /srv になっていることを確
 ### Phase 4: 検証チェックリスト（すべて通ったら完了）
 
 - [ ] `ss -ltnp`: 8080/3002 = `127.0.0.1`、3001 = `0.0.0.0`（webhook のみ外部向け）
-- [ ] `/api/health` = 200、`/api/notify` 無認証 = 401、`/api/system-info` 無認証 = 401
+- [ ] `/api/health` = 200、`/api/notify` 無認証 = 401、`/api/system-info` = 200（安全な値のみ公開）
 - [ ] `pm2 list`: api/worker/discord-bot = online、↺ が増えていない（クラッシュループなし）
 - [ ] ワーカーログ: Twitter/YouTube/FANBOX 各 watcher「起動」＋1ポーリング周期、error ログ空
 - [ ] 外部: トップ・archive・`/admin/login/`・PWA(SW)・SSE が 200

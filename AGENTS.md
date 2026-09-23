@@ -63,7 +63,7 @@
   `require("path")` を dotenv より前に置くこと。
 - `/admin` の Express 静的配信は廃止。**login.html のみ明示配信**し、認証コード（admin.js/webauthn.js）は
   `lib/` に移動（nginx の alias も同dir直配信のため、移動が必須）。
-- `/api/system-info` は管理者専用（`lib/admin.js` requireAuth）。公開 status ページは 403 時に非表示。
+- `/api/system-info` は公開（CPU%・メモリ%・loadavg・稼働時間・RSSのみ。**ホスト名/ディスク/OS詳細は返さない**）。status ページのリソース欄は誰でも閲覧可能。
 - `/api/ask`（公開）は 5回/分＋質問500文字上限。管理者用 `/api/admin/ask` は対象外。
 - 回帰テストは `npm test`（scripts/regression-test.js、HMAC v2＋timestamp検証含む 21 項目）に接続済み。
 - pm2-logrotate 導入済み（20M・10世代・圧縮）。

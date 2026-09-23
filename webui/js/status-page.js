@@ -40,7 +40,6 @@
             const grid = document.getElementById('resource-grid');
             try {
                 const res  = await fetch('/api/system-info');
-                // 管理者専用のため一般公開では 401/403 → カード群を非表示
                 if (!res.ok) { if (grid) grid.style.display = 'none'; return; }
                 const d    = await res.json();
                 const cpu  = d.cpu || {};
@@ -63,7 +62,7 @@
                             <div class="resource-bar cpu ${barClass(cpuPct, 'cpu')}" style="width:${cpuPct}%"></div>
                         </div>
                         <div class="resource-sub">
-                            <span>${cpu.count ?? '?'} vCPU &mdash; ${(cpu.model || '').split('@')[0].trim()}</span>
+                            <span>${cpu.count ?? '?'} vCPU</span>
                         </div>
                         <!-- Load Average -->
                         <div class="loadavg-row">
@@ -119,8 +118,7 @@
                             <div class="resource-value" style="font-size:1.1rem">${fmtUptime(dOs.uptimeSec ?? 0)}</div>
                         </div>
                         <div class="resource-sub" style="margin-top:4px">
-                            <span>${dOs.hostname ?? ''}</span>
-                            <span>${dOs.platform ?? ''}</span>
+                            <span>稼働: ${fmtUptime(dOs.uptimeSec ?? 0)}</span>
                         </div>
                     </div>
                 `;

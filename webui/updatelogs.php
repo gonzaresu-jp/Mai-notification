@@ -15,7 +15,7 @@ $updateLogs = [
                 "API(8080/8081)・ワーカー内Express(3002/3003) の bind を 127.0.0.1 に限定（nginx/cloudflared の loopback 経由のみ。YouTube webhook 用 3001 は例外で据え置き）",
                 "main.js の dotenv を path.join(__dirname, \".env\") に変更 — 固定パスだと staging ワーカーが本番 .env を読む事故になるため（staging は自 .env の DISABLE_NOTIFICATIONS=1 を読むことを実測確認）",
                 "/admin の Express 静的配信を廃止し login.html のみ明示配信。認証コード（admin.js/webauthn.js）は lib/ へ移動（nginx の alias も同dirを直配信するため移動が必須。移動後は /admin/login/admin.js が login.html フォールバックになりソース漏えいを実測解消）",
-                "公開 /api/ask に専用制限（5回/分）＋質問500文字上限を追加（管理者用 /api/admin/ask は対象外）。/api/system-info は管理者専用化し、公開 status ページは 403 時に非表示化",
+                "公開 /api/ask に専用制限（5回/分）＋質問500文字上限を追加（管理者用 /api/admin/ask は対象外）。/api/system-info は使用率・loadavg・稼働時間・メモリ/プロセス使用量のみ公開（ホスト名・ディスク・OS詳細は返さない情報設計）し、statusページのリソース表示は継続",
                 "twitter 分析送信先の localhost:8080 固定を NOTIFY_API_URL 基準に修正（staging が本番へ誤送する問題を解消）",
                 "Windowsインストーラの成果物名をASCII化（MaiPush-Setup-バージョン.exe / MaiPush-Portable-バージョン.exe）— 日本語名の文字化け・URL問題の回避",
             ],
