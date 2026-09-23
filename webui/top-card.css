@@ -1891,14 +1891,16 @@
     display: contents;
   }
 
-  .count-page .stat-pair .stat-half {
+  /* 結合するペアのみ半透明化。結合しないペア(.stat-pair-keep)は
+     display:contentsで親に背景が出ないため、子の個別背景を残す */
+  .count-page .stat-pair:not(.stat-pair-keep) .stat-half {
     flex: 1 1 0; min-width: 0; background: transparent; border: none; border-radius: 0;
     padding: .85rem 1rem; animation: none;
   }
-  .count-page .stat-pair .stat-half + .stat-half { border-left: 1px solid rgba(177, 30, 124, 0.18); }
-  .count-page .stat-pair .stat-half .value { font-size: clamp(1.15rem, 5.5vw, 1.6rem); }
-  .count-page .stat-pair .stat-half .label { font-size: .8rem; }
-  .count-page .stat-pair .stat-half .stat-copy-btn { top: 6px; right: 6px; }
+  .count-page .stat-pair:not(.stat-pair-keep) .stat-half + .stat-half { border-left: 1px solid rgba(177, 30, 124, 0.18); }
+  .count-page .stat-pair:not(.stat-pair-keep) .stat-half .value { font-size: clamp(1.15rem, 5.5vw, 1.6rem); }
+  .count-page .stat-pair:not(.stat-pair-keep) .stat-half .label { font-size: .8rem; }
+  .count-page .stat-pair:not(.stat-pair-keep) .stat-half .stat-copy-btn { top: 6px; right: 6px; }
 }
 
 /* --- 次の予定ウィジェット（通知履歴風: 左サムネ・右詳細／予定なしは非表示） --- */

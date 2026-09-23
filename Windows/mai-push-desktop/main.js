@@ -675,6 +675,7 @@ function handleAuthCallback(token) {
   const hostname = new URL(baseUrl).hostname;
   console.log('[mai-push] Setting cookie for domain:', hostname);
   mainWindow.webContents.session.cookies.set({
+    url: baseUrl + '/',
     name: 'session',
     value: token,
     domain: hostname,
