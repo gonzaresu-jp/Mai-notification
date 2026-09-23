@@ -123,25 +123,70 @@ async function initializeLastId(baseUrl) {
 }
 
 // --- SSE Client (real-time) ---
+// 再接続: 指数バックオフ。429 は Retry-After を優先。
+// 無通信タイムアウト: ハートビート(25秒)が来ない接続は 60秒で中断して張り直す。
+const SSE_RETRY_BASE_MS = 3000;
+const SSE_RETRY_MAX_MS = 60000;
+const SSE_IDLE_TIMEOUT_MS = 60000;
+let sseRetryAttempt = 0;
+let sseReconnectTimer = null;
+let sseGeneration = 0;
+
+function scheduleSseReconnect(baseUrl, delayMs) {
+  if (isQuitting) return;
+  if (sseReconnectTimer) clearTimeout(sseReconnectTimer);
+  const delay = delayMs != null
+    ? delayMs
+    : Math.min(SSE_RETRY_BASE_MS * Math.pow(2, sseRetryAttempt), SSE_RETRY_MAX_MS);
+  sseRetryAttempt++;
+  sseReconnectTimer = setTimeout(() => {
+    sseReconnectTimer = null;
+    connectSSE(baseUrl);
+  }, delay);
+}
+
 async function connectSSE(baseUrl) {
+  const gen = sseGeneration;
   const url = baseUrl.replace(/\/+$/, '') + SSE_PATH;
+  const ac = new AbortController();
   let resp;
+  let retryAfterMs = null;
   try {
     resp = await fetch(url, {
       headers: { 'Accept': 'text/event-stream', 'Cache-Control': 'no-cache' },
+      signal: ac.signal,
     });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) {
+      if (resp.status === 429) {
+        const ra = parseInt(resp.headers.get('Retry-After'), 10);
+        if (ra > 0) retryAfterMs = ra * 1000;
+      }
+      try { await resp.text(); } catch (e) {}
+      throw new Error(`HTTP ${resp.status}`);
+    }
   } catch (e) {
-    if (!isQuitting) setTimeout(() => connectSSE(baseUrl), 3000);
+    if (isQuitting || gen !== sseGeneration) return;
+    scheduleSseReconnect(baseUrl, retryAfterMs);
     return;
   }
+
+  sseRetryAttempt = 0;
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buf = '', dataLine = '';
+  let idleTimer = null;
+  const resetIdle = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      try { ac.abort(); } catch (e) {}
+    }, SSE_IDLE_TIMEOUT_MS);
+  };
+  resetIdle();
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      resetIdle();
       buf += decoder.decode(value, { stream: true });
       const lines = buf.split('\n');
       buf = lines.pop() || '';
@@ -158,9 +203,14 @@ async function connectSSE(baseUrl) {
       }
     }
   } catch (e) {
-    if (e.name === 'AbortError' || isQuitting) return;
+    if (idleTimer) clearTimeout(idleTimer);
+    if (isQuitting || gen !== sseGeneration) return;
+    // 接続済みだったためバックオフは頭出し（AbortError=idleタイムアウト含む）
+    scheduleSseReconnect(baseUrl, SSE_RETRY_BASE_MS);
+    return;
   }
-  if (!isQuitting) setTimeout(() => connectSSE(baseUrl), 3000);
+  if (idleTimer) clearTimeout(idleTimer);
+  if (!isQuitting && gen === sseGeneration) scheduleSseReconnect(baseUrl, SSE_RETRY_BASE_MS);
 }
 
 async function checkNewNotifications(baseUrl) {
@@ -181,12 +231,17 @@ async function checkNewNotifications(baseUrl) {
 function startRealTime(baseUrl) {
   if (!pushEnabled) return;
   if (sseTimer) clearInterval(sseTimer);
+  if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null; }
+  sseGeneration++;
+  sseRetryAttempt = 0;
   sseTimer = setInterval(() => checkNewNotifications(baseUrl), FALLBACK_INTERVAL);
   connectSSE(baseUrl);
 }
 
 function stopRealTime() {
   if (sseTimer) { clearInterval(sseTimer); sseTimer = null; }
+  if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null; }
+  sseGeneration++;
 }
 
 // --- Show notification: native + renderer (with image) ---

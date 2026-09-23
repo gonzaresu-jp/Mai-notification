@@ -36,11 +36,38 @@
             return baseClass;
         }
 
+        async function fetchWithRetry(url) {
+            const maxAttempts = 3;
+            let res = null;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    res = await fetch(url);
+                } catch (e) {
+                    if (attempt === maxAttempts) throw e;
+                    await new Promise(r => setTimeout(r, attempt * 2000));
+                    continue;
+                }
+                if (res.ok) return res;
+                if (res.status === 429 && attempt < maxAttempts) {
+                    const ra = parseInt(res.headers.get('Retry-After'), 10);
+                    const waitMs = Math.min((ra > 0 ? ra : attempt * 2) * 1000, 30000);
+                    await new Promise(r => setTimeout(r, waitMs));
+                    continue;
+                }
+                if (attempt === maxAttempts) return res;
+                await new Promise(r => setTimeout(r, attempt * 2000));
+            }
+            return res;
+        }
+
         async function loadSystemInfo() {
             const grid = document.getElementById('resource-grid');
             try {
-                const res  = await fetch('/api/system-info');
-                if (!res.ok) { if (grid) grid.style.display = 'none'; return; }
+                const res  = await fetchWithRetry('/api/system-info');
+                if (!res.ok) {
+                    if (grid) grid.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:0.85rem">リソース情報を取得できませんでした</div>';
+                    return;
+                }
                 const d    = await res.json();
                 const cpu  = d.cpu || {};
                 const mem  = d.memory || {};
@@ -130,7 +157,8 @@
         async function loadStatus() {
             const grid = document.getElementById('status-grid');
             try {
-                const res = await fetch('/api/scraper-status');
+                const res = await fetchWithRetry('/api/scraper-status');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 const items = data.items || [];
 

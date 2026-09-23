@@ -5,14 +5,30 @@ async function loadNotificationHeatmap(containerId) {
 
     renderHeatmapSkeleton(container);
 
-    try {
-        const response = await fetch('/api/notifications/stats?years=1');
-        if (!response.ok) throw new Error('API error');
-        const stats = await response.json();
-        renderHeatmap(container, stats);
-    } catch (e) {
-        console.error('Failed to load heatmap:', e);
-        container.innerHTML = '<p style="font-size: 11px; color: #888; text-align: center;">統計データの読み込みに失敗しました</p>';
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const response = await fetch('/api/notifications/stats?years=1');
+            if (!response.ok) {
+                if (response.status === 429 && attempt < maxAttempts) {
+                    const ra = parseInt(response.headers.get('Retry-After'), 10);
+                    const waitMs = Math.min((ra > 0 ? ra : attempt * 2) * 1000, 30000);
+                    await new Promise(r => setTimeout(r, waitMs));
+                    continue;
+                }
+                throw new Error('API error ' + response.status);
+            }
+            const stats = await response.json();
+            renderHeatmap(container, stats);
+            return;
+        } catch (e) {
+            if (attempt === maxAttempts) {
+                console.error('Failed to load heatmap:', e);
+                container.innerHTML = '<p style="font-size: 11px; color: #888; text-align: center;">統計データの読み込みに失敗しました</p>';
+                return;
+            }
+            await new Promise(r => setTimeout(r, attempt * 2000));
+        }
     }
 }
 
