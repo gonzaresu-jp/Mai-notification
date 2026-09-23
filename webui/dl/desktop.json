@@ -1,5 +1,5 @@
 {
-  "version": "1.3.3",
-  "url": "https://mai.honna-yuzuki.com/dl/MaiPush-Setup-1.3.3.exe",
-  "notes": "タブバーでホイール転がしによるタブ移動・中クリックでタブを閉じる機能を追加。"
+  "version": "1.3.4",
+  "url": "https://mai.honna-yuzuki.com/dl/MaiPush-Setup-1.3.4.exe",
+  "notes": "リロードでホームに戻らず現在のページを再読込。タブバーにリロードボタンを追加。SSE再接続を改善（指数バックオフ・Retry-After対応・無通信タイムアウト）。"
 }

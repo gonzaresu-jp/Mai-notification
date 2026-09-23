@@ -1,6 +1,6 @@
 {
   "name": "mai-push-desktop",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Mai Push Desktop - Web版と同じ通知をデスクトップで",
   "main": "main.js",
   "scripts": {

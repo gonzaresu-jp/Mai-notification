@@ -19,7 +19,7 @@
   }
   #tabs {
     flex: 0 1 auto;
-    max-width: calc(100% - 40px);
+    max-width: calc(100% - 76px);
     display: flex;
     align-items: stretch;
     gap: 4px;
@@ -73,7 +73,7 @@
     padding: 0;
   }
   .tab .close:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
-  #newtab {
+  #reloadtab, #newtab {
     flex: 0 0 auto;
     width: 30px;
     align-self: center;
@@ -86,17 +86,22 @@
     line-height: 1;
     cursor: pointer;
   }
-  #newtab:hover { background: #b11e7c; color: #fff; }
+  #reloadtab:hover, #newtab:hover { background: #b11e7c; color: #fff; }
+  #reloadtab { font-size: 15px; }
 </style>
 </head>
 <body>
   <div id="tabs"></div>
+  <button id="reloadtab" title="再読み込み (F5)">↻</button>
   <button id="newtab" title="新しいタブ (Ctrl+T)">＋</button>
 <script>
   (function() {
     var listEl = document.getElementById('tabs');
     document.getElementById('newtab').addEventListener('click', function() {
       if (window.tabAPI) window.tabAPI.newTab();
+    });
+    document.getElementById('reloadtab').addEventListener('click', function() {
+      if (window.tabAPI) window.tabAPI.reloadTab();
     });
     function esc(s) {
       return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

@@ -667,9 +667,10 @@ function setupTabContents(tab) {
 
   wc.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
+    // F5 / Ctrl+R: 現在のページを再読み込み（ホームへ戻さない）
     if ((input.key === 'F5' || (input.key === 'r' && input.control)) && !input.alt && !input.meta) {
-      const s = loadSettings(); loadURLSafe(wc, s.url);
-      initializeLastId(s.url).then(() => startRealTime(s.url));
+      event.preventDefault();
+      try { wc.reload(); } catch (e) {}
       return;
     }
     if (input.control && !input.alt && !input.meta) {
@@ -761,6 +762,12 @@ ipcMain.handle('tabs:get', () => tabsState());
 ipcMain.handle('tab-new', (e, url) => newTab(url || getBaseUrl()));
 ipcMain.handle('tab-close', (e, id) => closeTab(Number(id)));
 ipcMain.handle('tab-activate', (e, id) => activateTab(Number(id)));
+ipcMain.handle('tab-reload', (e, id) => {
+  const tab = id != null ? tabs.find(t => t.id === Number(id)) : activeTab();
+  if (tab && !tab.view.webContents.isDestroyed()) {
+    try { tab.view.webContents.reload(); } catch (err) {}
+  }
+});
 
 function createTray() {
   const trayIcon = nativeImage.createFromPath(iconPath());
@@ -777,11 +784,12 @@ function updateTrayMenu() {
     { label: '表示する', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
     { label: '再読み込み', click: () => {
       if (mainWindow) {
-        const s = loadSettings();
+        // 現在のタブをそのまま再読み込み（ホームへ戻さない）
         const t = activeTab();
-        if (t && !t.view.webContents.isDestroyed()) loadURLSafe(t.view.webContents, s.url);
+        if (t && !t.view.webContents.isDestroyed()) {
+          try { t.view.webContents.reload(); } catch (e) {}
+        }
         mainWindow.show(); mainWindow.focus();
-        initializeLastId(s.url).then(() => startRealTime(s.url));
       }
     }},
     { label: '新しいタブ', click: () => {
