@@ -13,6 +13,7 @@ import {
   initHeaderDependentUI,
   loadPlatformSettingsUIFromServer
 } from './uiController.js?v=20260317a';
+import './palette.js';
 
 function isAndroidApp() {
   try {
