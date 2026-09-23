@@ -42,7 +42,7 @@ function applyPeriodTime(startTimeValue, timePeriodValue) {
 }
 
 function register(app, db) {
-  const adminAuth = require("../admin/admin");
+  const adminAuth = require("../lib/admin");
   const { syncEventNotifications } = sched;
 
   app.get("/api/events", (req, res) => {

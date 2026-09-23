@@ -1,6 +1,7 @@
 // rag.js - ベクトル検索(/api/search) と RAG Q&A(/api/ask)
 // RAG_CHAT_ENDPOINT(Ollama等) を流用して、Piのベクトル検索結果とYT配信字幕を根拠に、まいの口調で回答する。
 // VECTOR_DB_URL / EMBEDDING_ENDPOINT 未設定時は 503 を返す（機能オフ）。
+const rateLimit = require("express-rate-limit");
 
 const fs = require("fs");
 const path = require("path");
@@ -731,7 +732,7 @@ const r18Extra = r18
   }
 
   // 管理者専用（管理画面のチャットUI用・認証必須）
-  const adminAuth = require("../admin/admin");
+  const adminAuth = require("../lib/admin");
   app.post("/api/admin/ask", adminAuth.requireAuth, (req, res) => handleAsk(req, res, true));
 
   // --- セッション管理API（管理者専用・ChatGPT風セッション機能） ---
@@ -925,7 +926,13 @@ const r18Extra = r18
   });
 
   // 公開（後方互換・必要なら削除可）※ R18モードは管理者専用のため公開側では無効
-  app.post("/api/ask", (req, res) => handleAsk(req, res, false));
+  // LLMコスト・負荷対策：公開側は専用の厳しい制限（5回/分）＋質問500文字上限。管理者用 /api/admin/ask は対象外。
+  const askLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false, message: { error: "Too many ask requests, please try again later." } });
+  app.post("/api/ask", askLimiter, (req, res) => {
+    const q = (req.body?.question || req.body?.q || "").toString();
+    if (q.trim().length > 500) return res.status(400).json({ error: "question too long (max 500 chars)" });
+    return handleAsk(req, res, false);
+  });
 }
 
 module.exports = { register };

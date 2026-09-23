@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>管理者ログイン</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0; padding: 20px; min-height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .login-container {
+            background: white; border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 40px; max-width: 400px; width: 100%;
+        }
+        h1 { margin: 0 0 30px 0; color: #333; font-size: 28px; text-align: center; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #555; font-weight: 600; font-size: 14px; }
+        input[type="text"], input[type="password"] {
+            width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0;
+            border-radius: 8px; font-size: 15px; transition: border-color 0.2s; font-family: inherit;
+        }
+        input:focus { outline: none; border-color: #667eea; }
+        button {
+            width: 100%; padding: 14px 24px; border: none; border-radius: 8px;
+            font-size: 16px; font-weight: 600; cursor: pointer;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; transition: all 0.2s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.4); }
+        button:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        .error-message {
+            margin-top: 16px; padding: 12px 16px; background: #f8d7da;
+            color: #721c24; border: 1px solid #f5c6cb; border-radius: 8px;
+            font-size: 14px; display: none;
+        }
+        .error-message.show { display: block; }
+        .security-note {
+            margin-top: 20px; padding: 12px; background: #fff3cd;
+            border: 1px solid #ffc107; border-radius: 8px; font-size: 12px; color: #856404;
+        }
+    </style>
+<link rel="stylesheet" href="/fontawesome-free-7.2.0-web/css/all.min.css" crossorigin="anonymous" />
+</head>
+<body>
+    <div class="login-container">
+        <h1><i class="fa-solid fa-lock"></i> 管理者ログイン</h1>
+        <button type="button" id="btn-passkey" style="display:none; margin-bottom: 18px; background: linear-gradient(135deg, #17a05e 0%, #0e7a45 100%);">
+            <i class="fa-solid fa-key"></i> パスキーでログイン
+        </button>
+        <div id="passkey-hint" style="display:none; margin-bottom: 18px; text-align:center; color:#666; font-size: 13px;">
+            またはパスワードでログイン
+        </div>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="username">ユーザー名</label>
+                <input type="text" id="username" autocomplete="username" required />
+            </div>
+            <div class="form-group">
+                <label for="password">パスワード</label>
+                <input type="password" id="password" autocomplete="current-password" required />
+            </div>
+            <button type="submit" id="btn-login">ログイン</button>
+        </form>
+        <div class="error-message" id="error-message"></div>
+        <div class="security-note">
+            <i class="fa-solid fa-triangle-exclamation"></i> このページは管理者専用です。不正アクセスは記録されます。
+        </div>
+    </div>
+
+    <script>
+        // ---- WebAuthn 補助 (base64url <-> ArrayBuffer) ----
+        function b64uToBuf(s) {
+            s = s.replace(/-/g, '+').replace(/_/g, '/');
+            while (s.length % 4) s += '=';
+            const bin = atob(s);
+            const buf = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+            return buf;
+        }
+        function bufToB64u(buf) {
+            const bytes = new Uint8Array(buf);
+            let bin = '';
+            for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+            return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+        function decodeOptions(o) {
+            if (o.user && o.user.id) o.user.id = b64uToBuf(o.user.id);
+            if (o.challenge) o.challenge = b64uToBuf(o.challenge);
+            if (o.excludeCredentials) o.excludeCredentials = o.excludeCredentials.map(c => ({ ...c, id: b64uToBuf(c.id) }));
+            if (o.allowCredentials) o.allowCredentials = o.allowCredentials.map(c => ({ ...c, id: b64uToBuf(c.id) }));
+            return o;
+        }
+        function encodeAssertion(cred) {
+            return {
+                id: cred.id,
+                rawId: bufToB64u(cred.rawId),
+                type: cred.type,
+                clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+                response: {
+                    authenticatorData: bufToB64u(cred.response.authenticatorData),
+                    clientDataJSON: bufToB64u(cred.response.clientDataJSON),
+                    signature: bufToB64u(cred.response.signature),
+                    userHandle: cred.response.userHandle ? bufToB64u(cred.response.userHandle) : null,
+                },
+            };
+        }
+        function encodeAttestation(cred) {
+            return {
+                id: cred.id,
+                rawId: bufToB64u(cred.rawId),
+                type: cred.type,
+                clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+                response: {
+                    attestationObject: bufToB64u(cred.response.attestationObject),
+                    clientDataJSON: bufToB64u(cred.response.clientDataJSON),
+                    transports: cred.response.getTransports ? cred.response.getTransports() : [],
+                },
+            };
+        }
+
+        const ADMIN_HOME = 'https://mai.honna-yuzuki.com/admin.html';
+        const form = document.getElementById('login-form');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const btnLogin = document.getElementById('btn-login');
+        const btnPasskey = document.getElementById('btn-passkey');
+        const passkeyHint = document.getElementById('passkey-hint');
+        const errorMessage = document.getElementById('error-message');
+
+        // サーバーがHTMLエラーページを返しても落ちないJSON読み取り
+        async function readJson(res) {
+            const text = await res.text();
+            try { return JSON.parse(text); }
+            catch (e) { throw new Error('サーバーエラー (HTTP ' + res.status + ')'); }
+        }
+
+        // ---- パスキー登録はこのページでは行わない(admin.html から) ----
+        // ---- パスキーログイン ----
+        async function passkeyLogin() {
+            btnPasskey.disabled = true;
+            btnPasskey.textContent = '認証中...';
+            errorMessage.classList.remove('show');
+            try {
+                const begin = await fetch('/api/admin/passkey/login/begin', { method: 'POST', credentials: 'include' });
+                const opt = await readJson(begin);
+                if (!begin.ok) throw new Error(opt.error || 'パスキーを利用できません');
+                const fid = opt._fid;
+                delete opt._fid;
+                const assertion = await navigator.credentials.get({ publicKey: decodeOptions(opt) });
+                const finish = await fetch('/api/admin/passkey/login/finish', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ _fid: fid, response: encodeAssertion(assertion) }),
+                });
+                const data = await readJson(finish);
+                if (!finish.ok) throw new Error(data.error || 'パスキー認証に失敗しました');
+                window.location.href = ADMIN_HOME;
+            } catch (error) {
+                showError(error.message || String(error));
+            } finally {
+                btnPasskey.disabled = false;
+                btnPasskey.textContent = '<i class="fa-solid fa-key"></i> パスキーでログイン';
+            }
+        }
+        btnPasskey.addEventListener('click', passkeyLogin);
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value;
+            if (!username || !password) {
+                showError('ユーザー名とパスワードを入力してください');
+                return;
+            }
+            btnLogin.disabled = true;
+            btnLogin.textContent = 'ログイン中...';
+            errorMessage.classList.remove('show');
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include', // HttpOnly Cookie を受け取るために必要
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+                if (response.status === 429) {
+                    throw new Error('ログイン試行が多すぎます。しばらく待ってから再試行してください。');
+                }
+                if (!response.ok) {
+                    throw new Error(data.error || 'ログインに失敗しました');
+                }
+                // トークンは HttpOnly Cookie として保存されるため localStorage は使わない
+                window.location.href = ADMIN_HOME;
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                btnLogin.disabled = false;
+                btnLogin.textContent = 'ログイン';
+            }
+        });
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+            setTimeout(() => { errorMessage.classList.remove('show'); }, 5000);
+        }
+
+        // 既にログイン済みの場合は管理画面へ。未ログインならパスキー可否を確認
+        (async () => {
+            try {
+                const response = await fetch('/api/admin/verify', { credentials: 'include' });
+                if (response.ok) { window.location.href = ADMIN_HOME; return; }
+            } catch (e) { /* 未ログイン */ }
+            try {
+                if (!window.PublicKeyCredential) return;
+                const r = await fetch('/api/admin/passkey/exists', { credentials: 'include' });
+                const d = await r.json();
+                if (d.count > 0) {
+                    btnPasskey.style.display = 'block';
+                    passkeyHint.style.display = 'block';
+                }
+            } catch (e) { /* 非対応 */ }
+        })();
+    </script>
+</body>
+</html>

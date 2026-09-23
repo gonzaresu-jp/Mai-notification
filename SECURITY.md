@@ -41,7 +41,7 @@ readlink /proc/<pid>/cwd
 - OAuth state はランダム・単発・5分失効。デスクトップのJWT受け渡しは60秒の単発code交換。
 - `/api/notify` は `NOTIFY_API_TOKEN` と `NOTIFY_HMAC_SECRET` が未設定なら **503** で拒否。
 - 秘密値の分離: `NOTIFY_API_TOKEN` / `NOTIFY_HMAC_SECRET` / `INTERNAL_API_TOKEN`。`ADMIN_NOTIFY_TOKEN` は通知/内部APIでは不使用。
-- HMAC 比較は `crypto.timingSafeEqual`。
+- HMAC 比較は `crypto.timingSafeEqual`。署名対象は `{timestamp}.{生ボディ}`（v2、リプレイ対策に±300秒）。
 - Electron は `webSecurity=true`。OAuth callback はループバックのみ許可。
 - CSRF Origin 判定は完全一致。DB/JSバックアップの誤コミット抑止済み。`package-lock.json` はGit管理。
 - **nginx（2026-09-22 外部実測 404）**: `location ^~ /mai-push/ { deny all; }`、ドットファイル deny、
@@ -74,9 +74,9 @@ nginx 設定変更時は `proxy_set_header X-Forwarded-For $proxy_add_x_forwarde
 **`npm audit fix --force` をテストなしで実行しない（AGENTS.md）**
 
 1. 本番 `data.db` と staging `data-test.db` を Web公開外・制限付きの場所へバックアップ。
-2. ✅ 回帰テスト実装済み・**staging で 19/19 PASS（2026-09-22）**: `scripts/regression-test.js`
+2. ✅ 回帰テスト実装済み・**staging で 21/21 PASS（2026-09-24予定）**: `scripts/regression-test.js`（`npm test` に接続）
    （notifications / subscriptions / scraper_status の INSERT/SELECT/lastID・UPSERT、
-   `/api/health`、notify: tokenなし401 / HMACなし401 / 誤HMAC 401 / 完全認証で `suppressed:true`、
+   `/api/health`、notify: tokenなし401 / HMACなし401 / 誤HMAC 401 / timestampなし401 / 期限切れ401 / 完全認証で `suppressed:true`、
    内部scraper-status認証、token-exchange 無効code 400、SSE 上限429）
 3. staging だけで `sqlite3@6` を更新（`npm install sqlite3@6`）。
 4. `node --check` → staging pm2 再起動 → **回帰テスト実行:**

@@ -119,13 +119,13 @@ async function checkFanboxPosts() {
 
       try {
         const bodyString = JSON.stringify(payload);
-        const notifyHmac = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, bodyString);
+        const sig = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, bodyString);
         await axios.post(LOCAL_API_URL, payload, {
           timeout: 10000,
           headers: {
             'Content-Type': 'application/json',
             'X-Notify-Token': NOTIFY_TOKEN,
-            ...(notifyHmac ? { 'X-Notify-Hmac': notifyHmac } : {})
+            ...(sig ? { 'X-Notify-Hmac': sig.hmac, 'X-Notify-Timestamp': sig.timestamp } : {})
           }
         });
         console.log('Fanbox -> /api/notify sent:', newPostUrl);

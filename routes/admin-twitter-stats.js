@@ -3,7 +3,7 @@
 const { getStats } = require("../services/twitter-stats");
 
 function register(app, db) {
-  const adminAuth = require("../admin/admin");
+  const adminAuth = require("../lib/admin");
   app.get("/api/admin/twitter/stats", adminAuth.requireAuth, async (req, res) => {
     try {
       const stats = await getStats(db);

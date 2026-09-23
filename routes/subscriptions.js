@@ -144,7 +144,7 @@ function register(app, db, authLimiter) {
     });
   });
 
-  app.get("/api/subscriptions", require("../admin/admin").requireAuth, (req, res) => {
+  app.get("/api/subscriptions", require("../lib/admin").requireAuth, (req, res) => {
     let limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
     let offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
     db.all("SELECT id, client_id, endpoint, created_at FROM subscriptions ORDER BY created_at DESC LIMIT ? OFFSET ?", [limit, offset], (err, rows) => {

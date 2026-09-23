@@ -93,13 +93,13 @@ async function sendNotify(screenId, movieId, title = '【ツイキャス】ラ�
 
     try {
         const bodyString = JSON.stringify(payload);
-        const notifyHmac = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, bodyString);
+        const sig = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, bodyString);
         const res = await retryAsync(() => fetch(NOTIFY_ENDPOINT, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
                 'X-Notify-Token': NOTIFY_TOKEN,
-                ...(notifyHmac ? { 'X-Notify-Hmac': notifyHmac } : {})
+                ...(sig ? { 'X-Notify-Hmac': sig.hmac, 'X-Notify-Timestamp': sig.timestamp } : {})
             },
             body: bodyString,
             agent,

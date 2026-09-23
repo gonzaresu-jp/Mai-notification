@@ -40,6 +40,8 @@
             const grid = document.getElementById('resource-grid');
             try {
                 const res  = await fetch('/api/system-info');
+                // 管理者専用のため一般公開では 401/403 → カード群を非表示
+                if (!res.ok) { if (grid) grid.style.display = 'none'; return; }
                 const d    = await res.json();
                 const cpu  = d.cpu || {};
                 const mem  = d.memory || {};

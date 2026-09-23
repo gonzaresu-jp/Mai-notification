@@ -135,12 +135,12 @@ function buildEventFromVideoItem(item, fallbackTitle) {
 async function sendNotifyApi(payload) {
     try {
         const bodyString = JSON.stringify(payload);
-        const notifyHmac = require('./notify-sign').signNotifyPayload(NOTIFY_CONFIG.hmacSecret || null, bodyString);
+        const sig = require('./notify-sign').signNotifyPayload(NOTIFY_CONFIG.hmacSecret || null, bodyString);
         await axios.post(NOTIFY_CONFIG.apiUrl, payload, {
             headers: {
                 'Content-Type': 'application/json',
                 'X-Notify-Token': NOTIFY_CONFIG.token || '',
-                ...(notifyHmac ? { 'X-Notify-Hmac': notifyHmac } : {})
+                ...(sig ? { 'X-Notify-Hmac': sig.hmac, 'X-Notify-Timestamp': sig.timestamp } : {})
             },
             timeout: 8000
         });

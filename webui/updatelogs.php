@@ -1,6 +1,26 @@
 <?php
 $updateLogs = [
     [
+        "date" => "2026-09-24",
+        "details" => [
+            "add" => [
+                "Windowsデスクトップアプリにブラウザ風タブ機能を追加（v1.3.0〜v1.3.3）— WebContentsViewによる複数ページの同時表示。タブバー（＋ボタン・×・ファビコン＋タイトル表示、ブランドカラー #b11e7c 系に統一）、Ctrl+T（新規）/ Ctrl+W（閉じる）/ Ctrl+Tab（切替）、タブバー上のホイール転がしで移動・中クリックで閉じる、同一サイトのリンクは新しいタブで開く。ログイン状態・通知監視は全タブで共有",
+                "Windowsアプリに更新チェック機能を追加（v1.2.0〜）— 起動30秒後＋6時間毎＋トレイ「更新を確認」でフィード（webui/dl/desktop.json）を確認し、新バージョンがあればダウンロード誘導ダイアログを表示（electron-updater不使用の軽量実装、nginx変更不要）",
+                "Web共通コマンドパレットを追加（Ctrl+K / Cmd+K、全ページ）— 通常入力はEnterでアーカイブ全文検索（/archive/?q=）へ、「/」始まりでページジャンプ候補を表示（↑↓＋Enter/クリック、カタカナ→ひらがな正規化＋よみキーワード対応）。「/admin」は候補に出さず完全一致＋Enterでのみ管理画面（/admin.html）へ遷移する隠しコマンド化",
+            ],
+            "change" => [
+                "Windowsインストーラの成果物名をASCII化（MaiPush-Setup-バージョン.exe / MaiPush-Portable-バージョン.exe）— 日本語名の文字化け・URL問題の回避",
+            ],
+            "fix" => [
+                "WindowsアプリでGoogleログイン完了後に無反応になる問題を修正（v1.1.1）— Electronの session.cookies.set に必須の url オプションが欠落し Missing required option 'url' でクッキー設定が失敗していた（トークン交換自体は成功済み）",
+                "カウント結合セルで非対象ペア（お誕生日＋周年記念）の背景がスマホ幅で消える問題を修正 — .stat-pair .stat-half の transparent 化が .stat-pair-keep にも及び、親が display:contents のため背景が全く描画されなくなっていた。:not(.stat-pair-keep) に限定",
+                "配信アーカイブの要約／タイムスタンプポップアップのAndroid WebView描画対策 — inset併記の四辺指定、background-color二重指定、translateZ(0)による合成レイヤー強制",
+            ],
+        ],
+        "lines" => "36,158",
+    ],
+
+    [
         "date" => "2026-09-22",
         "details" => [
             "add" => [

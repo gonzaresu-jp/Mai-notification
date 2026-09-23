@@ -7,7 +7,7 @@
  *
  * やること:
  *   - 一時DBを自動生成して server.js を子プロセス起動（DISABLE_NOTIFICATIONS=1 / NODE_ENV=development）
- *   - /api/health, /api/notify の認証(401/401/HMAC/suppressed), 内部scraper-status認証,
+ *   - /api/health, /api/notify の認証(401/401/HMAC inconsistent 401/タイムスタンプなし401/期限切れ401/suppressed), 内部scraper-status認証,
  *     /auth/token-exchange 無効code 400, SSE接続上限, sqlite3 の INSERT/SELECT/lastID を検証
  *   - 終了時に一時DBを削除
  *
@@ -46,8 +46,9 @@ function ok(name, cond, detail) {
   }
 }
 
-function hmacOf(bodyString) {
-  return crypto.createHmac("sha256", HMAC_SECRET).update(bodyString).digest("hex");
+function hmacOf(bodyString, ts) {
+  const t = String(ts != null ? ts : Math.floor(Date.now() / 1000));
+  return { hmac: crypto.createHmac("sha256", HMAC_SECRET).update(t + "." + bodyString).digest("hex"), ts: t };
 }
 
 function request(method, urlPath, { headers = {}, body = null, timeoutMs = 10000 } = {}) {
@@ -151,11 +152,21 @@ async function main() {
     const noHmac = await request("POST", "/api/notify", { body, headers: { "x-notify-token": TOKEN } });
     ok("HMACなし -> 401", noHmac.status === 401, `got ${noHmac.status}`);
     const badHmac = await request("POST", "/api/notify", {
-      body, headers: { "x-notify-token": TOKEN, "x-notify-hmac": "0".repeat(64) },
+      body, headers: { "x-notify-token": TOKEN, "x-notify-hmac": "0".repeat(64), "x-notify-timestamp": String(Math.floor(Date.now() / 1000)) },
     });
     ok("誤HMAC -> 401", badHmac.status === 401, `got ${badHmac.status}`);
+    const noTs = await request("POST", "/api/notify", {
+      body, headers: { "x-notify-token": TOKEN, "x-notify-hmac": hmacOf(body).hmac },
+    });
+    ok("タイムスタンプなし -> 401", noTs.status === 401, `got ${noTs.status}`);
+    const oldTs = hmacOf(body, Math.floor(Date.now() / 1000) - 600);
+    const expired = await request("POST", "/api/notify", {
+      body, headers: { "x-notify-token": TOKEN, "x-notify-hmac": oldTs.hmac, "x-notify-timestamp": oldTs.ts },
+    });
+    ok("期限切れタイムスタンプ -> 401", expired.status === 401, `got ${expired.status}`);
+    const sig = hmacOf(body);
     const good = await request("POST", "/api/notify", {
-      body, headers: { "x-notify-token": TOKEN, "x-notify-hmac": hmacOf(body) },
+      body, headers: { "x-notify-token": TOKEN, "x-notify-hmac": sig.hmac, "x-notify-timestamp": sig.ts },
     });
     ok("完全認証 -> 200 & suppressed:true (DISABLE_NOTIFICATIONS)", good.status === 200 && good.json && good.json.suppressed === true, `got ${good.status} ${good.raw.slice(0, 120)}`);
 

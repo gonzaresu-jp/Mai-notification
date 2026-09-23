@@ -18,7 +18,7 @@
 const path = require("path");
 const { execFile } = require("child_process");
 const ctx = require("../services/context");
-const adminAuth = require("../admin/admin");
+const adminAuth = require("../lib/admin");
 
 const ARCHIVE_API_BASE = (process.env.ARCHIVE_API_BASE || "http://192.168.1.70:8766").replace(/\/+$/, "");
 const ADMIN_TOKEN = process.env.ARCHIVE_ADMIN_TOKEN || "";

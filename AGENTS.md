@@ -15,8 +15,12 @@
 - 通知の動作確認は **必ず staging(8081)** で行うこと。staging `.env` は `DISABLE_NOTIFICATIONS=1` 固定（実送抑止・履歴のみ）。**この設定を1に戻すな**。
 - stagingで抑制確認済みのレスポンス: `{"success":true,"suppressed":true,...}` が返れば auth 経路は正常。
 
-## 3. 認証仕様（2026-09 codex セキュリティ改修後）
-- `/api/notify` ヘッダ: `x-notify-token: $NOTIFY_API_TOKEN` + `x-notify-hmac: HMAC-SHA256 hex of JSON.stringify(body)`（compact JSONをそのまま送れば一致する）
+## 3. 認証仕様（2026-09 codex セキュリティ改修＋09-24 HMAC v2後）
+- `/api/notify` ヘッダ: `x-notify-token: $NOTIFY_API_TOKEN` + `x-notify-hmac` + **`x-notify-timestamp`（UNIX秒、必須）**
+- HMAC v2 署名対象: `"{timestamp}.{rawBody}"` の SHA256 hex（**受信した生ボディ**で検証。JSON作り直し禁止）。
+  送信側は必ず `notify-sign.js` の `signNotifyPayload(secret, bodyString)`（`{hmac, timestamp}` を返す）を使い、
+  送信する JSON 文字列そのものに署名すること。`X-Signature` は API 側で読まれない。
+- タイムスタンプ許容±300秒（リプレイ対策）。超過・欠落は401。
 - env 3値は**環境ごとに別々のランダム値**を `.env` に設定（コミット対象外・`.env` は gitignore）: `NOTIFY_API_TOKEN` / `NOTIFY_HMAC_SECRET` / `INTERNAL_API_TOKEN`。未設定時 `/api/notify` は **503**。
 - `ADMIN_NOTIFY_TOKEN` は通知/内部APIでは**もう使われない**（管理者専用）。
 - OAuth: `state` はランダム単発5分失効（`/auth/token-exchange` で60秒単発code→JWT交換）。**stateやJWTがURLに平文で残らない**。
@@ -52,4 +56,16 @@
   Web ツリー内の `backups/` は存在しない（退避済み）。
 - `trust proxy` は `"loopback"`、helmet は全 static より前。`.env` は重複キー禁止（先頭勝ちで無効化される罠）。
 
-最終更新: 2026-09-22（実事故ベース）
+## 6.6 第3ラウンド反映（2026-09-24、外部評価対応）
+- API(8080/8081)・ワーカー内Express(3002/3003) は **`127.0.0.1` にbind**（nginx/cloudflared は loopback 経由）。
+  YouTube webhook(3001) のみ外部フックのため 0.0.0.0 のまま。`ss -ltnp` で確認すること。
+- `main.js` の dotenv は **`path.join(__dirname, ".env")`**（固定パスだと staging が本番 .env を読む事故）。
+  `require("path")` を dotenv より前に置くこと。
+- `/admin` の Express 静的配信は廃止。**login.html のみ明示配信**し、認証コード（admin.js/webauthn.js）は
+  `lib/` に移動（nginx の alias も同dir直配信のため、移動が必須）。
+- `/api/system-info` は管理者専用（`lib/admin.js` requireAuth）。公開 status ページは 403 時に非表示。
+- `/api/ask`（公開）は 5回/分＋質問500文字上限。管理者用 `/api/admin/ask` は対象外。
+- 回帰テストは `npm test`（scripts/regression-test.js、HMAC v2＋timestamp検証含む 21 項目）に接続済み。
+- pm2-logrotate 導入済み（20M・10世代・圧縮）。
+
+最終更新: 2026-09-24（外部評価対応）

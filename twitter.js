@@ -202,7 +202,7 @@ async function sendNotify(username, tweet, settingKey, sendText) {
 
   const agent = (new URL(NOTIFY_ENDPOINT).protocol === 'https:') ? _httpsAgent : _httpAgent;
   const bodyString = JSON.stringify(payload);
-  const notifyHmac = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, bodyString);
+  const sig = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, bodyString);
 
   try {
     const res = await retryAsync(() => fetch(NOTIFY_ENDPOINT, {
@@ -210,7 +210,7 @@ async function sendNotify(username, tweet, settingKey, sendText) {
         headers: {
         'Content-Type': 'application/json',
         'X-Notify-Token': NOTIFY_TOKEN,
-        ...(notifyHmac ? { 'X-Notify-Hmac': notifyHmac } : {}),
+        ...(sig ? { 'X-Notify-Hmac': sig.hmac, 'X-Notify-Timestamp': sig.timestamp } : {}),
       },
       body: bodyString,
       agent,
@@ -607,13 +607,16 @@ async function check(username, isRetry = false) {
               try {
                 const analysisBody = { tweet_id: t.id, platform: settingKey, analysis };
                 const analysisPayload = JSON.stringify(analysisBody);
-                const analysisHmac = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, analysisPayload);
-                await fetch('http://localhost:8080/api/internal/twitter/analysis', {
+                const analysisSig = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET || null, analysisPayload);
+                // 分析APIは同一ホストの API プロセス宛。NOTIFY_API_URL の origin から組み立て
+                // （localhost:8080 固定だと staging が本番へ誤送するため）。
+                const analysisBase = (() => { try { return new URL(process.env.NOTIFY_API_URL || 'http://localhost:8080/api/notify').origin; } catch { return 'http://localhost:8080'; } })();
+                await fetch(analysisBase + '/api/internal/twitter/analysis', {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
                     'X-Notify-Token': NOTIFY_TOKEN,
-                    ...(analysisHmac ? { 'X-Notify-Hmac': analysisHmac } : {}),
+                    ...(analysisSig ? { 'X-Notify-Hmac': analysisSig.hmac, 'X-Notify-Timestamp': analysisSig.timestamp } : {}),
                   },
                   body: analysisPayload,
                   agent: _httpAgent,

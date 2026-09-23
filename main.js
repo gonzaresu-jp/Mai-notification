@@ -1,13 +1,15 @@
 // main.js - 起動専用版(改良版 + notifyConfig 注入 + listen修正)
-require("dotenv").config({ path: "/var/www/html/mai-push/.env" });
+const path = require("path");
+// .env は各環境のディレクトリから読む（staging が本番を読む事故防止）
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 // 日時処理を JST に固定（スケジュールのタイムゾーンずれ防止）
 process.env.TZ = process.env.TZ || "Asia/Tokyo";
-const path = require("path");
 const fs = require("fs");
 const express = require("express");
 const cron = require("node-cron");
 const axios = require("axios");
 const crypto = require("crypto");
+const { signNotifyPayload } = require("./notify-sign");
 const sqlite3 = require("sqlite3").verbose();
 
 const youtube = require("./youtube");
@@ -240,12 +242,11 @@ async function main() {
         };
 
         if (process.env.NOTIFY_HMAC_SECRET) {
-          const hmac = crypto.createHmac(
-            "sha256",
-            process.env.NOTIFY_HMAC_SECRET,
-          );
-          hmac.update(bodyString);
-          headers["X-Notify-Hmac"] = hmac.digest("hex");
+          const sig = signNotifyPayload(process.env.NOTIFY_HMAC_SECRET, bodyString);
+          if (sig) {
+            headers["X-Notify-Hmac"] = sig.hmac;
+            headers["X-Notify-Timestamp"] = sig.timestamp;
+          }
         }
 
         await axios.post(
@@ -341,8 +342,8 @@ async function main() {
     notifyConfig.token ? `${notifyConfig.token.slice(0, 8)}...` : "null",
   );
 
-  // ✅ HTTP サーバー起動 (1回だけ)
-  server = app.listen(PORT, () => {
+  // ✅ HTTP サーバー起動 (1回だけ・loopback限定。3001 webhookは例外で全IF)
+  server = app.listen(PORT, "127.0.0.1", () => {
     console.log(`APIサーバー 起動 on port ${PORT}`);
   });
 

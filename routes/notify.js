@@ -20,12 +20,21 @@ function register(app, db) {
     return res.status(401).json({ error: "Unauthorized: invalid notify token" });
   }
 
+  // v2: 署名対象は `${timestamp}.${rawBody}`（生ボディ）。
+  // JSON を作り直して検証するとキー順・空白・数値表記の違いで壊れるため、
+  // express.json({ verify }) で保持した受信バイト列そのもので検証する。
+  // タイムスタンプ（X-Notify-Timestamp: UNIX秒、許容±300秒）でリプレイを防止する。
+  const HMAC_SKEW_SEC = 300;
   function verifyNotifyHmac(req, res, next) {
     if (!ctx.NOTIFY_HMAC_SECRET) return res.status(503).json({ error: "Notification HMAC is not configured" });
     const hmac = String(req.headers["x-notify-hmac"] || req.headers["x-hmac-signature"] || '').replace(/^sha256=/, '');
     if (!hmac) return res.status(401).json({ error: "Missing HMAC signature" });
-    const payload = JSON.stringify(req.body);
-    const expected = crypto.createHmac("sha256", ctx.NOTIFY_HMAC_SECRET).update(payload).digest("hex");
+    const ts = String(req.headers["x-notify-timestamp"] || '');
+    if (!/^\d{10}$/.test(ts)) return res.status(401).json({ error: "Missing or invalid timestamp" });
+    const age = Math.abs(Math.floor(Date.now() / 1000) - Number(ts));
+    if (age > HMAC_SKEW_SEC) return res.status(401).json({ error: "Expired timestamp" });
+    const raw = typeof req.rawBody === "string" ? req.rawBody : JSON.stringify(req.body);
+    const expected = crypto.createHmac("sha256", ctx.NOTIFY_HMAC_SECRET).update(ts + "." + raw).digest("hex");
     const valid = hmac.length === expected.length && crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(expected));
     if (!valid) return res.status(401).json({ error: "Invalid HMAC signature" });
     next();

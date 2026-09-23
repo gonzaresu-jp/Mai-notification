@@ -1,5 +1,5 @@
-const adminAuth = require("../admin/admin");
-const webauthn = require("../admin/webauthn");
+const adminAuth = require("../lib/admin");
+const webauthn = require("../lib/webauthn");
 const notif = require("../services/notification");
 
 function register(app, db) {

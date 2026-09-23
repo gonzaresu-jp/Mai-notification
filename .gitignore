@@ -22,7 +22,6 @@ config.json
 *.db-shm
 *.db-wal
 data.db.bak.1763066928
-*.md
 twitcasting-state.json
 twitcasting-token.json
 twitch_state.json
@@ -40,7 +39,6 @@ sent_records.json
 *.apk
 server/
 mai_animation_data.json
-admin/
 backups/
 bilibiliDynamic.js
 bilibiliVideo.js

@@ -55,7 +55,11 @@ const apiLimiter = rateLimit({
 // --- notifyLimiter defined in routes/notify.js ---
 
 // --- Middleware ---
-app.use(express.json());
+// HMAC 検証はパース後の JSON を作り直さず受信した生ボディで検証する（routes/notify.js）。
+// キー順・空白・数値表記の違いで署名が壊れないように、各リクエストの生バイトを保持する。
+app.use(express.json({
+  verify: (req, res, buf) => { req.rawBody = buf.toString("utf8"); },
+}));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 // 同一オリジンの Web UI / デスクトップアプリ / ローカル開発のみ許可する、オリジン制限付き CORS。
@@ -93,7 +97,11 @@ app.use(helmet({
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
 }));
 app.use("/pushweb", express.static(path.join(__dirname, "pushweb")));
-app.use("/admin", express.static(path.join(__dirname, "admin")));
+// /admin 配下は認証コードのソース漏えい防止のため login.html のみ配信（admin.js 等は lib/ へ移動済み）。
+// ※ nginx の alias も同ディレクトリを直接配信するため、JS は admin/ 外に置くこと。
+app.get("/admin/login.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin", "login.html"));
+});
 app.use("/webui", express.static(path.join(__dirname, "webui")));
 
 // --- CSRF Protection ---
@@ -272,6 +280,8 @@ app.get("/api/health/ready", (req, res) => {
 
 // --- Start ---
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, "0.0.0.0", () => {
+// 前段は nginx/cloudflared 経由の loopback 接続のみ。LAN・外部への直接公開を避けるため loopback に限定。
+// （YouTube PubSubHubbub 用の 3001 だけは外部フックのため main.js 側で 0.0.0.0 のまま）
+app.listen(PORT, "127.0.0.1", () => {
   console.log(`WebUI Server is running on port ${PORT}`);
 });

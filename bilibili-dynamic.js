@@ -8,8 +8,8 @@
 *****************************************************************/
 
 const axios = require('axios');
-const crypto = require('crypto');
 const fs = require('fs');
+const { signNotifyPayload } = require('./notify-sign');
 const path = require('path');
 // env vars は main.js 経由で既に読み込まれているが、
 // 単体起動時のために明示パスで dotenv も読む
@@ -297,9 +297,11 @@ async function sendNotify(parsed) {
   };
 
 if (notifyConfig.hmacSecret) {
-    const hmac = crypto.createHmac('sha256', notifyConfig.hmacSecret);
-    hmac.update(bodyString);
-    headers['X-Notify-Hmac'] = hmac.digest('hex');
+    const sig = signNotifyPayload(notifyConfig.hmacSecret, bodyString);
+    if (sig) {
+      headers['X-Notify-Hmac'] = sig.hmac;
+      headers['X-Notify-Timestamp'] = sig.timestamp;
+    }
   }
 
   try {
