@@ -116,20 +116,9 @@ app.use("/api/", (req, res, next) => {
   next();
 });
 
-app.use("/api/", apiLimiter);
-
-// アーカイブAPI専用のリミッタ（上流はローカル・キャッシュ/サーキットブレーカー付きなので緩めに）
-// 1画面のバッジ判定で最大 ~40リクエスト/人 になることを考慮
-const archiveLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 400,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many archive API requests, please try again later." },
-});
-app.use("/api/archive", archiveLimiter);
-
-// --- SSE endpoint (must be before /api/events/:id) ---
+// --- SSE endpoint ---
+// ※ apiLimiter より前に登録する。ストリーム接続が通常 API のレート制限
+//   （300回/分/IP）を消費し、ヒートマップ/ステータス等を 429 で殺さないため。
 // SSE保護: 全体/同一送信元ごとの接続数上限・接続寿命の上限を設ける。
 // 送信元キーは信頼できる前段(nginx/cloudflared)からの接続のみ X-Forwarded-For の
 // 末尾要素（= 実クライアントIP）を使い、直接接続は TCP ピアアドレスを使う。
@@ -137,6 +126,7 @@ app.use("/api/archive", archiveLimiter);
 const SSE_MAX_CLIENTS = Math.max(1, parseInt(process.env.SSE_MAX_CLIENTS, 10) || 500);
 const SSE_MAX_PER_CLIENT = Math.max(1, parseInt(process.env.SSE_MAX_PER_CLIENT, 10) || 5);
 const SSE_MAX_AGE_MS = Math.max(60 * 1000, parseInt(process.env.SSE_MAX_AGE_MS, 10) || 30 * 60 * 1000);
+const SSE_HEARTBEAT_MS = Math.max(5000, parseInt(process.env.SSE_HEARTBEAT_MS, 10) || 25000);
 const sseConnectionCounts = new Map();
 
 function sseClientKey(req) {
@@ -162,7 +152,7 @@ function sseTrackRemove(key) {
   else sseConnectionCounts.set(key, n);
 }
 
-app.get("/api/events/stream", (req, res) => {
+function sseHandler(req, res) {
   const sseOrigin = req.headers.origin;
   const sseHost = req.get("host");
   const sseSameOrigin = !!sseOrigin && !!sseHost && (sseOrigin === `http://${sseHost}` || sseOrigin === `https://${sseHost}`);
@@ -176,25 +166,61 @@ app.get("/api/events/stream", (req, res) => {
     return;
   }
 
-  res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive", ...(acao ? { "Access-Control-Allow-Origin": acao } : {}) });
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    // nginx のバッファリングを無効化（ハートビート即時到達・ゾンビ検出のため）
+    "X-Accel-Buffering": "no",
+    ...(acao ? { "Access-Control-Allow-Origin": acao } : {}),
+  });
   res.write(": connected\n\n");
   res.write(`retry: 5000\n\n`);
   ctx.sseClients.add(res);
   sseTrackAdd(clientKey);
 
-  // 接続寿命の上限（到達で切断。EventSource は自動再接続する）
-  const lifetimeTimer = setTimeout(() => {
-    try { res.end(); } catch {}
-  }, SSE_MAX_AGE_MS);
-  if (typeof lifetimeTimer.unref === "function") lifetimeTimer.unref();
-
-  req.on("close", () => {
-    clearTimeout(lifetimeTimer);
+  let done = false;
+  let heartbeatTimer = null;
+  let lifetimeTimer = null;
+  function cleanup() {
+    if (done) return;
+    done = true;
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (lifetimeTimer) clearTimeout(lifetimeTimer);
     ctx.sseClients.delete(res);
     sseTrackRemove(clientKey);
     try { res.end(); } catch {}
-  });
+  }
+
+  // ハートビート: 無通信で tunnel/nginx に切られてもサーバ側カウントを正し、
+  // 死んだ接続の書き込み失敗で即 cleanup して枠を返す。
+  heartbeatTimer = setInterval(() => {
+    try { res.write(": ping\n\n"); } catch { cleanup(); }
+  }, SSE_HEARTBEAT_MS);
+  if (typeof heartbeatTimer.unref === "function") heartbeatTimer.unref();
+
+  lifetimeTimer = setTimeout(cleanup, SSE_MAX_AGE_MS);
+  if (typeof lifetimeTimer.unref === "function") lifetimeTimer.unref();
+
+  req.on("close", cleanup);
+  res.on("error", cleanup);
+}
+
+// 旧パス /api/history/stream はフロントの古いキャッシュ JS がまだ叩くため alias で受ける
+app.get(["/api/events/stream", "/api/history/stream"], sseHandler);
+
+app.use("/api/", apiLimiter);
+
+// アーカイブAPI専用のリミッタ（上流はローカル・キャッシュ/サーキットブレーカー付きなので緩めに）
+// 1画面のバッジ判定で最大 ~40リクエスト/人 になることを考慮
+const archiveLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 400,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many archive API requests, please try again later." },
 });
+app.use("/api/archive", archiveLimiter);
 
 // --- User routes (existing module) ---
 const userRoutes = require("./user-routes");

@@ -15,7 +15,7 @@ const jsonCache = {
 // SSE（任意）: サーバが対応しているなら UI を自動更新
 // =========================
 export function setupHistorySse($logsEl, $statusEl) {
-  const es = new EventSource('/api/history/stream');
+  const es = new EventSource('/api/events/stream');
 
   es.addEventListener('message', (ev) => {
     try {
