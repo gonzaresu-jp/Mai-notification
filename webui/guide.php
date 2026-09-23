@@ -140,7 +140,7 @@
                 <a href="/status">システム稼働状況</a>
                 <a href="/info/">このサービスについて</a>
                 <a href="/future/">今後の開発予定</a>
-                <a href="/download/">Androidアプリ</a>
+                <a href="/download/">アプリダウンロード（Android / Windows）</a>
             </div>
         </section>
 

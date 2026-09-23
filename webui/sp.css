@@ -7,13 +7,7 @@
 
 
 /* =========== download.php =========== */
-.download-page dt {
-  font-size: 16px;
-}
-
-.download-page img {
-  max-width: 80vw !important;
-}
+/* downloadページは css/download.css に一元化済み */
 
 /* =========== logs.php =========== */
 .log-date {

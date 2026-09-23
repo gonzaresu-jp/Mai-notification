@@ -13,7 +13,7 @@
     { path: '/logs/', name: 'アップデート履歴', keys: ['logs', 'log', 'ログ', '履歴', '更新', 'りれき', 'こうしん'] },
     { path: '/status', name: 'ステータス', keys: ['status', 'ステータス', '稼働', 'かどう'] },
     { path: '/twitter-media/', name: 'メディアアーカイブ', keys: ['media', 'メディア', '画像', 'がぞう'] },
-    { path: '/download/', name: 'Androidアプリをダウンロード', keys: ['download', 'ダウンロード', 'アプリ', 'apk', 'あぷり'] },
+    { path: '/download/', name: 'アプリをダウンロード（Android / Windows）', keys: ['download', 'ダウンロード', 'アプリ', 'apk', 'windows', 'win', 'ウィンドウズ', 'android', 'アンドロイド', 'あぷり'] },
     { path: '/future/', name: '今後の開発予定', keys: ['future', '予定', '開発', '計画', 'こんご', 'かいはつ', 'よてい', 'けいかく'] },
     { path: '/guide.php', name: '使い方・対応一覧', keys: ['guide', 'ガイド', '使い方', '対応', 'つかいかた', 'たいおう'] },
     { path: '/info.php', name: 'このサービスについて', keys: ['info', 'について', 'サービス', 'さーびす'] },

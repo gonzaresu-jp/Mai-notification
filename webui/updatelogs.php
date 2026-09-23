@@ -10,8 +10,10 @@ $updateLogs = [
                 "Windowsデスクトップアプリにブラウザ風タブ機能を追加（v1.3.0〜v1.3.3）— WebContentsViewによる複数ページの同時表示。タブバー（＋ボタン・×・ファビコン＋タイトル表示、ブランドカラー #b11e7c 系に統一）、Ctrl+T（新規）/ Ctrl+W（閉じる）/ Ctrl+Tab（切替）、タブバー上のホイール転がしで移動・中クリックで閉じる、同一サイトのリンクは新しいタブで開く。ログイン状態・通知監視は全タブで共有",
                 "Windowsアプリに更新チェック機能を追加（v1.2.0〜）— 起動30秒後＋6時間毎＋トレイ「更新を確認」でフィード（webui/dl/desktop.json）を確認し、新バージョンがあればダウンロード誘導ダイアログを表示（electron-updater不使用の軽量実装、nginx変更不要）",
                 "Web共通コマンドパレットを追加（Ctrl+K / Cmd+K、全ページ）— 通常入力はEnterでアーカイブ全文検索（/archive/?q=）へ、「/」始まりでページジャンプ候補を表示（↑↓＋Enter/クリック、カタカナ→ひらがな正規化＋よみキーワード対応）。「/admin」は候補に出さず完全一致＋Enterでのみ管理画面（/admin.html）へ遷移する隠しコマンド化",
+                "ダウンロードページをリニューアル（Android / Windows 両対応）— hero＋2カラムカードの新デザイン（Android: #3ddc84 / Windows: #0078d4 の円形ロゴ）、desktop.json から Windows 版のバージョン・更新内容・exe リンク・ファイルサイズを動的取得、APK もファイルサイズを動的表示。ヘッダー／ガイド／コマンドパレットの文言を「アプリをダウンロード（Android / Windows）」に更新",
             ],
             "change" => [
+                "ダウンロードページのスタイルを webui/css/download.css に一元化し、sp.css 内の旧 download ルールを削除（旧DLページの dt/img スタイルが新デザインに干渉するのを防止）",
                 "API(8080/8081)・ワーカー内Express(3002/3003) の bind を 127.0.0.1 に限定（nginx/cloudflared の loopback 経由のみ。YouTube webhook 用 3001 は例外で据え置き）",
                 "main.js の dotenv を path.join(__dirname, \".env\") に変更 — 固定パスだと staging ワーカーが本番 .env を読む事故になるため（staging は自 .env の DISABLE_NOTIFICATIONS=1 を読むことを実測確認）",
                 "/admin の Express 静的配信を廃止し login.html のみ明示配信。認証コード（admin.js/webauthn.js）は lib/ へ移動（nginx の alias も同dirを直配信するため移動が必須。移動後は /admin/login/admin.js が login.html フォールバックになりソース漏えいを実測解消）",
@@ -26,7 +28,7 @@ $updateLogs = [
                 "配信アーカイブの要約／タイムスタンプポップアップのAndroid WebView描画対策 — inset併記の四辺指定、background-color二重指定、translateZ(0)による合成レイヤー強制",
             ],
         ],
-        "lines" => "37,468",
+        "lines" => "37,906",
     ],
 
     [
