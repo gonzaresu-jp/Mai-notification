@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    background: #420b2b;
+    color: #f6e3ee;
+    font-family: "Segoe UI", Meiryo, sans-serif;
+    font-size: 12px;
+    padding: 5px 6px 0 6px;
+    overflow: hidden;
+    user-select: none;
+  }
+  #tabs {
+    flex: 0 1 auto;
+    max-width: calc(100% - 40px);
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  #tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 1 1 0;
+    min-width: 60px;
+    max-width: 220px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 6px 0 10px;
+    background: #7c1c55;
+    color: #f3d9e8;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tab:hover { background: #93276a; color: #fff; }
+  .tab.active { background: #b11e7c; color: #fff; }
+  .tab img.fav {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    border-radius: 3px;
+  }
+  .tab img.fav.hidden { display: none; }
+  .tab .title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tab .close {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    line-height: 18px;
+    text-align: center;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .tab .close:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+  #newtab {
+    flex: 0 0 auto;
+    width: 30px;
+    align-self: center;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #f3d9e8;
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  #newtab:hover { background: #b11e7c; color: #fff; }
+</style>
+</head>
+<body>
+  <div id="tabs"></div>
+  <button id="newtab" title="新しいタブ (Ctrl+T)">＋</button>
+<script>
+  (function() {
+    var listEl = document.getElementById('tabs');
+    document.getElementById('newtab').addEventListener('click', function() {
+      if (window.tabAPI) window.tabAPI.newTab();
+    });
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function render(tabs) {
+      listEl.innerHTML = '';
+      (tabs || []).forEach(function(t) {
+        var el = document.createElement('div');
+        el.className = 'tab' + (t.active ? ' active' : '');
+        el.dataset.id = t.id;
+        el.title = t.title || t.url || '';
+        var fav = t.favicon
+          ? '<img class="fav" src="' + esc(t.favicon) + '" alt="" />'
+          : '<img class="fav hidden" alt="" />';
+        el.innerHTML = fav + '<span class="title">' + esc(t.title || '新しいタブ') + '</span>'
+          + '<button class="close" title="閉じる (Ctrl+W)">×</button>';
+        el.addEventListener('click', function(e) {
+          if (e.target.classList.contains('close')) {
+            if (window.tabAPI) window.tabAPI.closeTab(t.id);
+          } else if (window.tabAPI) {
+            window.tabAPI.activateTab(t.id);
+          }
+        });
+        listEl.appendChild(el);
+      });
+      var active = listEl.querySelector('.tab.active');
+      if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+    function refresh() {
+      if (!window.tabAPI) return;
+      window.tabAPI.getTabs().then(render).catch(function() {});
+    }
+    if (window.tabAPI && window.tabAPI.onUpdate) window.tabAPI.onUpdate(refresh);
+    refresh();
+
+    // 中クリックでタブを閉じる（自動スクロール抑止）
+    listEl.addEventListener('mousedown', function(e) {
+      if (e.button === 1) e.preventDefault();
+    });
+    listEl.addEventListener('auxclick', function(e) {
+      if (e.button !== 1 || !window.tabAPI) return;
+      var tabEl = e.target.closest ? e.target.closest('.tab') : null;
+      if (!tabEl || !tabEl.dataset.id) return;
+      e.preventDefault();
+      window.tabAPI.closeTab(Number(tabEl.dataset.id));
+    });
+
+    // タブバー上でホイール転がし→タブ移動（トラックパッド連射は間引き）
+    var wheelCooldown = 0;
+    document.body.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      var now = Date.now();
+      if (now - wheelCooldown < 120) return;
+      wheelCooldown = now;
+      if (!window.tabAPI) return;
+      var d = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+      window.tabAPI.getTabs().then(function(tabs) {
+        if (!tabs || tabs.length < 2) return;
+        var idx = -1;
+        for (var i = 0; i < tabs.length; i++) {
+          if (tabs[i].active) { idx = i; break; }
+        }
+        if (idx === -1) return;
+        var next = d > 0 ? idx + 1 : idx - 1;
+        if (next < 0 || next >= tabs.length) return;
+        window.tabAPI.activateTab(tabs[next].id);
+      }).catch(function() {});
+    }, { passive: false });
+  })();
+</script>
+</body>
+</html>

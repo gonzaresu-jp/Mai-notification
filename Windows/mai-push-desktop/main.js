@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, Notification, session, net, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, Notification, session, net, screen, dialog, WebContentsView } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const fs = require('fs');
 const http = require('http');
 const { execFile, execFileSync } = require('child_process');
@@ -15,6 +16,10 @@ const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
 const SSE_PATH = '/api/events/stream';
 const HISTORY_PATH = '/api/history?limit=5&offset=0';
 const FALLBACK_INTERVAL = 30000;
+// アプリ更新チェック用フィード（MAI_UPDATE_FEED_URL で差し替え可＝検証用）
+const UPDATE_FEED_URL = process.env.MAI_UPDATE_FEED_URL || 'https://mai.honna-yuzuki.com/dl/desktop.json';
+const UPDATE_CHECK_DELAY_MS = 30 * 1000;
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 let mainWindow = null;
 let tray = null;
@@ -23,6 +28,56 @@ let lastNotifId = 0;
 let sseTimer = null;
 let pushEnabled = false;
 let pendingAuthUrl = null;
+
+// ── タブ管理 ──
+const TAB_STRIP_HEIGHT = 40;
+let tabStripView = null;
+let tabs = []; // { id, view, title, favicon }
+let activeTabId = null;
+let nextTabId = 1;
+let realtimeStarted = false;
+
+function getBaseUrl() {
+  return (loadSettings().url || DEFAULT_URL).replace(/\/+$/, '');
+}
+
+function activeTab() {
+  return tabs.find(t => t.id === activeTabId) || null;
+}
+
+function tabsState() {
+  return tabs.map(x => {
+    let url = '';
+    try { url = x.view.webContents.getURL(); } catch (e) {}
+    let title = x.title;
+    if (!title) {
+      try {
+        const u = new URL(url);
+        title = (u.hostname || '') + (u.pathname && u.pathname !== '/' ? u.pathname : '');
+      } catch (e) { title = url; }
+    }
+    return { id: x.id, title: title || '新しいタブ', favicon: x.favicon || '', url, active: x.id === activeTabId };
+  });
+}
+
+function notifyTabs() {
+  try {
+    if (tabStripView && !tabStripView.webContents.isDestroyed())
+      tabStripView.webContents.send('tabs:update', tabsState());
+  } catch (e) {}
+}
+
+function layoutViews() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    const { width, height } = mainWindow.getContentBounds();
+    if (tabStripView && !tabStripView.webContents.isDestroyed())
+      tabStripView.setBounds({ x: 0, y: 0, width, height: TAB_STRIP_HEIGHT });
+    const t = activeTab();
+    if (t && !t.view.webContents.isDestroyed())
+      t.view.setBounds({ x: 0, y: TAB_STRIP_HEIGHT, width, height: Math.max(0, height - TAB_STRIP_HEIGHT) });
+  } catch (e) {}
+}
 
 function loadSettings() {
   try {
@@ -185,7 +240,9 @@ function navigateToUrl(url) {
       shell.openExternal(url);
     } else {
       const baseUrl = (loadSettings().url || DEFAULT_URL).replace(/\/+$/, '');
-      loadURLSafe(mainWindow.webContents, baseUrl + url);
+      const t = activeTab();
+      if (t && !t.view.webContents.isDestroyed()) loadURLSafe(t.view.webContents, baseUrl + url);
+      else newTab(baseUrl + url);
     }
   }
 }
@@ -298,9 +355,9 @@ function showNativeNotif(data) {
 }
 
 // --- Inject PushManager override for web app toggle ---
-function injectPushOverride() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.executeJavaScript(`
+function injectPushOverride(wc) {
+  if (!wc || wc.isDestroyed()) return;
+  wc.executeJavaScript(`
     (function() {
     if (window.__electronPushOverrideInjected) return;
     window.__electronPushOverrideInjected = true;
@@ -420,12 +477,6 @@ function createWindow() {
     icon: path.join(__dirname, 'icons', 'icon.png'),
     backgroundColor: '#1a1a2e',
     autoHideMenuBar: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
-      webSecurity: true,
-    },
     show: false, // ready-to-show で手動表示（自動起動時は表示しない）
   });
 
@@ -435,26 +486,147 @@ function createWindow() {
     if (!startHidden) mainWindow.show();
   });
 
-  mainWindow.webContents.userAgent =
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+  mainWindow.setMenu(null);
 
+  // セッション共通設定（全タブで共有・一度だけ）
+  const ses = session.defaultSession;
   // Client Hints ヘッダーを設定（Google が Electron を検知しないように）
-  mainWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
     details.requestHeaders['sec-ch-ua'] = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
     details.requestHeaders['sec-ch-ua-mobile'] = '?0';
     details.requestHeaders['sec-ch-ua-platform'] = '"Windows"';
     callback({ requestHeaders: details.requestHeaders });
   });
 
-  mainWindow.webContents.on('before-input-event', (event, input) => {
-    if ((input.key === 'F5' || (input.key === 'r' && input.control)) && input.type === 'keyDown') {
-      const s = loadSettings(); loadURLSafe(mainWindow.webContents, s.url);
+  // タブストリップ（上部40px・ローカルHTML）
+  tabStripView = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, 'tabs-preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: true,
+    },
+  });
+  mainWindow.contentView.addChildView(tabStripView);
+  tabStripView.webContents.loadURL(pathToFileURL(path.join(__dirname, 'tabs.html')).href);
+  tabStripView.webContents.on('did-finish-load', () => notifyTabs());
+
+  // SW/キャッシュクリア→完了後ホームタブを開く
+  ses.clearStorageData({
+    storages: ['serviceworkers', 'cachestorage']
+  }).then(() => {
+    if (tabs.length === 0) newTab(settings.url);
+    startRealtimeOnce(baseUrl);
+  }).catch(() => {
+    if (tabs.length === 0) newTab(settings.url);
+    startRealtimeOnce(baseUrl);
+  });
+
+  mainWindow.on('resize', layoutViews);
+
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) { event.preventDefault(); mainWindow.hide(); }
+  });
+  mainWindow.on('closed', () => { mainWindow = null; tabs = []; activeTabId = null; tabStripView = null; });
+  layoutViews();
+}
+
+// 通知監視は全タブで共有・最初のタブ確定時に一度だけ開始
+function startRealtimeOnce(baseUrl) {
+  if (realtimeStarted) return;
+  realtimeStarted = true;
+  initializeLastId(baseUrl).then(() => startRealTime(baseUrl));
+}
+
+// ── タブ操作 ──
+function newTab(url, opts = {}) {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  const view = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: true,
+    },
+  });
+  const tab = { id: nextTabId++, view, title: '', favicon: '' };
+  setupTabContents(tab);
+  tabs.push(tab);
+  loadURLSafe(view.webContents, url || getBaseUrl());
+  if (opts.activate === false) notifyTabs();
+  else activateTab(tab.id);
+  console.log(`[tabs] new #${tab.id}: ${url}`);
+  return tab.id;
+}
+
+function activateTab(id) {
+  const tab = tabs.find(t => t.id === id);
+  if (!tab || !mainWindow || mainWindow.isDestroyed()) return;
+  if (tab.view.webContents.isDestroyed()) return;
+  const cur = activeTab();
+  if (cur && cur.id !== id) {
+    try { mainWindow.contentView.removeChildView(cur.view); } catch (e) {}
+  }
+  activeTabId = id;
+  try {
+    if (!mainWindow.contentView.children.includes(tab.view))
+      mainWindow.contentView.addChildView(tab.view);
+  } catch (e) {}
+  layoutViews();
+  notifyTabs();
+  console.log(`[tabs] activate #${id}`);
+}
+
+function closeTab(id) {
+  const idx = tabs.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const [tab] = tabs.splice(idx, 1);
+  if (activeTabId === id) {
+    try { mainWindow.contentView.removeChildView(tab.view); } catch (e) {}
+    activeTabId = null;
+  }
+  try { tab.view.webContents.destroy(); } catch (e) {}
+  console.log(`[tabs] closed #${id}`);
+  if (tabs.length === 0) {
+    newTab(getBaseUrl());
+  } else if (activeTabId === null) {
+    activateTab(tabs[Math.max(0, idx - 1)].id);
+  } else {
+    notifyTabs();
+  }
+}
+
+function cycleTab(dir) {
+  if (tabs.length < 2 || activeTabId === null) return;
+  const idx = tabs.findIndex(t => t.id === activeTabId);
+  const next = tabs[(idx + dir + tabs.length) % tabs.length];
+  activateTab(next.id);
+}
+
+function setupTabContents(tab) {
+  const wc = tab.view.webContents;
+  const baseUrl = getBaseUrl();
+
+  wc.userAgent =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+  wc.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    if ((input.key === 'F5' || (input.key === 'r' && input.control)) && !input.alt && !input.meta) {
+      const s = loadSettings(); loadURLSafe(wc, s.url);
       initializeLastId(s.url).then(() => startRealTime(s.url));
+      return;
+    }
+    if (input.control && !input.alt && !input.meta) {
+      const k = (input.key || '').toLowerCase();
+      if (k === 't' && !input.shift) { event.preventDefault(); newTab(getBaseUrl()); }
+      else if (k === 'w' && !input.shift) { event.preventDefault(); closeTab(tab.id); }
+      else if (input.key === 'Tab') { event.preventDefault(); cycleTab(input.shift ? -1 : 1); }
     }
   });
 
   // Google/Discord ログインページへのナビゲーションをシステムブラウザに転送
-  mainWindow.webContents.on('will-navigate', (event, url) => {
+  wc.on('will-navigate', (event, url) => {
     if (url.includes('/auth/google') || url.includes('/auth/discord')) {
       console.log('[mai-push] Auth navigation intercepted:', url);
       event.preventDefault();
@@ -467,63 +639,73 @@ function createWindow() {
     }
   });
 
-  mainWindow.webContents.on('did-start-navigation', () => {
-    injectPushOverride();
+  wc.on('did-start-navigation', () => {
+    injectPushOverride(wc);
   });
-
-  mainWindow.setMenu(null);
 
   const hideScrollbars = () => {
     try {
-      mainWindow.webContents.insertCSS(`
+      wc.insertCSS(`
         ::-webkit-scrollbar { display: none !important; }
         * { scrollbar-width: none !important; }
       `);
-    } catch {}
+    } catch (e) {}
   };
-  mainWindow.webContents.on('did-finish-load', hideScrollbars);
+  wc.on('did-finish-load', hideScrollbars);
 
-  // SW/キャッシュクリア→完了後ロード
-  mainWindow.webContents.session.clearStorageData({
-    storages: ['serviceworkers', 'cachestorage']
-  }).then(() => {
-    loadURLSafe(mainWindow.webContents, settings.url);
-  }).catch(() => {
-    loadURLSafe(mainWindow.webContents, settings.url);
-  });
-
-  mainWindow.webContents.on('did-finish-load', () => {
+  wc.on('did-finish-load', () => {
     if (pendingAuthUrl) {
       const token = pendingAuthUrl;
       pendingAuthUrl = null;
       handleAuthCallback(token);
       return;
     }
-    initializeLastId(baseUrl).then(() => startRealTime(baseUrl));
+    notifyTabs();
   });
 
-  mainWindow.webContents.on('did-fail-load', (event, code, desc) => {
-    const cur = mainWindow.webContents.getURL();
-    if (!cur.includes('settings.html'))
-      mainWindow.loadFile(path.join(__dirname, 'settings.html'));
-  });
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.includes('/test') || url.includes('settings.html')) {
-      // /test はアプリ内の新しいウィンドウで開く
-      const win = new BrowserWindow({ width: 600, height: 800, parent: mainWindow, title: 'まいちゃん通知' });
-      win.loadURL(url);
-      return { action: 'deny' };
+  wc.on('did-fail-load', (event, code, desc) => {
+    let cur = '';
+    try { cur = wc.getURL(); } catch (e) {}
+    if (!cur.includes('settings.html')) {
+      try { wc.loadURL(pathToFileURL(path.join(__dirname, 'settings.html')).href); } catch (e) {}
     }
-    shell.openExternal(url);
+  });
+
+  // 同一サイトのリンクは新しいタブで開く（ブラウザのCtrl+クリック/中クリック対応）
+  wc.setWindowOpenHandler(({ url, disposition }) => {
+    try {
+      const target = new URL(url);
+      const base = new URL(getBaseUrl());
+      if (target.origin === base.origin && !url.includes('/auth/google') && !url.includes('/auth/discord')) {
+        newTab(url, { activate: disposition !== 'background-tab' });
+      } else if (url.includes('/auth/google') || url.includes('/auth/discord')) {
+        ensureAuthServer().then(port => {
+          const parsedUrl = new URL(url);
+          parsedUrl.searchParams.set('returnTo', `http://127.0.0.1:${port}/callback`);
+          shell.openExternal(parsedUrl.toString());
+        });
+      } else {
+        shell.openExternal(url);
+      }
+    } catch (e) {
+      try { shell.openExternal(url); } catch (e2) {}
+    }
     return { action: 'deny' };
   });
 
-  mainWindow.on('close', (event) => {
-    if (!isQuitting) { event.preventDefault(); mainWindow.hide(); }
+  wc.on('page-title-updated', (e, title) => {
+    tab.title = title || '';
+    notifyTabs();
   });
-  mainWindow.on('closed', () => { mainWindow = null; });
+  wc.on('page-favicon-updated', (e, favicons) => {
+    if (favicons && favicons[0]) { tab.favicon = favicons[0]; notifyTabs(); }
+  });
 }
+
+ipcMain.handle('tabs:get', () => tabsState());
+ipcMain.handle('tab-new', (e, url) => newTab(url || getBaseUrl()));
+ipcMain.handle('tab-close', (e, id) => closeTab(Number(id)));
+ipcMain.handle('tab-activate', (e, id) => activateTab(Number(id)));
 
 function createTray() {
   const trayIcon = nativeImage.createFromPath(iconPath());
@@ -540,10 +722,15 @@ function updateTrayMenu() {
     { label: '表示する', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
     { label: '再読み込み', click: () => {
       if (mainWindow) {
-        const s = loadSettings(); loadURLSafe(mainWindow.webContents, s.url);
+        const s = loadSettings();
+        const t = activeTab();
+        if (t && !t.view.webContents.isDestroyed()) loadURLSafe(t.view.webContents, s.url);
         mainWindow.show(); mainWindow.focus();
         initializeLastId(s.url).then(() => startRealTime(s.url));
       }
+    }},
+    { label: '新しいタブ', click: () => {
+      if (mainWindow) { newTab(getBaseUrl()); mainWindow.show(); mainWindow.focus(); }
     }},
     { type: 'separator' },
     { type: 'checkbox', label: '自動起動', checked: autoStart, click: () => {
@@ -551,8 +738,9 @@ function updateTrayMenu() {
       app.setLoginItemSettings({ openAtLogin: next, args: ['--hidden'] });
       updateTrayMenu();
     }},
+    { label: '更新を確認', click: () => { checkForUpdates({ manual: true }); } },
     { type: 'separator' },
-    { label: 'DevTools', click: () => { if (mainWindow) { mainWindow.webContents.openDevTools(); mainWindow.show(); mainWindow.focus(); } } },
+    { label: 'DevTools', click: () => { const t = activeTab(); if (mainWindow && t && !t.view.webContents.isDestroyed()) { t.view.webContents.openDevTools(); mainWindow.show(); mainWindow.focus(); } } },
     { type: 'separator' },
     { label: '終了', click: () => { isQuitting = true; app.quit(); } },
   ]);
@@ -614,6 +802,7 @@ app.whenReady().then(() => {
   });
   createWindow();
   createTray();
+  scheduleUpdateChecks();
   app.on('activate', () => { if (mainWindow) mainWindow.show(); });
 });
 
@@ -674,7 +863,7 @@ function handleAuthCallback(token) {
   const baseUrl = settings.url.replace(/\/+$/, '');
   const hostname = new URL(baseUrl).hostname;
   console.log('[mai-push] Setting cookie for domain:', hostname);
-  mainWindow.webContents.session.cookies.set({
+  session.defaultSession.cookies.set({
     url: baseUrl + '/',
     name: 'session',
     value: token,
@@ -688,7 +877,9 @@ function handleAuthCallback(token) {
     console.log('[mai-push] Auth cookie set, reloading page');
     mainWindow.show();
     mainWindow.focus();
-    loadURLSafe(mainWindow.webContents, baseUrl);
+    const t = activeTab();
+    if (t && !t.view.webContents.isDestroyed()) loadURLSafe(t.view.webContents, baseUrl);
+    else newTab(baseUrl);
   }).catch((e) => {
     console.error('[mai-push] Failed to set auth cookie:', e);
   });
@@ -697,3 +888,71 @@ function handleAuthCallback(token) {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+// ── アプリ更新チェック：起動時(遅延)＋6時間毎＋トレイ手動 ──
+function compareVersions(a, b) {
+  const pa = String(a || '').replace(/^v/i, '').split('.');
+  const pb = String(b || '').replace(/^v/i, '').split('.');
+  const n = Math.max(pa.length, pb.length);
+  for (let i = 0; i < n; i++) {
+    const na = parseInt(pa[i], 10), nb = parseInt(pb[i], 10);
+    const va = Number.isNaN(na) ? 0 : na, vb = Number.isNaN(nb) ? 0 : nb;
+    if (va !== vb) return va < vb ? -1 : 1;
+  }
+  return 0;
+}
+
+async function fetchUpdateFeed() {
+  const url = UPDATE_FEED_URL + (UPDATE_FEED_URL.includes('?') ? '&' : '?') + 't=' + Date.now();
+  const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const info = await resp.json();
+  if (!info || typeof info.version !== 'string' || typeof info.url !== 'string')
+    throw new Error('invalid feed');
+  return info;
+}
+
+async function checkForUpdates(opts = {}) {
+  const manual = !!opts.manual;
+  const current = app.getVersion();
+  try {
+    const info = await fetchUpdateFeed();
+    console.log(`[update] current=${current} latest=${info.version}`);
+    if (compareVersions(current, info.version) >= 0) {
+      if (manual && mainWindow && !mainWindow.isDestroyed()) {
+        dialog.showMessageBox(mainWindow, {
+          type: 'info', title: 'まいちゃん通知',
+          message: `お使いのバージョン（v${current}）は最新です。`,
+        });
+      }
+      return;
+    }
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const notes = info.notes ? `\n\n${info.notes}` : '';
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'まいちゃん通知 - アップデート',
+      message: `新しいバージョン v${info.version} が利用可能です（現在 v${current}）。${notes}\n\nダウンロードしますか？`,
+      buttons: ['ダウンロード', '後で'],
+      defaultId: 0, cancelId: 1,
+    });
+    if (response === 0) {
+      console.log('[update] Opening download URL:', info.url);
+      await shell.openExternal(info.url);
+    }
+  } catch (e) {
+    console.error('[update] check failed:', e.message);
+    if (manual && mainWindow && !mainWindow.isDestroyed()) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'warning', title: 'まいちゃん通知',
+        message: `更新の確認に失敗しました。\n(${e.message})`,
+      });
+    }
+  }
+}
+
+function scheduleUpdateChecks() {
+  if (!app.isPackaged) return; // 開発実行時は自動チェックしない
+  setTimeout(() => { if (!isQuitting) checkForUpdates(); }, UPDATE_CHECK_DELAY_MS);
+  setInterval(() => { if (!isQuitting) checkForUpdates(); }, UPDATE_CHECK_INTERVAL_MS);
+}
