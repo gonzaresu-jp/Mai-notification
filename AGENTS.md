@@ -32,7 +32,7 @@
 
 ## 5. 依存関係
 - **sqlite3 は 6.0.1 に昇格済み（2026-09-22 本番反映）**。npm audit critical は解消。
-  依存を触る際は必ず staging で「実体 node_modules の npm install → 回帰テスト(19/19) → smoke」を通すこと。
+  依存を触る際は必ず staging で「実体 node_modules の npm install → 回帰テスト(21/21) → smoke」を通すこと。
 - 本番プロセスは **Node v22.12.0**（nvm）で稼働。ネイティブモジュールをビルドする際は
   `PATH` を v22 優先にして `npm install` すること（v18 でビルドするとABI不一致が起きる）。
 - `package-lock.json` は Git 管理対象。除外するな。`npm audit fix --force` は回帰テスト通過後にのみ。

@@ -4,6 +4,28 @@ $updateLogs = [
         "date" => "2026-09-24",
         "details" => [
             "add" => [
+                "外部セキュリティ評価の指摘を反映（第3ラウンド）— HMAC v2（署名対象を {timestamp}.{生ボディ} に変更、±300秒でリプレイ対策。express.json({verify}) で生バイト保持、全送信側を notify-sign ヘルパーに統一）。回帰テストは HMAC v2＋timestamp検証を含む 21 項目に拡充し staging で 21/21 PASS（npm test に接続済み）",
+                "管理用認証コード・ドキュメントを git 管理化（admin/admin.js・login.html・webauthn.js、GEMMA/LINUX/OLLAMA/SCHEDULE の各種md）。clone だけで起動できる構成に復帰",
+                "pm2-logrotate を導入（20M・10世代・圧縮）。43MB まで膨張していたログのローテーションを開始",
+            ],
+            "change" => [
+                "API(8080/8081)・ワーカー内Express(3002/3003) の bind を 127.0.0.1 に限定（nginx/cloudflared の loopback 経由のみ。YouTube webhook 用 3001 は例外で据え置き）",
+                "main.js の dotenv を path.join(__dirname, \".env\") に変更 — 固定パスだと staging ワーカーが本番 .env を読む事故になるため（staging は自 .env の DISABLE_NOTIFICATIONS=1 を読むことを実測確認）",
+                "/admin の Express 静的配信を廃止し login.html のみ明示配信。認証コード（admin.js/webauthn.js）は lib/ へ移動（nginx の alias も同dirを直配信するため移動が必須。移動後は /admin/login/admin.js が login.html フォールバックになりソース漏えいを実測解消）",
+                "公開 /api/ask に専用制限（5回/分）＋質問500文字上限を追加（管理者用 /api/admin/ask は対象外）。/api/system-info は管理者専用化し、公開 status ページは 403 時に非表示化",
+                "twitter 分析送信先の localhost:8080 固定を NOTIFY_API_URL 基準に修正（staging が本番へ誤送する問題を解消）",
+            ],
+            "fix" => [
+                "リポジトリ整理 — git 管理の不要物（14MB zip・YADMAT~Z phantom・debug_twitter.js）を除去。未使用の debug_status.php / staging-gate.php、参照なしの tmp/pw.txt、空DB（maipush.db・data/mai-push.db）、使われていない pushweb.db、127MB 未使用 mai_animation_data.json（全アクセスログで hit 0 を確認）、ルートの古い DB バックアップ群を削除。YADMAT~Z は youtube.js.bak とバイト同一の phantom だった",
+            ],
+        ],
+        "lines" => "37,468",
+    ],
+
+    [
+        "date" => "2026-09-24",
+        "details" => [
+            "add" => [
                 "Windowsデスクトップアプリにブラウザ風タブ機能を追加（v1.3.0〜v1.3.3）— WebContentsViewによる複数ページの同時表示。タブバー（＋ボタン・×・ファビコン＋タイトル表示、ブランドカラー #b11e7c 系に統一）、Ctrl+T（新規）/ Ctrl+W（閉じる）/ Ctrl+Tab（切替）、タブバー上のホイール転がしで移動・中クリックで閉じる、同一サイトのリンクは新しいタブで開く。ログイン状態・通知監視は全タブで共有",
                 "Windowsアプリに更新チェック機能を追加（v1.2.0〜）— 起動30秒後＋6時間毎＋トレイ「更新を確認」でフィード（webui/dl/desktop.json）を確認し、新バージョンがあればダウンロード誘導ダイアログを表示（electron-updater不使用の軽量実装、nginx変更不要）",
                 "Web共通コマンドパレットを追加（Ctrl+K / Cmd+K、全ページ）— 通常入力はEnterでアーカイブ全文検索（/archive/?q=）へ、「/」始まりでページジャンプ候補を表示（↑↓＋Enter/クリック、カタカナ→ひらがな正規化＋よみキーワード対応）。「/admin」は候補に出さず完全一致＋Enterでのみ管理画面（/admin.html）へ遷移する隠しコマンド化",

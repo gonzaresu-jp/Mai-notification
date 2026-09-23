@@ -74,7 +74,7 @@ nginx 設定変更時は `proxy_set_header X-Forwarded-For $proxy_add_x_forwarde
 **`npm audit fix --force` をテストなしで実行しない（AGENTS.md）**
 
 1. 本番 `data.db` と staging `data-test.db` を Web公開外・制限付きの場所へバックアップ。
-2. ✅ 回帰テスト実装済み・**staging で 21/21 PASS（2026-09-24予定）**: `scripts/regression-test.js`（`npm test` に接続）
+2. ✅ 回帰テスト実装済み・**staging で 21/21 PASS（2026-09-24）**: `scripts/regression-test.js`（`npm test` に接続）
    （notifications / subscriptions / scraper_status の INSERT/SELECT/lastID・UPSERT、
    `/api/health`、notify: tokenなし401 / HMACなし401 / 誤HMAC 401 / timestampなし401 / 期限切れ401 / 完全認証で `suppressed:true`、
    内部scraper-status認証、token-exchange 無効code 400、SSE 上限429）
