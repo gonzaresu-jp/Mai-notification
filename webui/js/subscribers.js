@@ -94,7 +94,10 @@
       return;
     }
     try {
-      const res = await fetch(platform.path, { cache: 'no-store' });
+      // データは毎日 0:05 に自動追記される（scripts/update-subscribers.js）。
+      // Cloudflare が .txt を最大4時間キャッシュするため、1時間ごとに変わるクエリで取りに行く
+      const bust = Math.floor(Date.now() / 3600000);
+      const res = await fetch(platform.path + '?v=' + bust, { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const text = await res.text();
       dataCache[platform.id] = parseTxt(text);
@@ -177,14 +180,45 @@
     return Date.UTC(y, m - 1, d);
   }
 
+  const DAY_MS = 86400_000;
+
+  /** 今日（JST）の 0:00 を dateToMs と同じ基準（UTC日付）で返す */
+  function todayMs() {
+    const j = new Date(Date.now() + 9 * 3600_000);
+    return Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate());
+  }
+
+  /** 表示期間の開始日（'all' はデータの先頭） */
+  function rangeStartMs(data, range) {
+    if (range === 'all' || !data.length) return data.length ? dateToMs(data[0].date) : todayMs();
+    return todayMs() - { '1y': 365, '6m': 180, '3m': 90 }[range] * DAY_MS;
+  }
+
   function filterByRange(data, range) {
-    if (range === 'all') return data;
-    if (!data.length) return data;
-    // 現在時刻ではなくデータの最新日を基準にする
-    // （最終更新から時間が経っていても直近の推移が見られるように）
-    const latestMs = dateToMs(data[data.length - 1].date);
-    const delta    = { '1y': 365, '6m': 180, '3m': 90 }[range] * 86400_000;
-    return data.filter(d => dateToMs(d.date) >= latestMs - delta);
+    if (range === 'all' || !data.length) return data;
+    // 期間は「今日」基準。期間の直前の点も1つ残し、左端から線がつながるようにする
+    const start = rangeStartMs(data, range);
+    const idx = data.findIndex(d => dateToMs(d.date) >= start);
+    if (idx === -1) return data.slice(-1);
+    return data.slice(Math.max(0, idx - 1));
+  }
+
+  /** 期間の長さに応じた目盛り（月初 or 年初）を返す */
+  function timeTicks(xMin, xMax) {
+    const spanDays = (xMax - xMin) / DAY_MS;
+    const stepMonths = spanDays <= 120 ? 1 : spanDays <= 400 ? 2 : spanDays <= 800 ? 4 : 12;
+    const d = new Date(xMin);
+    let y = d.getUTCFullYear(), m = d.getUTCMonth() + 1; // 次の月初から
+    if (m > 11) { m = 0; y++; }
+    if (stepMonths === 12) { y++; m = 0; }
+    const out = [];
+    for (let t = Date.UTC(y, m, 1); t <= xMax; ) {
+      if (t >= xMin) out.push(t);
+      m += stepMonths;
+      y += Math.floor(m / 12); m %= 12;
+      t = Date.UTC(y, m, 1);
+    }
+    return { ticks: out, yearly: stepMonths === 12 };
   }
 
   /* ===== Canvas グラフ描画 ===== */
@@ -219,7 +253,10 @@
 
     const xs   = data.map(d => dateToMs(d.date));
     const ys   = data.map(d => d.val);
-    const xMin = xs[0], xMax = xs[xs.length - 1];
+    // 横軸は「期間の開始日 〜 今日」。データが今日まで無くても右端は今日にする
+    const today = todayMs();
+    const xMin = Math.max(xs[0], rangeStartMs(data, activeRange) || xs[0]);
+    const xMax = Math.max(xs[xs.length - 1], today);
     const yMax = roundUpNice(Math.max(...ys));
     const yMin = 0;
 
@@ -250,24 +287,29 @@
       ctx.fillText(lbl, PAD.l - 4, y);
     }
 
-    /* X軸ラベル */
+    /* X軸ラベル（時間軸で等間隔。データ点の並びには依存しない） */
     ctx.fillStyle    = '#5c5c5c';
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'top';
-    const step = Math.max(1, Math.floor(xs.length / 5));
-    const shownX = new Set();
-    for (let i = 0; i < xs.length; i += step) {
-      const d   = new Date(xs[i]);
-      const lbl = `${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-      const x   = px(xs[i]);
-      if (!shownX.has(lbl)) { ctx.fillText(lbl, x, H - PAD.b + 4); shownX.add(lbl); }
-    }
-    // 末尾
-    {
-      const d   = new Date(xs[xs.length - 1]);
-      const lbl = `${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-      if (!shownX.has(lbl)) ctx.fillText(lbl, px(xs[xs.length - 1]), H - PAD.b + 4);
-    }
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+    const { ticks, yearly } = timeTicks(xMin, xMax);
+    let lastLabelX = -Infinity;
+    ticks.forEach(t => {
+      const x = px(t);
+      if (x - lastLabelX < 44 || x > PAD.l + CW - 18) return; // 詰まりと右端の「今日」との重なりを避ける
+      const d = new Date(t);
+      const lbl = yearly ? `${d.getUTCFullYear()}` : `${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      ctx.fillText(lbl, x, H - PAD.b + 4);
+      lastLabelX = x;
+    });
+    ctx.textAlign = 'right';
+    ctx.fillText('今日', PAD.l + CW, H - PAD.b + 4);
+    ctx.restore();
+
+    /* 期間の左端より前の点（線をつなぐための1点）はグラフ領域でクリップする */
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PAD.l, 0, CW + PAD.r, H); ctx.clip();
 
     /* グラデーション塗り */
     const grad = ctx.createLinearGradient(0, PAD.t, 0, PAD.t + CH);
@@ -289,6 +331,16 @@
     ctx.lineJoin    = 'round';
     ctx.lineCap     = 'round';
     ctx.stroke();
+
+    /* 最新データが今日より前なら、今日まで点線で延ばす（未取得の区間） */
+    if (today - xs[xs.length - 1] > DAY_MS) {
+      ctx.beginPath(); ctx.setLineDash([4, 4]);
+      ctx.moveTo(px(xs[xs.length - 1]), py(ys[ys.length - 1]));
+      ctx.lineTo(px(today), py(ys[ys.length - 1]));
+      ctx.strokeStyle = color + '88'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
 
     /* 最新点 */
     const lx = px(xs[xs.length - 1]), ly = py(ys[ys.length - 1]);
@@ -326,7 +378,7 @@
     }
 
     /* ホバー用メタデータ保存 */
-    canvas._chartMeta = { xs, ys, px, py, data, platform };
+    canvas._chartMeta = { xs, ys, px, py, data, platform, left: PAD.l };
   }
 
   /* ===== ツールチップ ===== */
@@ -346,6 +398,7 @@
 
       let minDist = Infinity, nearest = null;
       meta.xs.forEach((x, i) => {
+        if (meta.px(x) < meta.left) return; // 期間外（線をつなぐための点）は対象外
         const dist = Math.abs(meta.px(x) - mouseX);
         if (dist < minDist) { minDist = dist; nearest = i; }
       });
