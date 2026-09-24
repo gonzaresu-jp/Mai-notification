@@ -623,6 +623,13 @@
         diff = numOr(bv.view_count, -1) - numOr(av.view_count, -1);
       } else if (sort === 'like_desc') {
         diff = numOr(bv.like_count, -1) - numOr(av.like_count, -1);
+      } else if (sort === 'duration_desc' || sort === 'duration_asc' || sort === 'size_desc' || sort === 'size_asc') {
+        // 値が無い（長さ不明・未ダウンロード）ものは昇順/降順どちらでも末尾へ
+        var field = sort.indexOf('duration') === 0 ? 'duration_sec' : 'file_size_bytes';
+        var an = numOr(av[field], null);
+        var bn = numOr(bv[field], null);
+        if ((an === null) !== (bn === null)) return an === null ? 1 : -1;
+        if (an !== null) diff = sort.slice(-4) === 'desc' ? bn - an : an - bn;
       } else if (sort === 'hits_desc') {
         diff = (b.hits.length + (b.titleSnippet ? 1 : 0)) - (a.hits.length + (a.titleSnippet ? 1 : 0));
       } else {

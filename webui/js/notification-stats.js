@@ -581,11 +581,15 @@
         + `<span class="ns-bw-rank">${item.rank}</span>`
         + `<a class="ns-bw-word" href="${href}" target="_blank" rel="noopener">${esc(item.word)}</a>`
         + `<span class="ns-bw-bar"><i style="width:${pct.toFixed(1)}%"></i></span>`
-        + `<span class="ns-bw-count">${num(item.count)}<em>回</em></span>`
+        // v2 は「何配信で使われたか」を主指標にする（旧データは回数で表示）
+        + (item.doc_freq != null
+          ? `<span class="ns-bw-count" title="${num(item.count)}回 / ${num(item.months || 0)}か月">${num(item.doc_freq)}<em>配信</em></span>`
+          : `<span class="ns-bw-count">${num(item.count)}<em>回</em></span>`)
         + ex
         + `</li>`;
     }).join('') + '</ul>';
-    const meta = `<div class="ns-buzzwords-meta">${y}年 ${bw.total_videos}本の動画から抽出${bw.updated_at ? ` · 更新 ${bw.updated_at.slice(0,10)}` : ''}</div>`;
+    const note = bw.chat_based === false ? '<br>※ この年はチャット記録が少ないため、自動字幕の誤認識を含む参考値です' : '';
+    const meta = `<div class="ns-buzzwords-meta">${y}年 ${bw.total_videos}本の動画から抽出${bw.updated_at ? ` · 更新 ${bw.updated_at.slice(0,10)}` : ''}${note}</div>`;
     const more = bw.buzzwords.length > 10
       ? `<button type="button" class="ns-buzzwords-more" data-expand="${state.buzzwordsExpanded ? '0' : '1'}">${state.buzzwordsExpanded ? '閉じる' : `もっと見る（あと${bw.buzzwords.length - 10}語）`}</button>`
       : '';

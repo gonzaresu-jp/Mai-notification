@@ -139,6 +139,10 @@
                     <option value="stream_at_asc">配信が古い順</option>
                     <option value="view_desc">再生数が多い順</option>
                     <option value="like_desc">高評価が多い順</option>
+                    <option value="duration_desc">配信時間が長い順</option>
+                    <option value="duration_asc">配信時間が短い順</option>
+                    <option value="size_desc">動画サイズが大きい順</option>
+                    <option value="size_asc">動画サイズが小さい順</option>
                     <option value="hits_desc" id="ar-sort-hits" hidden disabled>ヒットが多い順</option>
                 </select>
             </div>
