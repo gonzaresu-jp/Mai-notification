@@ -12,6 +12,12 @@ $updateLogs = [
                 "Windowsアプリに更新チェック機能を追加（v1.2.0〜）— 起動30秒後＋6時間毎＋トレイ「更新を確認」でフィード（webui/dl/desktop.json）を確認し、新バージョンがあればダウンロード誘導ダイアログを表示（electron-updater不使用の軽量実装、nginx変更不要）",
                 "Web共通コマンドパレットを追加（Ctrl+K / Cmd+K、全ページ）— 通常入力はEnterでアーカイブ全文検索（/archive/?q=）へ、「/」始まりでページジャンプ候補を表示（↑↓＋Enter/クリック、カタカナ→ひらがな正規化＋よみキーワード対応）。「/admin」は候補に出さず完全一致＋Enterでのみ管理画面（/admin.html）へ遷移する隠しコマンド化",
                 "ダウンロードページをリニューアル（Android / Windows 両対応）— hero＋2カラムカードの新デザイン（Android: #3ddc84 / Windows: #0078d4 の円形ロゴ）、desktop.json から Windows 版のバージョン・更新内容・exe リンク・ファイルサイズを動的取得、APK もファイルサイズを動的表示。ヘッダー／ガイド／コマンドパレットの文言を「アプリをダウンロード（Android / Windows）」に更新",
+                "登録者数グラフの自動更新 — scripts/update-subscribers.js（YouTube Data API channels.list・1日1ユニット）を毎日 0:05 に cron 実行し、webui/data/*.txt へ「日付:万人」で1日1行追記（同日の再実行は上書きで冪等、一時ファイル→rename で書込）。手入力で抜けていた期間は Internet Archive のチャンネルページ保存から、チャンネル名一致を確認できた12点を補完（2021/12〜2022/07・2025〜2026 など）",
+                "配信アーカイブのカテゴリ自動分類（アーカイブ本体 nassy 側）— category_llm.py を新設。タイトル・タグ・概要欄冒頭・配信全体から均等に抜いた字幕を Gemini 3.5 flash-lite で判定し、提案（確信度・理由つき）を video_category_suggestions に保存、確信度0.8以上のみ source='llm' で付与（手動設定済みの動画には付与しない）。ルール分類との比較で適合率85%／再現率88%、差分の多くはルール側の誤分類だった。毎晩の取り込みで新着を最大40本判定",
+                "流行語抽出 v2（アーカイブ本体側）— 年内の出現回数合算（1配信・1ゲーム実況のキャラ名が上位を独占）をやめ、「広がり（3配信以上・2か月以上・実質配信数）」「その年らしさ（他年比 lift 2倍以上）」「チャットでも使われたか（チャット lift）」の3条件で評価。数詞・代名詞・自動字幕の断片を除外し表記ゆれを同一視、buzzwords_rules.json で手動の除外／追加に対応。チャット記録の乏しい年は「参考値」と表示",
+                "配信アーカイブ検索に並び順「配信時間が長い／短い順」「動画サイズが大きい／小さい順」を追加。ユーザー名＋キーワード検索でキーワードが無視されていた問題も修正（両方に一致する発言だけを返す。ひらがな読みの一致にも対応）",
+                "管理画面「まいAI」に「まいちゃんの活動傾向（推定）」を追加（/api/admin/mai-state）— 配信意欲スコア、体調サイン（体調関連ワード・深夜投稿・感情・配信頻度の変化）、今後7日間の配信見込み（曜日別実績×活動量、予定登録日は優先）、曜日×プラットフォーム（YouTube/ツイキャス/Twitch）・開始時刻の分布、直近26週の配信数と感情の推移",
+                "Windowsデスクトップアプリ v1.3.5 — 起動のたびに Service Worker とキャッシュを消していた処理を、アプリ更新後の初回だけに変更（毎回の再インストール・全ファイル再取得を解消）。ページ内の全リクエストをメインプロセス経由で書き換えていた Client Hints 付与を Google ドメインのみに限定",
             ],
             "change" => [
                 "ダウンロードページのスタイルを webui/css/download.css に一元化し、sp.css 内の旧 download ルールを削除（旧DLページの dt/img スタイルが新デザインに干渉するのを防止）",
@@ -21,15 +27,19 @@ $updateLogs = [
                 "公開 /api/ask に専用制限（5回/分）＋質問500文字上限を追加（管理者用 /api/admin/ask は対象外）。/api/system-info は使用率・loadavg・稼働時間・メモリ/プロセス使用量のみ公開（ホスト名・ディスク・OS詳細は返さない情報設計）し、statusページのリソース表示は継続",
                 "twitter 分析送信先の localhost:8080 固定を NOTIFY_API_URL 基準に修正（staging が本番へ誤送する問題を解消）",
                 "Windowsインストーラの成果物名をASCII化（MaiPush-Setup-バージョン.exe / MaiPush-Portable-バージョン.exe）— 日本語名の文字化け・URL問題の回避",
+                "Service Worker v3.72 — JS/CSS/HTML を毎回 cache:'no-store' で取り直していたのをやめ、?v= 付きの JS/CSS はブラウザの HTTP キャッシュに任せる形に変更。ナビゲーションプリロードも有効化。2回目以降の表示で JS/CSS 1本あたり約170ms→ほぼ0ms、読み込み完了 約0.85秒→約0.41秒",
+                "登録者数グラフの横軸を「今日」まで表示し、目盛りを時間軸で等間隔に変更（データ行の順番で選んでいたため2021年に偏っていた）。1年／6ヶ月／3ヶ月は今日基準の期間に変更、Cloudflare のキャッシュ対策で1時間ごとに変わるクエリで取得",
+                "流行語の表示を「◯回」から「◯配信」に変更し、全語に代表配信を2本表示",
             ],
             "fix" => [
                 "リポジトリ整理 — git 管理の不要物（14MB zip・YADMAT~Z phantom・debug_twitter.js）を除去。未使用の debug_status.php / staging-gate.php、参照なしの tmp/pw.txt、空DB（maipush.db・data/mai-push.db）、使われていない pushweb.db、127MB 未使用 mai_animation_data.json（全アクセスログで hit 0 を確認）、ルートの古い DB バックアップ群を削除。YADMAT~Z は youtube.js.bak とバイト同一の phantom だった",
                 "WindowsアプリでGoogleログイン完了後に無反応になる問題を修正（v1.1.1）— Electronの session.cookies.set に必須の url オプションが欠落し Missing required option 'url' でクッキー設定が失敗していた（トークン交換自体は成功済み）",
                 "カウント結合セルで非対象ペア（お誕生日＋周年記念）の背景がスマホ幅で消える問題を修正 — .stat-pair .stat-half の transparent 化が .stat-pair-keep にも及び、親が display:contents のため背景が全く描画されなくなっていた。:not(.stat-pair-keep) に限定",
                 "配信アーカイブの要約／タイムスタンプポップアップのAndroid WebView描画対策 — inset併記の四辺指定、background-color二重指定、translateZ(0)による合成レイヤー強制",
+                "管理画面で付けた配信カテゴリが毎晩の取り込みで消えていた問題を修正 — catalog.py categorize が source='manual' 以外を全削除していたが管理画面の保存は source='admin' だった。admin / llm を保持し、管理画面で設定した動画にはルール分類を上書き・追加しないように変更",
             ],
         ],
-        "lines" => "37,906",
+        "lines" => "38,659",
     ],
 
     [
