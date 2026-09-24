@@ -1,0 +1,6 @@
+{
+  "versionCode": 2,
+  "versionName": "1.1",
+  "url": "https://mai.honna-yuzuki.com/mai-notification.apk?v=2",
+  "notes": "ページ表示を高速化しました（起動のたびにキャッシュを消す処理を廃止）。アップデートの確認機能を追加しました。"
+}

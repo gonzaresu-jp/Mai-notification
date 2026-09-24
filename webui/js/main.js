@@ -29,6 +29,36 @@ if (isAndroidApp() && 'serviceWorker' in navigator) {
   }).catch(() => { });
 }
 
+// 旧 Android アプリ（v1.0）の利用者に入れ直しを案内する。
+// v1.1 から署名の鍵が変わったため上書きアップデートできない。v1.0 には getAppVersion が無いのでそれで見分ける。
+function showLegacyAndroidAppNotice() {
+  const KEY = 'mai-legacy-app-notice-dismissed';
+  try { if (Date.now() - Number(localStorage.getItem(KEY) || 0) < 3 * 86400000) return; } catch { }
+  if (location.pathname.startsWith('/download')) return;
+  const bar = document.createElement('div');
+  bar.setAttribute('role', 'alert');
+  bar.style.cssText = 'position:fixed;left:10px;right:10px;bottom:12px;z-index:99999;background:#fff;border:2px solid #b11e7c;' +
+    'border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.18);font-size:14px;line-height:1.55;color:#333;';
+  bar.innerHTML = '<div style="font-weight:800;color:#b11e7c;margin-bottom:4px;">アプリの新しいバージョンがあります</div>' +
+    '<div>このアプリは古いバージョン（v1.0）です。新しいバージョンは自動で更新できないため、<b>一度アンインストールしてから</b>ダウンロードページの新しいアプリを入れてください。入れ直した後は、通知の設定をもう一度オンにしてください。</div>' +
+    '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">' +
+    '<button type="button" data-act="later" style="border:1px solid #ccc;background:#fff;border-radius:999px;padding:6px 14px;font-size:13px;">あとで</button>' +
+    '<a href="/download.php" style="background:#b11e7c;color:#fff;border-radius:999px;padding:6px 16px;font-size:13px;font-weight:700;text-decoration:none;">ダウンロードページへ</a></div>';
+  bar.querySelector('[data-act="later"]').addEventListener('click', () => {
+    try { localStorage.setItem(KEY, String(Date.now())); } catch { }
+    bar.remove();
+  });
+  document.body.appendChild(bar);
+}
+if (isAndroidApp()) {
+  let hasVersionApi = false;
+  try { hasVersionApi = typeof window.MaiApp.getAppVersion === 'function'; } catch { }
+  if (!hasVersionApi) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showLegacyAndroidAppNotice);
+    else showLegacyAndroidAppNotice();
+  }
+}
+
 if (!isAndroidApp() && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js')
     .then(reg => {

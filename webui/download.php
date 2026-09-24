@@ -68,7 +68,7 @@
                 <?php if ($apkSizeMb): ?>
                     <p class="dl-meta">ファイルサイズ: <?= htmlspecialchars($apkSizeMb) ?> / Android 8.0 以上</p>
                 <?php endif; ?>
-                <a class="dl-btn dl-btn-android" href="/mai-notification.apk" target="_blank" rel="noopener noreferrer">
+                <a class="dl-btn dl-btn-android" href="/mai-notification.apk?v=<?= @filemtime($apkPath) ?: time() ?>" target="_blank" rel="noopener noreferrer">
                     <i class="fa-solid fa-download" aria-hidden="true"></i> APKをダウンロード
                 </a>
             </article>
