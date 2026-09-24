@@ -1,6 +1,6 @@
 // service-worker.js (iOS対応版 v3.60 - 履歴Invalidate/互換メッセージ付き)
 
-const VERSION = 'v3.71'; // キャッシュ管理用バージョン
+const VERSION = 'v3.72'; // キャッシュ管理用バージョン
 const CACHE_NAME = `mai-notification-${VERSION}`;
 const ALWAYS_OPEN_NEW_TAB = false;
 
@@ -124,6 +124,11 @@ self.addEventListener('activate', event => {
       })
     );
 
+    // ナビゲーションプリロード: SW の起動待ち（実測 ~300ms）と並行して HTML を取りに行く
+    if (self.registration.navigationPreload) {
+      try { await self.registration.navigationPreload.enable(); } catch (e) { /* 非対応環境は無視 */ }
+    }
+
     await self.clients.claim();
   })());
 });
@@ -153,17 +158,29 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // JS/CSS/HTML は常に最新を取りに行く（HTTPキャッシュを極力回避）
-  const isMutableTextAsset =
+  // v3.72: 以前は JS/CSS/HTML を毎回 cache:'no-store' で取り直していたため、
+  // ?v=更新日時 付きで長期キャッシュ可能なファイルまで毎回ネットワーク往復（1本 150〜500ms）していた。
+  // - ?v= 付きの JS/CSS は URL が変われば中身も変わるので、SW は触らずブラウザの HTTP キャッシュに任せる
+  // - それ以外（HTML・?v 無しの JS/CSS）は通常の fetch（サーバーの Cache-Control / ETag に従って再検証）
+  const isScriptOrStyle =
     req.destination === 'script' ||
     req.destination === 'style' ||
+    /\.(js|css)$/i.test(url.pathname);
+  if (isScriptOrStyle && url.searchParams.has('v')) return;
+
+  const isMutableTextAsset =
+    isScriptOrStyle ||
     req.destination === 'document' ||
-    /\.(js|css|html?)$/i.test(url.pathname);
+    /\.html?$/i.test(url.pathname);
 
   if (isMutableTextAsset) {
     event.respondWith((async () => {
       try {
-        return await fetch(req, { cache: 'no-store' });
+        if (req.mode === 'navigate' && event.preloadResponse) {
+          const preloaded = await event.preloadResponse;
+          if (preloaded) return preloaded;
+        }
+        return await fetch(req);
       } catch (err) {
         // オフライン時のみキャッシュを使う
         try {

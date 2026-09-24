@@ -546,7 +546,9 @@ function createWindow() {
   // セッション共通設定（全タブで共有・一度だけ）
   const ses = session.defaultSession;
   // Client Hints ヘッダーを設定（Google が Electron を検知しないように）
-  ses.webRequest.onBeforeSendHeaders((details, callback) => {
+  // Google のログイン画面だけが対象。以前は全リクエストをメインプロセス経由で書き換えていて、
+  // ページ読み込みのたびに数十本のリクエストが IPC 往復を挟んでいた。
+  ses.webRequest.onBeforeSendHeaders({ urls: ['*://*.google.com/*', '*://*.googleusercontent.com/*', '*://*.gstatic.com/*'] }, (details, callback) => {
     details.requestHeaders['sec-ch-ua'] = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
     details.requestHeaders['sec-ch-ua-mobile'] = '?0';
     details.requestHeaders['sec-ch-ua-platform'] = '"Windows"';
@@ -566,16 +568,24 @@ function createWindow() {
   tabStripView.webContents.loadURL(pathToFileURL(path.join(__dirname, 'tabs.html')).href);
   tabStripView.webContents.on('did-finish-load', () => notifyTabs());
 
-  // SW/キャッシュクリア→完了後ホームタブを開く
-  ses.clearStorageData({
-    storages: ['serviceworkers', 'cachestorage']
-  }).then(() => {
+  // SW/キャッシュのクリアはアプリを更新した初回だけ行う。
+  // 以前は起動のたびに消していたため、毎回 Service Worker の再インストールと
+  // 全ファイルの再ダウンロードが発生し、起動直後の表示が遅くなっていた。
+  const openHome = () => {
     if (tabs.length === 0) newTab(settings.url);
     startRealtimeOnce(baseUrl);
-  }).catch(() => {
-    if (tabs.length === 0) newTab(settings.url);
-    startRealtimeOnce(baseUrl);
-  });
+  };
+  const appVersion = app.getVersion();
+  if (settings.cacheClearedFor !== appVersion) {
+    ses.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] })
+      .catch(() => {})
+      .then(() => {
+        try { const s = loadSettings(); s.cacheClearedFor = appVersion; saveSettings(s); } catch (e) {}
+        openHome();
+      });
+  } else {
+    openHome();
+  }
 
   mainWindow.on('resize', layoutViews);
 
