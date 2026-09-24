@@ -218,7 +218,37 @@ function aggregate(rowsInput, loggedPairs) {
   return stats;
 }
 
+// 1行ずつ分析ラベルを付けて返す（aggregate と同じ照合: data → gemma.log 本文一致 → ±3分）。
+// mai-state.js（活動傾向の推定）が使う。
+function labelRows(rowsInput, loggedPairs) {
+  const rows = Array.isArray(rowsInput) ? rowsInput : [];
+  const loggedNorm = (Array.isArray(loggedPairs) ? loggedPairs : [])
+    .map(p => ({ ...p, norm: p.body ? normalizeBody(p.body).slice(0, 120) : "", used: false }))
+    .sort((a, b) => a.ts - b.ts);
+  return rows.map(row => {
+    const text = normalizeBody(row.body);
+    const p = jstParts(row.created_at);
+    let category = null, sentiment = null, status = null;
+    if (row.data) {
+      try {
+        const d = JSON.parse(row.data);
+        if (d && d.category) { category = d.category; sentiment = d.sentiment || null; status = d.status || null; }
+      } catch {}
+    }
+    if (!category) {
+      let hit = loggedNorm.find(L => !L.used && L.norm && text.slice(0, 120) === L.norm);
+      if (!hit && p) {
+        const win = 3 * 60 * 1000;
+        hit = loggedNorm.find(L => !L.used && L.ts >= p.ms - win && L.ts <= p.ms + win);
+      }
+      if (hit) { hit.used = true; category = hit.category; sentiment = hit.sentiment; }
+    }
+    return { created_at: row.created_at, platform: row.platform, body: row.body, category, sentiment, status };
+  });
+}
+
 module.exports = {
+  labelRows,
   parseGemmaLog,
   aggregate,
   jstParts,
