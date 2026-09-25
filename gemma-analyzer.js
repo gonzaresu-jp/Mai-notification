@@ -28,6 +28,46 @@ const REQUEST_TIMEOUT = 60000; // API駆動のため短めに
 const RETRY_TIMES = 3;
 const RETRY_DELAY_MS = 1500;
 
+// Gemini の上限（429）に当たったときの予備（Groq・OpenAI互換）。キー未設定なら使わない
+const FALLBACK_ENDPOINT = process.env.TWITTER_AI_FALLBACK_URL || "https://api.groq.com/openai/v1/chat/completions";
+const FALLBACK_MODEL = process.env.TWITTER_AI_FALLBACK_MODEL || "qwen/qwen3.8-27b";
+const FALLBACK_API_KEY = process.env.TWITTER_AI_FALLBACK_KEY || process.env.GROQ_API_KEY || "";
+
+async function callFallback(prompt) {
+  if (!FALLBACK_API_KEY) throw new Error("fallback not configured");
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  try {
+    const response = await fetch(FALLBACK_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${FALLBACK_API_KEY}`, 'User-Agent': 'mai-push/1.0' },
+      body: JSON.stringify({
+        model: FALLBACK_MODEL,
+        messages: [
+          { role: "system", content: "あなたはツイート解析AIです。JSON形式でのみ回答してください。" },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.1,
+        // 出力上限を小さく・推論（thinking）を止める。Groq 無料枠は出力トークン/分の上限が小さく、
+        // 既定の max_tokens のままだと 1 回のリクエストで上限超過（429 Request too large）になる
+        max_tokens: 400,
+        reasoning_effort: "none",
+        response_format: { type: "json_object" }
+      }),
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(`fallback API ${response.status}: ${detail.slice(0, 200)}`);
+    }
+    const data = await response.json();
+    // 推論モデルの <think>…</think> は取り除く
+    return (data.choices[0].message.content || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /**
  * Gemini API へのリクエストを実行（OpenAI互換エンドポイント）
  */
@@ -64,6 +104,11 @@ async function callAiServer(prompt, retries = RETRY_TIMES) {
       return (data.choices[0].message.content || "").trim();
     } catch (err) {
       lastError = err;
+      // 429（1日の上限など）は数秒待っても回復しないので、リトライせず予備のモデルへ切り替える
+      if (/Gemini API 429/.test(String(err && err.message)) && FALLBACK_API_KEY) {
+        gemmaLogger.warn(`[Gemini] 上限(429)のため予備モデル ${FALLBACK_MODEL} で解析します`);
+        return await callFallback(prompt);
+      }
       if (attempt < retries) {
         const delay = RETRY_DELAY_MS * Math.pow(1.5, attempt);
         gemmaLogger.warn(`[Gemini] リトライ ${attempt + 1}/${retries}: ${err.message}`);
@@ -83,8 +128,15 @@ async function analyzeTweet(tweetText) {
 
   const prompt = `以下のツイートから情報を抽出してください。
 
+【「配信」の定義】
+- ここでいう配信は、YouTube・ツイキャス・Twitch・Bilibili などの動画配信サービスでのライブ配信のこと
+- X（Twitter）上での活動は配信ではない: リプ返（リプライへの返信）・いいね回り・ツイートでの企画・アンケート・画像や動画の投稿予告
+- グッズやボイスの発売・受付開始、動画の公開予告（プレミア公開を除く）も配信ではない
+- 例: 「14時からリプ返するね」→ category=DAILY, status=NONE, start_time=null
+- 例: 「14時からごごまい配信するよ」→ category=LIVE, status=LIVE_SOON, start_time="14:00"
+
 【カテゴリ】(必須: いずれか1つ)
-- LIVE: 配信開始・配信予告・配信予定に関するツイート
+- LIVE: 配信開始・配信予告・配信予定に関するツイート（上の定義の「配信」のみ）
 - NEWS: お知らせ・更新・発表
 - PROMOTION: 宣伝・告知
 - REPOST: RT・引用リツイート
@@ -94,12 +146,12 @@ async function analyzeTweet(tweetText) {
 
 【配信状態 status】(必須: いずれか1つ)
 - LIVE_NOW: 「今から配信します」「配信スタート」など、今すぐ始まることを示す
-- LIVE_SOON: 「〇〇時から配信します」「今夜〇時〜」など、近い将来の配信予告
+- LIVE_SOON: 「〇〇時から配信します」「今夜〇時〜」など、近い将来の配信予告（時刻があっても配信でなければ NONE）
 - TIME_CHANGE: 「〇〇時だったが〇〇時に変更」など、時刻変更の告知
 - NONE: 配信に関係ない、または時刻が全く分からない
 
 【start_time】
-- ツイートに具体的な時刻があれば HH:MM 形式で抽出（例: "21:00"）
+- 配信の開始時刻が具体的にあれば HH:MM 形式で抽出（例: "21:00"）。配信以外の予定の時刻は入れない
 - 時刻が不明または配信と無関係なら null
 
 【time_period】(具体的な時刻が無い配信予告のときの時間帯)
@@ -264,9 +316,25 @@ function formatNaiveLocal(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+// X 上だけの活動（リプ返など）の言葉。配信を示す言葉が無いのにこれがある場合は予定を作らない。
+// 2026-09-24「14時から一気に返し始める（リプ返）」を AI が LIVE_SOON と判定し、配信予定が作られた。
+const X_ONLY_ACTIVITY_RE = /リプ返|リプライ|りぷ返|返信(します|するね|するよ|していく)|いいね回り|ふぁぼ回り/;
+const STREAM_HINT_RE = /配信|枠|生放送|放送|ライブ|LIVE|youtu\.?be|twitcas|ツイキャス|twitch|bilibili|歌枠|ASMR|雑談|ゲーム|実況|コラボ|ごごまい|晩酌|待機|スペース/i;
+
+function isXOnlyActivity(text) {
+  const t = String(text || '');
+  return X_ONLY_ACTIVITY_RE.test(t) && !STREAM_HINT_RE.test(t);
+}
+
 function extractScheduleFromAnalysis(analysis, tweetDate, urls = [], tweetText = '') {
   // status が配信系（LIVE_NOW/SOON/CHANGE）なら category が NEWS でもスケジュール作成
   if (analysis.status === 'NONE') return null;
+  // 配信URLが無く、本文が X 上だけの活動（リプ返等）なら AI の判定に関わらず登録しない
+  const hasStreamUrl = (urls || []).some(u => /youtu\.?be|twitcasting|twitch\.tv|bilibili/i.test(String(u)));
+  if (!hasStreamUrl && isXOnlyActivity(tweetText)) {
+    gemmaLogger.warn('[Gemini] X上の活動（リプ返等）と判断したため予定を作りません:', String(tweetText).slice(0, 60));
+    return null;
+  }
 
   // 具体的な時刻があればそれを使う。無ければ時間帯を解決し、
   // 曜日配置・並び順のための代表時刻（PERIOD_DEFAULT_TIMES）を内部的に当てる。
@@ -342,4 +410,4 @@ function periodToTime(period) {
   return PERIOD_DEFAULT_TIMES[period.toUpperCase()] || null;
 }
 
-module.exports = { analyzeTweet, extractScheduleFromAnalysis, extractUrlsFromTweet, periodToTime, PERIOD_DEFAULT_TIMES };
+module.exports = { analyzeTweet, extractScheduleFromAnalysis, extractUrlsFromTweet, periodToTime, PERIOD_DEFAULT_TIMES, isXOnlyActivity };

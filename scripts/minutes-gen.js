@@ -20,6 +20,7 @@ const MODEL = process.env.MINUTES_MODEL || "gemini-3.5-flash-lite";
 const CHUNK_MS = 300 * 1000; // 5分チャンク
 const CONCURRENCY = 1; // API 呼び出しの並列数（レート制限対策で1）
 const MAX_RETRY = 3;
+const NO_TRANSCRIPT_RECHECK_DAYS = parseInt(process.env.MINUTES_NO_TRANSCRIPT_RECHECK_DAYS || "3", 10);
 const PACE_MS = parseInt(process.env.MINUTES_PACE_MS || "60000", 10); // 成功後のインターバル（Groq無料枠のOTPM 1000/分を踏まえた既定値）
 
 // --- Cloudflare Workers AI 日次無料枠(Neurons)管理 ----------------------------------
@@ -221,6 +222,12 @@ async function main() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_video_minutes_video_id ON video_minutes (video_id)`);
+  // 字幕が無い(404)動画を記録し、NO_TRANSCRIPT_RECHECK_DAYS 日は再確認しない。
+  // whisper が字幕を作れば、再確認時に 200 が返って自動的に生成対象へ戻る。
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS minutes_no_transcript (
+    video_id TEXT PRIMARY KEY,
+    checked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
 
   const targets = await resolveVideos(db, args);
   console.log(`targets: ${targets.length}`);
@@ -229,8 +236,21 @@ async function main() {
   let totalChunks = 0, totalItems = 0, skipped = 0;
   for (const t of targets) {
     const videoId = t.video_id;
+    const noTr = await dbGet(db,
+      `SELECT checked_at FROM minutes_no_transcript WHERE video_id=? AND checked_at > datetime('now', ?)`,
+      [videoId, `-${NO_TRANSCRIPT_RECHECK_DAYS} days`]);
+    if (noTr) { skipped++; continue; }
     let tr;
-    try { tr = await getTranscript(videoId); } catch (e) { console.error(`getTranscript fail ${videoId}:`, e.message); continue; }
+    try { tr = await getTranscript(videoId); } catch (e) {
+      if (/transcript 404/.test(e.message)) {
+        await dbRun(db, `INSERT OR REPLACE INTO minutes_no_transcript (video_id, checked_at) VALUES (?, CURRENT_TIMESTAMP)`, [videoId]);
+        console.log(`skip (no transcript yet): ${videoId} — ${NO_TRANSCRIPT_RECHECK_DAYS}日後に再確認`);
+      } else {
+        console.error(`getTranscript fail ${videoId}:`, e.message);
+      }
+      continue;
+    }
+    await dbRun(db, `DELETE FROM minutes_no_transcript WHERE video_id=?`, [videoId]);
     const meta = tr.meta || {};
     const title = t.title || meta.title || "";
     const streamAt = meta.stream_at || "";
