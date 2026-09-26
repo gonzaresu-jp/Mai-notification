@@ -289,8 +289,7 @@
                                         </div>
                                     </div>
 
-                                    <!-- お誕生日＋周年記念をペアに（スマホで1セル結合・PCは従来通り） -->
-<!-- 付き合った記念日＋推してからをペアに（PCで偶数維持・スマホは従来通り個別セル） -->
+                                    <!-- お誕生日＋推してから：PC/スマホとも個別セル（推し日未設定時はお誕生日が1行に広がる） -->
                                     <div class="stat-pair stat-pair-keep">
                                         <div class="stat-item stat-half">
                                             <button type="button" class="stat-copy-btn" data-copy-target="days-to-birthday"
@@ -301,6 +300,17 @@
                                         </div>
 
                                         <div class="stat-item stat-half">
+                                            <button type="button" class="stat-copy-btn" data-copy-target="days-to-meet"
+                                                aria-label="推してからの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
+                                            <div class="label">推してから</div>
+                                            <div class="value" id="days-to-meet" aria-live="polite" aria-atomic="true">0
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 周年記念＋付き合った記念日をペアに（スマホで1セル結合・PCは従来通り） -->
+                                    <div class="stat-pair">
+                                        <div class="stat-item stat-half">
                                             <button type="button" class="stat-copy-btn"
                                                 data-copy-target="days-to-anniversary" aria-label="周年記念までの日数をコピー"><i
                                                     class="fa-regular fa-clipboard"></i></button>
@@ -308,9 +318,7 @@
                                             <div class="value" id="days-to-anniversary" aria-live="polite"
                                                 aria-atomic="true">0</div>
                                         </div>
-                                    </div>
 
-<div class="stat-pair">
                                         <div class="stat-item stat-half">
                                             <button type="button" class="stat-copy-btn"
                                                 data-copy-target="days-to-love-anniversary"
@@ -319,14 +327,6 @@
                                             <div class="label">付き合った記念日まで <span class="label-date">8月17日</span></div>
                                             <div class="value" id="days-to-love-anniversary" aria-live="polite"
                                                 aria-atomic="true">0</div>
-                                        </div>
-
-                                        <div class="stat-item stat-half">
-                                            <button type="button" class="stat-copy-btn" data-copy-target="days-to-meet"
-                                                aria-label="推してからの日数をコピー"><i class="fa-regular fa-clipboard"></i></button>
-                                            <div class="label">推してから</div>
-                                            <div class="value" id="days-to-meet" aria-live="polite" aria-atomic="true">0
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
