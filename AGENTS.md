@@ -68,4 +68,62 @@
 - 回帰テストは `npm test`（scripts/regression-test.js、HMAC v2＋timestamp検証含む 21 項目）に接続済み。
 - pm2-logrotate 導入済み（20M・10世代・圧縮）。
 
-最終更新: 2026-09-24（外部評価対応）
+## 7. 自動化スクリプト（2026-09-26 追加）— AI はこれを使う
+手動でのミスを防ぐため、以下を実装済み。**作業の対応するフェーズで必ず実行すること。**
+
+### 7.1 デプロイ後の検証（必須）
+```bash
+bash scripts/verify-deploy.sh webui/<file>          # 静的ファイル
+bash scripts/verify-deploy.sh webui/<file>.php      # PHP（バイト比較はskip）
+```
+- **配信バイト数 vs ディスクのバイト数**を機械比較し、nginx の `open_file_cache` による
+  切り詰め（応答が途中で切れ `<script>` が消える）を検出する。**HTTP 200 を返しても
+  気づけないので必ずこのスクリプトを使うこと。** 検出したら自動でTTL待ちして再試行する。
+- 公開 HTML の `</html>` 欠落と `<?php` のにじみ出しも検出する。
+
+### 7.2 ポート位相の検証（本番操作の**前**に必須）
+```bash
+bash scripts/assert-port.sh prod        # 8080 が本番ツリーか
+bash scripts/assert-port.sh staging     # 8081 が staging ツリーか
+```
+- ポート → PID → 実行スクリプトパスを照合する。**不一致なら exit 1 で停止**。
+- AGENTS.md §1 の事故（`curl localhost:8081` で本番と誤認）を防ぐ。
+
+### 7.3 push 前の自動検査（pre-push フック、有効化済み）
+`core.hooksPath = scripts/hooks` により、push 時に自動で：
+- ステージ・コミット対象の `.js` に対し `node --check`
+- `.php` に対し `php -l`
+- 回帰テスト `npm test`（21項目、約4秒）
+- 構文エラーがあれば push を拒否。回避は `git push --no-verify` または `SKIP_PREPUSH_REGRESSION=1`。
+
+### 7.4 staging/本番のドリフト検出
+```bash
+bash scripts/check-drift.sh            # 乖離の有無と是正コマンドを表示
+bash scripts/check-drift.sh --quiet    # cron 用（出力最小）
+```
+- git ブランチの乖離、Service Worker バージョン、主要ファイルの md5 一致、
+  未コミット変更を検査する。**exit 0=乖離なし / 1=乖離あり**。
+- 毎晩 00:05 の `update-subscribers-and-commit.sh` が作る `webui/data` のみの
+  自動コミットによる behind は**正常と判定**（誤検出しない）。
+- **cron 登録済み**（1日1回 06:30、0.14秒。ログは `logs/drift.log`）:
+  ```
+  30 6 * * * cd /var/www/html/mai-push && ./scripts/check-drift.sh --quiet >> logs/drift.log 2>&1
+  ```
+  乖離があった場合のみログに記録される（--quiet は出力を stderr に出すため、
+  乖離なしは無言で exit 0）。
+
+### 7.5 日次データ更新（cron 実装済み・手動介入不要）
+```
+5 0 * * * cd /var/www/html/mai-push && ./scripts/update-subscribers-and-commit.sh >> logs/subscribers.log 2>&1
+```
+- `scripts/update-subscribers.js` で YouTube 登録者数を取得し `webui/data/*.txt` に追記、
+  そのまま **commit + push** する。`webui/data` は ignore 済みだが追跡済みのため `git add -u` を使う。
+- 登録者数が変わらない日は空コミットを作らない。**自動pushは他作業と競合しないよう
+  データ変更があった日のみ**。push 失敗時はログに記録し exit 1。
+
+### 7.6 改行コード
+`.gitattributes` で `text=auto eol=lf` を設定済み。LF→CRLF 混入で作業ツリーが
+dirty になる事故（2026-09-26、main.js を含む8ファイル）を防止。既存の CRLF ファイルは
+遅延正規化。バイナリ拡張子は `binary` と明示。
+
+最終更新: 2026-09-26（自動化スクリプト追加 / ログイン・wave 修正 / nginx 最適化）
