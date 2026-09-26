@@ -14,8 +14,8 @@
 #   - update-subscribers.js は冪等（同日同値なら unchanged で書かない）ため、
 #     changed が返らない日は commit しない（空コミットを作らない）
 #   - 対象は webui/data/ のみ。其他の未コミット変更巻き込まない
-#   - 自動 push はしない。backup.sh と同様、記録は commit まで。
-#     必要なら手動で git push する（自動 push は他作業と競合する）
+#   - データ変更があった日のみ push する（commit した時だけ）。何もない日は push しない。
+#   - push 失敗時は commit を残したままログに記録し、次回実行時に再送される
 #   - 既存の未コミット変更があれば本次分は commit せず警告だけ出す
 #
 # 保存先・ログ:
@@ -65,3 +65,14 @@ git commit -q -m "chore(data): ${DATE} の登録者数を自動更新
 scripts/update-subscribers.js が日次で取得・追記した webui/data/*.txt の差分。
 cron: scripts/update-subscribers-and-commit.sh" -- webui/data
 log "commit しました: $(git rev-parse --short HEAD) $(git log -1 --format=%s)"
+
+# --- 5. 自動 push ---
+#   毎晩の data コミットを origin へ反映し、ローカルを origin と同期させる。
+#   データ変更があった日（= commit した場合）のみ push するため、
+#   何もない日に余計な push を行わない。
+#   push に失敗しても commit は既に済んでいるため、次回実行時に再送される。
+if ! git push origin main 2>&1; then
+  log "ERROR: git push に失敗しました。origin/main が進んでいる場合は手動で rebase してください"
+  exit 1
+fi
+log "push 完了: origin/main = $(git rev-parse --short origin/main)"
