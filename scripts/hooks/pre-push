@@ -1,0 +1,86 @@
+#!/bin/bash
+# git pre-push フック（共有可能版）
+#
+# 有効化（リポジトリに 1 度だけ）:
+#   git config core.hooksPath scripts/hooks
+#
+# なぜ必要か:
+#   構文エラーや回帰テストの失敗が_remote_ に到達してから気づくのは遅い。
+#   このフックは push 直前に機械検査し、CI 等に頼らずにミスを塞ぐ。
+#
+# 実行内容:
+#   1. ステージ済みの .js に対し node --check
+#   2. ステージ済みの .php に対し php -l
+#   3. 回帰テスト（npm test / scripts/regression-test.js）
+#
+# 回避:
+#   git push --no-verify        … フック全体をスキップ
+#   SKIP_PREPUSH_REGRESSION=1   … 回帰テストのみスキップ（構文検査は実行）
+#   SKIP_PREPUSH=1              … フック全体をスキップ（cron の自動 push 用）
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+
+if [ "${SKIP_PREPUSH:-0}" = "1" ]; then
+  echo "[pre-push] SKIP_PREPUSH=1 によりスキップ"
+  exit 0
+fi
+
+RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; RST=$'\033[0m'
+fail=0
+
+# --- 1. ステージ済み .js の構文検査 ---
+JS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.js$' || true)
+if [ -n "$JS_FILES" ]; then
+  echo "[pre-push] JS 構文検査: $(echo "$JS_FILES" | wc -l) ファイル"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    if ! out=$(node --check "$f" 2>&1); then
+      echo "${RED}[pre-push] ✗ 構文エラー: $f${RST}"
+      echo "$out" | head -3 | sed 's/^/         /'
+      fail=1
+    fi
+  done <<< "$JS_FILES"
+  [ $fail -eq 0 ] && echo "${GRN}[pre-push] ✓ JS 構文 OK${RST}"
+fi
+
+# --- 2. ステージ済み .php の構文検査 ---
+PHP_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.php$' || true)
+if [ -n "$PHP_FILES" ] && command -v php >/dev/null 2>&1; then
+  echo "[pre-push] PHP 構文検査: $(echo "$PHP_FILES" | wc -l) ファイル"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    if ! out=$(php -l "$f" 2>&1); then
+      echo "${RED}[pre-push] ✗ 構文エラー: $f${RST}"
+      echo "$out" | head -3 | sed 's/^/         /'
+      fail=1
+    fi
+  done <<< "$PHP_FILES"
+  [ $fail -eq 0 ] && echo "${GRN}[pre-push] ✓ PHP 構文 OK${RST}"
+elif [ -n "$PHP_FILES" ]; then
+  echo "${YLW}[pre-push] php コマンドが無いので .php は検査スキップ${RST}"
+fi
+
+# 構文エラーがあれば回帰テストを浪費せず打ち切る
+if [ $fail -ne 0 ]; then
+  echo "${RED}[pre-push] 構文エラーのため中断（--no-verify で回避可能）${RST}"
+  exit 1
+fi
+
+# --- 3. 回帰テスト ---
+if [ "${SKIP_PREPUSH_REGRESSION:-0}" = "1" ]; then
+  echo "${YLW}[pre-push] SKIP_PREPUSH_REGRESSION=1 により回帰テストをスキップ${RST}"
+  exit 0
+fi
+
+echo "[pre-push] 回帰テストを実行 (npm test)"
+if npm test; then
+  echo "${GRN}[pre-push] ✓ 回帰テスト pass${RST}"
+else
+  echo "${RED}[pre-push] ✗ 回帰テスト failed${RST}"
+  echo "          差し戻す場合は git push --no-verify"
+  fail=1
+fi
+
+exit $fail
