@@ -1,7 +1,8 @@
 
                 document.addEventListener('DOMContentLoaded', () => {
                     loadWeeklySchedule('weekly-schedule');
-                    loadNotificationHeatmap('notification-heatmap');
+                    // ヒートマップ(53週×7日のセル)は「ヒートマップ」タブを開いた時に初回だけ描画する
+                    // （index-history-tabs.js）。初期表示の DOM 量とレイアウト計算を削減。
                     enableAutoReload(5);
 
                     // システムステータス情報取得

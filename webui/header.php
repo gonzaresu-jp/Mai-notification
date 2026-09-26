@@ -56,8 +56,8 @@
             <li class="menu-notification-toggle">
                 <!-- 画像切り替えコンテナ -->
                 <div class="toggle-image-container">
-                    <img src="/off.webp" alt="通知オフ" class="toggle-image off" />
-                    <img src="/on.webp" alt="通知オン" class="toggle-image on" />
+                    <img src="/off.webp" alt="通知オフ" class="toggle-image off" loading="lazy" decoding="async" />
+                    <img src="/on.webp" alt="通知オン" class="toggle-image on" loading="lazy" decoding="async" />
                 </div>
 
                 <div class="toggle-controls-wrapper">

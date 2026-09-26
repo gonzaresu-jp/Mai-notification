@@ -13,6 +13,8 @@
     ?>
 
 
+    <!-- LCP 要素（上部のまいちゃん画像）を最優先で取得 -->
+    <link rel="preload" href="./3dmai.webp" as="image" type="image/webp" fetchpriority="high" />
     <link rel="manifest" href="./manifest.json" />
     <link rel="stylesheet" href="./heatmap.min.css?v=<?= @filemtime(__DIR__ . '/heatmap.min.css') ?: time(); ?>" />
 
@@ -50,8 +52,17 @@
     <!-- iOS Helper を main.js より先に読み込む -->
     <script src="/ios-helper.js" defer></script>
 
-    <!-- Fonts: display=swap でブロッディング軽減 -->
-    <link href="https://fonts.googleapis.com/css2?family=Kaisei+Tokumin&display=swap" rel="stylesheet" />
+    <!-- Fonts: 週間メッセージ/ボイス吹き出し専用の装飾フォント。
+         <link> を直書きすると Cloudflare Fonts が約28KBの @font-face を HTML に展開するため、
+         ページ読み込み後に JS で追加する（未読込時は Hiragino/Meiryo で表示される）。 -->
+    <script>
+      window.addEventListener('load', function () {
+        var l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = 'https://fonts.googleapis.com/css2?family=Kaisei+Tokumin&display=swap';
+        document.head.appendChild(l);
+      });
+    </script>
 
     <!-- google -->
     <meta name="google-site-verification" content="Cy8Wfrb-EEkhphBoNiZV2P6dFt9g501JONelux-P2jQ" />
@@ -256,7 +267,7 @@
             <div class="stats-card bg-blur" role="region" aria-label="統計情報">
 
                 <img src="./3dmai.webp" alt="まいちゃんのイラスト" class="count-bg-mai" aria-hidden="true" width="384" height="512"
-                    loading="lazy" />
+                    fetchpriority="high" decoding="async" />
 
                 <!-- ✅ カルーセルに role="region" + aria-label、ドットに role="tablist" -->
                 <div class="stats-carousel" role="region" aria-label="情報カルーセル" aria-roledescription="carousel">

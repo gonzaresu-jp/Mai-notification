@@ -46,3 +46,10 @@
   align-items: center;
   gap: 4px;
 }
+
+/* 画面外の重いセクションは表示されるまでレイアウト/描画を省略（PageSpeed: Style & Layout 削減） */
+.log-section,
+#footer-slot {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
+}
