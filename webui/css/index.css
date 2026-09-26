@@ -53,3 +53,22 @@
   content-visibility: auto;
   contain-intrinsic-size: auto 900px;
 }
+
+/* Android アプリ用「ホームに追加」ボタン（index-dashboard.js が追加） */
+.pin-widget-btn {
+  order: 1;
+  margin-left: 8px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(177, 30, 124, .35);
+  background: #fff;
+  color: #B11E7C;
+  font-size: .72rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  letter-spacing: 0;
+  position: relative;
+  z-index: 2;
+}
+.pin-widget-btn:active { transform: scale(.96); }

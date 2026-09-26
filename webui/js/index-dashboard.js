@@ -55,3 +55,28 @@
                     }
                 }
             
+// Android アプリ(v1.2〜)のみ: カウント／スケジュールの見出しに「ホーム画面に追加」ボタンを出す
+(function () {
+    function setup() {
+        var app = window.MaiApp;
+        if (!app || typeof app.requestPinWidget !== 'function') return;
+        [['.count-page h2', 'count', 'カウント'], ['.week-title', 'schedule', 'スケジュール']].forEach(function (d) {
+            var h = document.querySelector(d[0]);
+            if (!h || h.querySelector('.pin-widget-btn')) return;
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'pin-widget-btn';
+            b.setAttribute('aria-label', d[2] + 'ウィジェットをホーム画面に追加');
+            b.innerHTML = '<i class="fa-solid fa-thumbtack" aria-hidden="true"></i> ホームに追加';
+            b.addEventListener('click', function (e) {
+                e.preventDefault(); e.stopPropagation();
+                var ok = false;
+                try { ok = app.requestPinWidget(d[1]); } catch (err) { ok = false; }
+                if (!ok) alert('お使いのホームアプリはこの方法に対応していません。\nホーム画面を長押し →「ウィジェット」→「まいちゃん通知」から追加できます。');
+            });
+            h.appendChild(b);
+        });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
+    else setup();
+})();

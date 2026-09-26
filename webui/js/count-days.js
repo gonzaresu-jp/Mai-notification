@@ -122,6 +122,10 @@ function initOshiDays() {
 
   function loadAndApply() {
     const effective = localStorage.getItem(STORAGE_KEY) || dateInput.value || null;
+    // Android アプリのホーム画面ウィジェットへ「推してから」の日付を渡す（v1.2〜。古いアプリには無い）
+    try {
+      if (window.MaiApp && typeof window.MaiApp.setOshiDate === 'function') window.MaiApp.setOshiDate(effective || '');
+    } catch (e) { /* noop */ }
 
     if (!effective) {
       meetStatItem.style.display = 'none';
