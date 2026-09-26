@@ -5,70 +5,259 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>管理者ログイン</title>
     <style>
-        * { box-sizing: border-box; }
+        :root {
+            --mai-primary: #B11E7C;
+            --mai-primary-2: #d63b97;
+            --mai-primary-dark: #8e1763;
+            --mai-soft: #f7e0ef;
+            --mai-ink: #2c2c3e;
+            --mai-dim: #6d6779;
+            --mai-faint: #a8a2b0;
+            --mai-line: #eae3ec;
+            --mai-grad: linear-gradient(135deg, #d63b97 0%, #B11E7C 55%, #8e1763 100%);
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { height: 100%; }
         body {
-            font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0; padding: 20px; min-height: 100vh;
-            display: flex; justify-content: center; align-items: center;
+            font-family: "Hiragino Maru Gothic ProN", "Rounded Mplus 1c", "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+            margin: 0; padding: 24px 20px; min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--mai-ink);
+            background:
+                radial-gradient(1000px 520px at 10% -10%, #ffd9ee 0%, transparent 60%),
+                radial-gradient(880px 480px at 94% 4%, #ffe3f4 0%, transparent 58%),
+                radial-gradient(900px 620px at 50% 118%, #f2e7ff 0%, transparent 62%),
+                linear-gradient(160deg, #fff7fb 0%, #f8ecf5 100%);
+            background-attachment: fixed;
+            overflow-x: hidden;
         }
+        /* slow drifting color blobs */
+        .blob {
+            position: fixed; border-radius: 50%; filter: blur(70px);
+            opacity: .5; pointer-events: none; z-index: 0;
+        }
+        .blob.b1 {
+            width: 420px; height: 420px; top: -120px; left: -80px;
+            background: radial-gradient(circle, #ff9ecd 0%, transparent 70%);
+            animation: drift 22s ease-in-out infinite;
+        }
+        .blob.b2 {
+            width: 380px; height: 380px; bottom: -140px; right: -60px;
+            background: radial-gradient(circle, #c9a6ff 0%, transparent 70%);
+            animation: drift 27s ease-in-out infinite reverse;
+        }
+        @keyframes drift {
+            0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+            50%      { transform: translate3d(38px, 30px, 0) scale(1.09); }
+        }
+
         .login-container {
-            background: white; border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 40px; max-width: 400px; width: 100%;
+            position: relative; z-index: 1;
+            width: 100%; max-width: 420px;
+            padding: 40px 36px 32px;
+            background: rgba(255, 255, 255, .82);
+            -webkit-backdrop-filter: blur(16px) saturate(1.3);
+            backdrop-filter: blur(16px) saturate(1.3);
+            border: 1px solid rgba(255, 255, 255, .9);
+            border-radius: 24px;
+            box-shadow:
+                0 1px 1px rgba(90, 30, 70, .04),
+                0 12px 28px -12px rgba(142, 23, 99, .18),
+                0 40px 80px -32px rgba(90, 30, 70, .28);
+            animation: rise .5s cubic-bezier(.2, .8, .25, 1) both;
         }
-        h1 { margin: 0 0 30px 0; color: #333; font-size: 28px; text-align: center; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; color: #555; font-weight: 600; font-size: 14px; }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(14px) scale(.985); }
+            to   { opacity: 1; transform: none; }
+        }
+
+        .brand {
+            display: flex; flex-direction: column; align-items: center;
+            text-align: center; margin-bottom: 30px;
+        }
+        .brand-mark {
+            width: 62px; height: 62px; border-radius: 20px;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--mai-grad);
+            color: #fff; font-size: 25px;
+            box-shadow: 0 10px 24px -6px rgba(177, 30, 124, .5), inset 0 1px 0 rgba(255, 255, 255, .35);
+            margin-bottom: 16px;
+        }
+        .brand h1 {
+            margin: 0; font-size: 1.45rem; font-weight: 800;
+            letter-spacing: .02em; color: var(--mai-ink);
+        }
+        .brand p {
+            margin: 6px 0 0; font-size: .82rem; color: var(--mai-dim);
+        }
+
+        .form-group { margin-bottom: 18px; }
+        label {
+            display: block; margin-bottom: 7px;
+            font-size: .78rem; font-weight: 700; letter-spacing: .05em;
+            color: var(--mai-dim);
+        }
+        .field { position: relative; }
+        .field-icon {
+            position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+            color: #bdb6c6; font-size: 15px; pointer-events: none;
+            transition: color .2s;
+        }
         input[type="text"], input[type="password"] {
-            width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0;
-            border-radius: 8px; font-size: 15px; transition: border-color 0.2s; font-family: inherit;
+            width: 100%; padding: 13px 15px 13px 42px;
+            border: 1.5px solid var(--mai-line);
+            border-radius: 12px;
+            background: #fdfbfe;
+            font-size: 15px; font-family: inherit; color: var(--mai-ink);
+            transition: border-color .2s, box-shadow .2s, background .2s;
+            -webkit-appearance: none; appearance: none;
         }
-        input:focus { outline: none; border-color: #667eea; }
+        input::placeholder { color: #c3bdcb; }
+        input:focus {
+            outline: none; background: #fff;
+            border-color: var(--mai-primary);
+            box-shadow: 0 0 0 4px rgba(177, 30, 124, .12);
+        }
+        .field:focus-within .field-icon { color: var(--mai-primary); }
+        .reveal {
+            position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+            width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+            border: none; background: transparent; border-radius: 9px;
+            color: #bdb6c6; font-size: 14px; cursor: pointer; padding: 0;
+            transition: color .2s, background .2s;
+        }
+        .reveal:hover { color: var(--mai-primary); background: rgba(177, 30, 124, .07); }
+        #password { padding-right: 44px; }
+
         button {
-            width: 100%; padding: 14px 24px; border: none; border-radius: 8px;
-            font-size: 16px; font-weight: 600; cursor: pointer;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; transition: all 0.2s;
+            width: 100%; padding: 14px 24px; border: none; border-radius: 12px;
+            font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer;
+            letter-spacing: .03em;
+            transition: transform .18s, box-shadow .18s, background .2s, opacity .2s;
         }
-        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.4); }
-        button:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        .btn-primary {
+            background: var(--mai-grad); color: #fff;
+            box-shadow: 0 8px 20px -8px rgba(177, 30, 124, .6);
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 28px -10px rgba(177, 30, 124, .7);
+        }
+        .btn-primary:active:not(:disabled) { transform: translateY(0); }
+        .btn-primary:disabled {
+            background: #d9d3dd; color: #fff; cursor: not-allowed;
+            box-shadow: none; transform: none;
+        }
+        .btn-passkey {
+            margin-bottom: 18px;
+            background: #fff; color: var(--mai-primary);
+            border: 1.5px solid rgba(177, 30, 124, .32);
+            box-shadow: 0 4px 12px -8px rgba(177, 30, 124, .5);
+        }
+        .btn-passkey:hover:not(:disabled) {
+            background: rgba(177, 30, 124, .06);
+            border-color: rgba(177, 30, 124, .55);
+            transform: translateY(-2px);
+        }
+        .btn-passkey:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+        .btn-passkey i, .btn-primary i { margin-right: 6px; }
+
+        .divider { margin: 20px 0 18px; }
+        .divider-inner {
+            display: flex; align-items: center; gap: 12px;
+            font-size: .76rem; color: var(--mai-faint); letter-spacing: .04em;
+        }
+        .divider-inner::before, .divider-inner::after {
+            content: ""; flex: 1; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--mai-line), transparent);
+        }
+
         .error-message {
-            margin-top: 16px; padding: 12px 16px; background: #f8d7da;
-            color: #721c24; border: 1px solid #f5c6cb; border-radius: 8px;
-            font-size: 14px; display: none;
+            display: none; align-items: center; gap: 9px;
+            margin-top: 18px; padding: 12px 14px;
+            background: #fdeef1; color: #9f1239;
+            border: 1px solid #fbd0da; border-radius: 12px;
+            font-size: .83rem; line-height: 1.5;
         }
-        .error-message.show { display: block; }
+        .error-message.show { display: flex; }
+        .error-message i { color: #e11d48; }
+
         .security-note {
-            margin-top: 20px; padding: 12px; background: #fff3cd;
-            border: 1px solid #ffc107; border-radius: 8px; font-size: 12px; color: #856404;
+            display: flex; align-items: flex-start; gap: 9px;
+            margin-top: 24px; padding: 12px 14px;
+            background: rgba(177, 30, 124, .05);
+            border: 1px dashed rgba(177, 30, 124, .26);
+            border-radius: 12px;
+            font-size: .77rem; line-height: 1.6; color: #8a3a6b;
+        }
+        .security-note i { margin-top: 2px; color: var(--mai-primary); }
+
+        @media (max-width: 460px) {
+            body { padding: 16px; }
+            .login-container { padding: 32px 22px 26px; border-radius: 20px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .blob, .login-container { animation: none !important; }
+            * { transition-duration: .01ms !important; }
         }
     </style>
 <link rel="stylesheet" href="/fontawesome-free-7.2.0-web/css/all.min.css" crossorigin="anonymous" />
+<!-- フォールバック: 本番の配置は webui/ 配下。ルートパスが 404 の環境向け -->
+<link rel="stylesheet" href="/webui/fontawesome-free-7.2.0-web/css/all.min.css" crossorigin="anonymous" />
 </head>
 <body>
+    <div class="blob b1" aria-hidden="true"></div>
+    <div class="blob b2" aria-hidden="true"></div>
+
     <div class="login-container">
-        <h1><i class="fa-solid fa-lock"></i> 管理者ログイン</h1>
-        <button type="button" id="btn-passkey" style="display:none; margin-bottom: 18px; background: linear-gradient(135deg, #17a05e 0%, #0e7a45 100%);">
+        <div class="brand">
+            <div class="brand-mark"><i class="fa-solid fa-lock"></i></div>
+            <h1>管理者ログイン</h1>
+            <p>管理者専用エリア</p>
+        </div>
+
+        <button type="button" id="btn-passkey" class="btn-passkey" style="display:none;">
             <i class="fa-solid fa-key"></i> パスキーでログイン
         </button>
-        <div id="passkey-hint" style="display:none; margin-bottom: 18px; text-align:center; color:#666; font-size: 13px;">
-            またはパスワードでログイン
+        <div id="passkey-hint" class="divider" style="display:none;">
+            <div class="divider-inner">またはパスワードでログイン</div>
         </div>
-        <form id="login-form">
+
+        <form id="login-form" autocomplete="on">
             <div class="form-group">
                 <label for="username">ユーザー名</label>
-                <input type="text" id="username" autocomplete="username" required />
+                <div class="field">
+                    <i class="fa-solid fa-user field-icon" aria-hidden="true"></i>
+                    <input type="text" id="username" name="username" autocomplete="username"
+                           autocapitalize="none" autocorrect="off" spellcheck="false"
+                           placeholder="admin" required />
+                </div>
             </div>
             <div class="form-group">
                 <label for="password">パスワード</label>
-                <input type="password" id="password" autocomplete="current-password" required />
+                <div class="field">
+                    <i class="fa-solid fa-lock field-icon" aria-hidden="true"></i>
+                    <input type="password" id="password" name="password" autocomplete="current-password"
+                           placeholder="••••••••" required />
+                    <button type="button" class="reveal" id="btn-reveal" aria-label="パスワードを表示"
+                            aria-pressed="false" tabindex="-1">
+                        <i class="fa-regular fa-eye" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
-            <button type="submit" id="btn-login">ログイン</button>
+            <button type="submit" id="btn-login" class="btn-primary">
+                <i class="fa-solid fa-right-to-bracket"></i> ログイン
+            </button>
         </form>
-        <div class="error-message" id="error-message"></div>
+
+        <div class="error-message" id="error-message" role="alert" aria-live="polite">
+            <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+            <span id="error-text"></span>
+        </div>
+
         <div class="security-note">
-            <i class="fa-solid fa-triangle-exclamation"></i> このページは管理者専用です。不正アクセスは記録されます。
+            <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+            <span>このページは管理者専用です。不正アクセスは記録されます。</span>
         </div>
     </div>
 
@@ -131,6 +320,9 @@
         const btnPasskey = document.getElementById('btn-passkey');
         const passkeyHint = document.getElementById('passkey-hint');
         const errorMessage = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        const btnReveal = document.getElementById('btn-reveal');
+        const PASSKEY_LABEL = '<i class="fa-solid fa-key"></i> パスキーでログイン';
 
         // サーバーがHTMLエラーページを返しても落ちないJSON読み取り
         async function readJson(res) {
@@ -138,6 +330,20 @@
             try { return JSON.parse(text); }
             catch (e) { throw new Error('サーバーエラー (HTTP ' + res.status + ')'); }
         }
+
+        // ---- パスワード表示切替 ----
+        btnReveal.addEventListener('click', () => {
+            const shown = passwordInput.type === 'text';
+            passwordInput.type = shown ? 'password' : 'text';
+            btnReveal.setAttribute('aria-pressed', String(!shown));
+            btnReveal.setAttribute('aria-label', shown ? 'パスワードを表示' : 'パスワードを隠す');
+            btnReveal.innerHTML = shown
+                ? '<i class="fa-regular fa-eye" aria-hidden="true"></i>'
+                : '<i class="fa-regular fa-eye-slash" aria-hidden="true"></i>';
+            passwordInput.focus();
+            const len = passwordInput.value.length;
+            try { passwordInput.setSelectionRange(len, len); } catch (e) { /* 未対応 */ }
+        });
 
         // ---- パスキー登録はこのページでは行わない(admin.html から) ----
         // ---- パスキーログイン ----
@@ -165,7 +371,7 @@
                 showError(error.message || String(error));
             } finally {
                 btnPasskey.disabled = false;
-                btnPasskey.textContent = '<i class="fa-solid fa-key"></i> パスキーでログイン';
+                btnPasskey.innerHTML = PASSKEY_LABEL;
             }
         }
         btnPasskey.addEventListener('click', passkeyLogin);
@@ -201,14 +407,16 @@
                 showError(error.message);
             } finally {
                 btnLogin.disabled = false;
-                btnLogin.textContent = 'ログイン';
+                btnLogin.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> ログイン';
             }
         });
 
+        let errorTimer = null;
         function showError(message) {
-            errorMessage.textContent = message;
+            errorText.textContent = message;
             errorMessage.classList.add('show');
-            setTimeout(() => { errorMessage.classList.remove('show'); }, 5000);
+            clearTimeout(errorTimer);
+            errorTimer = setTimeout(() => { errorMessage.classList.remove('show'); }, 5000);
         }
 
         // 既にログイン済みの場合は管理画面へ。未ログインならパスキー可否を確認
