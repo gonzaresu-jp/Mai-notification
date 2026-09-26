@@ -86,7 +86,7 @@ function initOshiDays() {
     el.innerHTML = await res.text();
   };
 
-  await load('header-slot', '/header.html');
+  await load('header-slot', '/header.php');
   initOshiDays();               // ← ここが重要：header 注入後に初期化
-  await load('footer-slot', '/footer.html');
+  await load('footer-slot', '/footer.php');
 })();

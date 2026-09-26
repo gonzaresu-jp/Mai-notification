@@ -7,7 +7,7 @@
       el.innerHTML = await res.text();
     };
 
-    await load('header-slot', '/header.html');
+    await load('header-slot', '/header.php');
     window.initHeader?.();
-    await load('footer-slot', '/footer.html');
+    await load('footer-slot', '/footer.php');
   })();

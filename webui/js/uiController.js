@@ -7,7 +7,7 @@
 //
 // 前提:
 // - index.html 側で window.__layoutReady（header/footer 読み込み Promise）があるとさらに安定
-//   例: window.__layoutReady = (async()=>{ await load('header-slot','/header.html'); ... })();
+//   例: window.__layoutReady = (async()=>{ await load('header-slot','/header.php'); ... })();
 
 import {
   getPlatformSettings,
