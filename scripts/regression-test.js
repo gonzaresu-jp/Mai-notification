@@ -29,6 +29,22 @@ const portIdx = args.indexOf("--port");
 const PORT = portIdx >= 0 ? Number(args[portIdx + 1]) || 18099 : 18099;
 const BASE = `http://127.0.0.1:${PORT}`;
 
+// ---- 本番 Leak ガード ----
+// 本番(8080) の .env は DISABLE_NOTIFICATIONS=0 であり、通知抑止が効かない。
+// 誤って本番に対して --port 8080 を指定して実行すると、[2] の完全認証ケースで
+// 実ユーザー全員にテスト通知が届いてしまう。それを機械的に防ぐ。
+const PROD_PORTS = [8080];
+if (PROD_PORTS.includes(PORT)) {
+  console.error("╔════════════════════════════════════════════════════════╗");
+  console.error("║ ✗ 本番ポートが検査対象に指定されています                                 ║");
+  console.error("║   本番(8080) は DISABLE_NOTIFICATIONS=0 のため、             ║");
+  console.error("║   このテストの通知が実ユーザーへ実送されます。                              ║");
+  console.error("║   実行を中止します。staging(8081) または                          ║");
+  console.error("║   ローカル(既定 18099) を使用してください。                           ║");
+  console.error("╚════════════════════════════════════════════════════════╝");
+  process.exit(2);
+}
+
 const TOKEN = "regression-test-token-" + crypto.randomBytes(8).toString("hex");
 const HMAC_SECRET = "regression-test-hmac-" + crypto.randomBytes(8).toString("hex");
 const DB_NAME = `regression-test-${Date.now()}.db`;

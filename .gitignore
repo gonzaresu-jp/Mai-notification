@@ -27,6 +27,7 @@ twitcasting-token.json
 twitch_state.json
 webui/styles/
 history.json
+history-*.json
 firebase-messaging-sw.js
 logs/
 mai-push-9c47c-firebase-adminsdk-fbsvc-5d72ba0aba.json
