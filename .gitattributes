@@ -1,0 +1,46 @@
+# 改行コードの規範化
+#
+# 背景（2026-09-26 の実事故）:
+#   LF のファイル群が LF→CRLF に変換されて混入し、作業ツリーが 8 ファイル分
+#   dirty になった（main.js / 各 .md / package-lock.json が該当）。
+#   内容は一切変わっておらず CR だけが異なることを確認のうえ revert した。
+#   .gitattributes が無く core.autocrlf も未設定だったため再発防止が存在しなかった。
+#
+#   特に main.js は本番で稼働中のファイルであり、CRLF 混入は
+#   promote.sh の「本番に未コミット変更があれば中止」条件まで雁が過程で
+#   デプロイを阻害しうる。
+#
+# 方針:
+#   text=auto eol=lf により、インデックスとチェックアウトの両方で LF に統一する。
+#   既存の CRLF ファイルは「次に編集・add された時点で」遅延的に LF 正規化される。
+#   （一括で今すぐ変換したい場合は `git add --renormalize .` を明示的に実行する）
+* text=auto eol=lf
+
+# バイナリは text 扱いすると壊れるため明示する（text=auto でも自動判定されるが、
+# 判定が環境依存になるのを避ける 위해性别を宣言しておく）
+*.webp binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.avif binary
+*.mp4 binary
+*.webm binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.db binary
+*.db-wal binary
+*.db-shm binary
+*.sqlite binary
+*.exe binary
+*.dll binary
+*.so binary
+*.node binary
+*.apk binary
+*.asar binary
+*.zip binary
+*.mp3 binary
+*.wav binary
