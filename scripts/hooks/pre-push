@@ -30,8 +30,35 @@ fi
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; RST=$'\033[0m'
 fail=0
 
+# --- 0. 検査対象ファイル（重要） ---
+#   git diff --cached は「未コミットのステージ」を見るため、コミット済の
+#   push 時は常に空になる。検査するのは **この push で送信されるコミット差分**。
+#   尺 hemodynamic に remote の到達点と local HEAD を比較して範囲を算出する。
+#   pre-push フックは引数として <remote name> <remote URL> を受け取る。
+REMOTE_NAME="${1:-origin}"
+REMOTE_URL="${2:-}"
+
+# 送信されるコミットの範囲（remote が未取得なら origin/main との差）
+if BASE=$(git rev-parse --verify --quiet "@{upstream}" 2>/dev/null); then
+  RANGE="$BASE..HEAD"
+else
+  RANGE="origin/main..HEAD"
+fi
+
+echo "[pre-push] 検査範囲: $RANGE  (remote: $REMOTE_NAME)"
+
+# 検査対象のファイル一覧（追加・変更・コピー。削除は対象外）
+changed_files() {
+  git diff --name-only --diff-filter=ACM $RANGE 2>/dev/null
+}
+
+ALL_CHANGED=$(changed_files)
+if [ -z "$ALL_CHANGED" ]; then
+  echo "[pre-push] 送信対象のファイル変更なし。構文検査をスキップ"
+fi
+
 # --- 1. ステージ済み .js の構文検査 ---
-JS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.js$' || true)
+JS_FILES=$(printf '%s\n' "$ALL_CHANGED" | grep '\.js$' || true)
 if [ -n "$JS_FILES" ]; then
   echo "[pre-push] JS 構文検査: $(echo "$JS_FILES" | wc -l) ファイル"
   while IFS= read -r f; do
@@ -46,7 +73,7 @@ if [ -n "$JS_FILES" ]; then
 fi
 
 # --- 2. ステージ済み .php の構文検査 ---
-PHP_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.php$' || true)
+PHP_FILES=$(printf '%s\n' "$ALL_CHANGED" | grep '\.php$' || true)
 if [ -n "$PHP_FILES" ] && command -v php >/dev/null 2>&1; then
   echo "[pre-push] PHP 構文検査: $(echo "$PHP_FILES" | wc -l) ファイル"
   while IFS= read -r f; do
