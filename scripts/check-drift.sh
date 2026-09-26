@@ -49,9 +49,25 @@ say "[1] git ブランチ"
 say "  本番 HEAD  : $PROD_HEAD"
 say "  staging HEAD: $STG_HEAD (origin/main  ahead $STG_AHEAD / behind $STG_BEHIND)"
 
-if [ "$STG_AHEAD" != "0" ] || [ "$STG_BEHIND" != "0" ]; then
-  echo "  ⚠ 乖離あり: staging が origin/main と一致していません" >&2
+# origin/main が先行している commit が「webui/data のみの変更」なら、
+# update-subscribers-and-commit.sh が毎晩 00:05 に作る自動コミットであり、
+# staging が遅れるのは正常（データは生成物なので staging への追従は不要）。
+# その場合は「コード乖離ではない」と判定し、誤報を排除する。
+CODE_ONLY=""
+if [ "$STG_BEHIND" != "0" ] && [ "$STG_AHEAD" = "0" ]; then
+  CODE_ONLY=$(git -C "$STG_DIR" diff --name-only HEAD..origin/main 2>/dev/null \
+    | grep -v '^webui/data/' || true)
+fi
+
+if [ "$STG_AHEAD" != "0" ]; then
+  echo "  ⚠ 乖離あり: staging に独自コミット（ahead $STG_AHEAD）があります" >&2
   drift=1
+elif [ "$STG_BEHIND" != "0" ] && [ -n "$CODE_ONLY" ]; then
+  say "  ⚠ コード乖離あり: staging が behind $STG_BEHIND。webui/data 以外の差分:"
+  printf '%s\n' "$CODE_ONLY" | head -15 | sed 's/^/       /'
+  drift=1
+elif [ "$STG_BEHIND" != "0" ]; then
+  say "  ✓ staging は behind $STG_BEHIND だが webui/data のみ（毎晩の自動コミットのため正常）"
 else
   say "  ✓ staging は origin/main に追従"
 fi
