@@ -251,6 +251,12 @@ async function main() {
     for (const suffix of ["", "-wal", "-shm"]) {
       try { fs.unlinkSync(dbPath + suffix); } catch (_) {}
     }
+    // 一時DB名から導出された履歴JSON（services/context.js の HISTORY_JSON_PATH）も削除する。
+    // 残すと毎回 webui/history-regression-test-<ts>.json が溜まる。
+    try {
+      const histBase = path.basename(DB_NAME, path.extname(DB_NAME));
+      fs.unlinkSync(path.join(projectDir, "webui", `history-${histBase}.json`));
+    } catch (_) {}
     if (failed > 0) {
       console.error("\n--- server log (tail) ---");
       console.error(serverLog.join("").split("\n").slice(-40).join("\n"));

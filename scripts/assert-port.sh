@@ -10,7 +10,7 @@
 #   本番 API = 8080、staging API = 8081。curl localhost:8081 は staging であり、
 #   本番検証を 8081 で行うと「staging の旧コードを本番と誤認」する事故が実際に起きた。
 #   本スクリプトは ポート → PID → 実行スクリプトパス を機械的に照合し、
-#   期待したツリーで answered ことを確認してから如果不是なら中断する。
+#   期待したツリーで応答していることを確認してから、不一致なら中断する。
 #
 #   本番を触る操作（deploy / promote / smoke）の前に必ず実行すること。
 #
@@ -45,7 +45,7 @@ echo "=== ポート位相検証: $LABEL (期待 $PORT) ===" >&2
 
 # --- 1. そのポートが listening しているか ---
 #     自分（通常ユーザー）は他プロセスの cmdline を読めないため、
-#     ポートの特定は /api/health の pid を_THROW_ して行う。
+#     ポートの特定は /api/health の pid を取り出して行う。
 HEALTH=$(curl -s --max-time 5 "http://127.0.0.1:${PORT}/api/health" 2>/dev/null)
 if [ -z "$HEALTH" ]; then
   die "ポート $PORT で応答する /api/health がありません（サービス停止 or 別サービス）"
@@ -57,7 +57,7 @@ PID=$(printf '%s' "$HEALTH" | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9]\
 
 # --- 3. pid の実行ファイルパスを取得 ---
 #     /proc/<pid>/cmdline は他ユーザーのプロセスの場合 root しか読めないので、
-#     read できなければ「 права不足」として、その旨をRedeする（不正確な断定はしない）。
+#     読み取れなければ「権限不足」として、その旨を記録する（不正確な断定はしない）。
 ACTUAL_CMD=$(tr '\0' ' ' < "/proc/${PID}/cmdline" 2>/dev/null | awk '{print $2}')
 
 if [ -z "$ACTUAL_CMD" ]; then
@@ -79,7 +79,7 @@ if [ -z "$ACTUAL_CMD" ]; then
       ok "pm2 cwd から $LABEL ツリーと整合（/proc 権限不足のため確定はせず）"
       exit 0
     fi
-    fail "期待: $EXPECT_PATH  belonging するツリーだが、判定できません（要 root で確認）"
+    fail "期待: $EXPECT_PATH  に属するツリーだが、判定できません（要 root で確認）"
   fi
   exit 0
 fi
@@ -96,5 +96,5 @@ if [ -n "$EXPECT_PATH" ]; then
         ※ ポート位相の誤り（AGENTS.md §1）。本番検証を staging で行っている可能性"
   fi
 else
-  ok "ポート $PORT は pid $PID / $ACTUAL_CMD で応答中（パス指定なしのため到此）"
+  ok "ポート $PORT は pid $PID / $ACTUAL_CMD で応答中（パス指定のないため未照合）"
 fi

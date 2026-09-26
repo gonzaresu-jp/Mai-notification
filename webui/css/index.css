@@ -47,8 +47,10 @@
   gap: 4px;
 }
 
-/* 画面外の重いセクションは表示されるまでレイアウト/描画を省略（PageSpeed: Style & Layout 削減） */
-.log-section,
+/* 画面外の重いセクションは表示されるまでレイアウト/描画を省略（PageSpeed: Style & Layout 削減）
+   ※ .log-section には content-visibility を付けないこと。
+     付けるとペイントコンテナメントでカードがセクション箱（=カードと同幅）に強制切断され、
+     .card:hover の scale(1.01) が左右にはみ出して左の縁取りが消える（2026-09-27 実測で確認）。 */
 #footer-slot {
   content-visibility: auto;
   contain-intrinsic-size: auto 900px;

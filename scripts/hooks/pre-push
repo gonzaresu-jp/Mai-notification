@@ -33,7 +33,7 @@ fail=0
 # --- 0. 検査対象ファイル（重要） ---
 #   git diff --cached は「未コミットのステージ」を見るため、コミット済の
 #   push 時は常に空になる。検査するのは **この push で送信されるコミット差分**。
-#   尺 hemodynamic に remote の到達点と local HEAD を比較して範囲を算出する。
+#   push 時点で remote の到達点と local HEAD を比較して範囲を算出する。
 #   pre-push フックは引数として <remote name> <remote URL> を受け取る。
 REMOTE_NAME="${1:-origin}"
 REMOTE_URL="${2:-}"

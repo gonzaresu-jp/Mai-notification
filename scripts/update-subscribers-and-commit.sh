@@ -16,7 +16,7 @@
 #   - 対象は webui/data/ のみ。其他の未コミット変更巻き込まない
 #   - データ変更があった日のみ push する（commit した時だけ）。何もない日は push しない。
 #   - push 失敗時は commit を残したままログに記録し、次回実行時に再送される
-#   - 既存の未コミット変更があれば本次分は commit せず警告だけ出す
+#   - 既存の未コミット変更があれば今回分は commit せず警告だけ出す
 #
 # 保存先・ログ:
 #   ログは logs/subscribers.log に追記（cron のリダイレクト）
@@ -42,11 +42,11 @@ if [ $rc -ne 0 ]; then
   exit $rc
 fi
 
-# --- 2. 他に未コミット変更があれば本次分は commit しない ---
+# --- 2. 他に未コミット変更があれば今回分は commit しない ---
 #    データ以外の作業が混ざったまま commit すると、追跡外のファイルまで
 #    巻き込む・あるいは巻き込まれ損なうので、警告してスキップする
 if ! git diff --quiet -- . ':(exclude)webui/data'; then
-  log "WARNING: webui/data 以外に未コミット変更があるため，本次分は commit せず残置"
+  log "WARNING: webui/data 以外に未コミット変更があるため、今回分は commit せず残置"
   git status --short -- . ':(exclude)webui/data' | head -20
   exit 0
 fi
