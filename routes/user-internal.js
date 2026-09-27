@@ -60,9 +60,13 @@ function register(app, db) {
       if (dupRows.length === 0) {
         const minTime = new Date(targetDate.getTime() - 4 * 60 * 60 * 1000);
         const maxTime = new Date(targetDate.getTime() + 4 * 60 * 60 * 1000);
+        // 時刻幅での重複判定は同プラットフォーム内だけで行う。
+        // YouTube 配信とツイキャス FC限定は同時刻でも完全に別の配信で、platform を
+        // 見ずに判定すると先に登録された側が後から来る配信を 409 で弾き、
+        // その配信がスケジュールから丸ごと消える事故が起きていた。
         dupRows = await dbAll(db,
-          "SELECT id, title, platform, event_type, start_time FROM events WHERE start_time BETWEEN ? AND ? AND status IN ('scheduled','live') ORDER BY start_time DESC LIMIT 5",
-          [toNaiveJst(minTime), toNaiveJst(maxTime)]);
+          "SELECT id, title, platform, event_type, start_time FROM events WHERE start_time BETWEEN ? AND ? AND platform = ? AND status IN ('scheduled','live') ORDER BY start_time DESC LIMIT 5",
+          [toNaiveJst(minTime), toNaiveJst(maxTime), platform || 'twitter']);
       }
 
       // 4) time_period 付きの推定イベントとの同日重複チェック。

@@ -117,8 +117,22 @@ async function sendNotify(screenId, movieId, title = '【ツイキャス】ラ�
     }
 }
 
-async function syncEventToSchedule(screenId, movieId, title, thumbnailUrl) {
+// スケジュール同期は即時には失敗しうる。特に 409(duplicate) は相手側イベントの
+// status が次第で数時間後に解消するため、1回だけで諦めると二度と取り込まれない
+// （＝配信が始まったのにスケジュールに入らない事故の元）。4xx で 409 以外は
+// 再試行しても無駄なので打ち切る。
+const SYNC_RETRY_DELAYS_MS = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000];
+
+function retryDelay(ms) {
+    return new Promise(resolve => {
+        const t = setTimeout(resolve, ms);
+        if (t && typeof t.unref === 'function') t.unref();
+    });
+}
+
+async function syncEventToSchedule(screenId, movieId, title, thumbnailUrl, attempt = 0) {
     if (!SCHEDULE_ENDPOINT || !INTERNAL_TOKEN) return;
+    const tag = attempt === 0 ? '' : ` (retry ${attempt}/${SYNC_RETRY_DELAYS_MS.length})`;
     try {
         const payload = {
             title: title || 'ツイキャス配信',
@@ -139,12 +153,28 @@ async function syncEventToSchedule(screenId, movieId, title, thumbnailUrl) {
         });
         if (res.ok) {
             const result = await res.json().catch(() => ({}));
-            console.log(`[${screenId}] schedule event created (id: ${result.id}) for movie ${movieId}`);
-        } else {
-            console.warn(`[${screenId}] schedule event creation failed: ${res.status}`);
+            console.log(`[${screenId}] schedule event created (id: ${result.id}) for movie ${movieId}${tag}`);
+            return;
         }
+        const status = res.status;
+        const retryable = status === 409 || status >= 500;
+        if (!retryable || attempt >= SYNC_RETRY_DELAYS_MS.length) {
+            console.warn(`[${screenId}] schedule event creation failed: ${status}${tag}`);
+            return;
+        }
+        const waitMs = SYNC_RETRY_DELAYS_MS[attempt];
+        console.warn(`[${screenId}] schedule event creation failed: ${status}${tag} → retry in ${waitMs / 1000}s`);
+        await retryDelay(waitMs);
+        return syncEventToSchedule(screenId, movieId, title, thumbnailUrl, attempt + 1);
     } catch (e) {
-        console.error(`[${screenId}] schedule event error:`, e.message);
+        if (attempt >= SYNC_RETRY_DELAYS_MS.length) {
+            console.error(`[${screenId}] schedule event error:`, e.message, tag);
+            return;
+        }
+        const waitMs = SYNC_RETRY_DELAYS_MS[attempt];
+        console.warn(`[${screenId}] schedule event error: ${e.message}${tag} → retry in ${waitMs / 1000}s`);
+        await retryDelay(waitMs);
+        return syncEventToSchedule(screenId, movieId, title, thumbnailUrl, attempt + 1);
     }
 }
 
