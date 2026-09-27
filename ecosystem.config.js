@@ -15,6 +15,8 @@ module.exports = {
     name: 'discord-bot',
     script: './discord-bot.js',
     cwd: '/var/www/html/mai-push',
+    // メモリ上限での自動再起動（2026-09-27 の global OOM 対策）
+    max_memory_restart: '512M',
     env: {
       NODE_ENV: 'production'
     }
