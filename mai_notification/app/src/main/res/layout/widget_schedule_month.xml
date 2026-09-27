@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_cell_bg"
+    android:padding="8dp">
+
+    <!-- ヘッダー -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/ws_header"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="予定"
+            android:textColor="@color/primary"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/mw_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#7A6B75"
+            android:textSize="11sp"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/mw_prev"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="4dp"
+            android:text="&#9664;"
+            android:textColor="#7A6B75"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/mw_mode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:text="週"
+            android:textColor="@color/primary"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/mw_next"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="4dp"
+            android:text="&#9654;"
+            android:textColor="#7A6B75"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/ws_refresh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="4dp"
+            android:text="&#8635;"
+            android:textColor="#7A6B75"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- 曜日ヘッダー -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView
+            android:id="@+id/mw_dow0"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="日"
+            android:textColor="#D14D6B"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+        <TextView
+            android:id="@+id/mw_dow1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="月"
+            android:textColor="#7A6B75"
+            android:textSize="10sp" />
+        <TextView
+            android:id="@+id/mw_dow2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="火"
+            android:textColor="#7A6B75"
+            android:textSize="10sp" />
+        <TextView
+            android:id="@+id/mw_dow3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="水"
+            android:textColor="#7A6B75"
+            android:textSize="10sp" />
+        <TextView
+            android:id="@+id/mw_dow4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="木"
+            android:textColor="#7A6B75"
+            android:textSize="10sp" />
+        <TextView
+            android:id="@+id/mw_dow5"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="金"
+            android:textColor="#7A6B75"
+            android:textSize="10sp" />
+        <TextView
+            android:id="@+id/mw_dow6"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="土"
+            android:textColor="#4E7BD1"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <!-- 第1週 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <LinearLayout android:id="@+id/mw_cell0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num0" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="1" android:textSize="13sp" /><TextView android:id="@+id/mw_dot0" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="2" android:textSize="13sp" /><TextView android:id="@+id/mw_dot1" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="3" android:textSize="13sp" /><TextView android:id="@+id/mw_dot2" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="4" android:textSize="13sp" /><TextView android:id="@+id/mw_dot3" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="5" android:textSize="13sp" /><TextView android:id="@+id/mw_dot4" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell5" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num5" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="6" android:textSize="13sp" /><TextView android:id="@+id/mw_dot5" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell6" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num6" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="7" android:textSize="13sp" /><TextView android:id="@+id/mw_dot6" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+    </LinearLayout>
+
+    <!-- 第2週 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <LinearLayout android:id="@+id/mw_cell7" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num7" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="8" android:textSize="13sp" /><TextView android:id="@+id/mw_dot7" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell8" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num8" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="9" android:textSize="13sp" /><TextView android:id="@+id/mw_dot8" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell9" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num9" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="10" android:textSize="13sp" /><TextView android:id="@+id/mw_dot9" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell10" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num10" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="11" android:textSize="13sp" /><TextView android:id="@+id/mw_dot10" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell11" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num11" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="12" android:textSize="13sp" /><TextView android:id="@+id/mw_dot11" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell12" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num12" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="13" android:textSize="13sp" /><TextView android:id="@+id/mw_dot12" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell13" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num13" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="14" android:textSize="13sp" /><TextView android:id="@+id/mw_dot13" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+    </LinearLayout>
+
+    <!-- 第3週 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <LinearLayout android:id="@+id/mw_cell14" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num14" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="15" android:textSize="13sp" /><TextView android:id="@+id/mw_dot14" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell15" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num15" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="16" android:textSize="13sp" /><TextView android:id="@+id/mw_dot15" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell16" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num16" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="17" android:textSize="13sp" /><TextView android:id="@+id/mw_dot16" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell17" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num17" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="18" android:textSize="13sp" /><TextView android:id="@+id/mw_dot17" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell18" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num18" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="19" android:textSize="13sp" /><TextView android:id="@+id/mw_dot18" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell19" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num19" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="20" android:textSize="13sp" /><TextView android:id="@+id/mw_dot19" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell20" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num20" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="21" android:textSize="13sp" /><TextView android:id="@+id/mw_dot20" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+    </LinearLayout>
+
+    <!-- 第4週 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <LinearLayout android:id="@+id/mw_cell21" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num21" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="22" android:textSize="13sp" /><TextView android:id="@+id/mw_dot21" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell22" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num22" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="23" android:textSize="13sp" /><TextView android:id="@+id/mw_dot22" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell23" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num23" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="24" android:textSize="13sp" /><TextView android:id="@+id/mw_dot23" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell24" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num24" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="25" android:textSize="13sp" /><TextView android:id="@+id/mw_dot24" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell25" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num25" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="26" android:textSize="13sp" /><TextView android:id="@+id/mw_dot25" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell26" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num26" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="27" android:textSize="13sp" /><TextView android:id="@+id/mw_dot26" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell27" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num27" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="28" android:textSize="13sp" /><TextView android:id="@+id/mw_dot27" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+    </LinearLayout>
+
+    <!-- 第5週 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <LinearLayout android:id="@+id/mw_cell28" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num28" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="29" android:textSize="13sp" /><TextView android:id="@+id/mw_dot28" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell29" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num29" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="30" android:textSize="13sp" /><TextView android:id="@+id/mw_dot29" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell30" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num30" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="31" android:textSize="13sp" /><TextView android:id="@+id/mw_dot30" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell31" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num31" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="1" android:textSize="13sp" /><TextView android:id="@+id/mw_dot31" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell32" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num32" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="2" android:textSize="13sp" /><TextView android:id="@+id/mw_dot32" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell33" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num33" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="3" android:textSize="13sp" /><TextView android:id="@+id/mw_dot33" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell34" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num34" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="4" android:textSize="13sp" /><TextView android:id="@+id/mw_dot34" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell35" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num35" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="5" android:textSize="13sp" /><TextView android:id="@+id/mw_dot35" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+    </LinearLayout>
+
+    <!-- 第6週 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <LinearLayout android:id="@+id/mw_cell36" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num36" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="6" android:textSize="13sp" /><TextView android:id="@+id/mw_dot36" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell37" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num37" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="7" android:textSize="13sp" /><TextView android:id="@+id/mw_dot37" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell38" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num38" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="8" android:textSize="13sp" /><TextView android:id="@+id/mw_dot38" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell39" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num39" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="9" android:textSize="13sp" /><TextView android:id="@+id/mw_dot39" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell40" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num40" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="10" android:textSize="13sp" /><TextView android:id="@+id/mw_dot40" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+        <LinearLayout android:id="@+id/mw_cell41" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingVertical="3dp"><TextView android:id="@+id/mw_num41" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:text="11" android:textSize="13sp" /><TextView android:id="@+id/mw_dot41" android:layout_width="6dp" android:layout_height="6dp" android:layout_marginTop="2dp" android:background="@drawable/widget_dot" android:visibility="gone" /></LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/ws_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingVertical="8dp"
+        android:gravity="center"
+        android:text="予定はありません"
+        android:textColor="#9A8C96"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <!-- 選択日の予定 -->
+    <View
+        android:id="@+id/mw_divider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginVertical="4dp"
+        android:background="#E6DFEA"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/mw_sel_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/primary"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <LinearLayout android:id="@+id/mw_row0" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingVertical="2dp" android:visibility="gone"><TextView android:id="@+id/mw_time0" android:layout_width="40dp" android:layout_height="wrap_content" android:text="21:00" android:textColor="@color/primary" android:textSize="10sp" /><TextView android:id="@+id/mw_title0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="配信" android:textColor="#2B2B33" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" /></LinearLayout>
+    <LinearLayout android:id="@+id/mw_row1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingVertical="2dp" android:visibility="gone"><TextView android:id="@+id/mw_time1" android:layout_width="40dp" android:layout_height="wrap_content" android:text="21:00" android:textColor="@color/primary" android:textSize="10sp" /><TextView android:id="@+id/mw_title1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="配信" android:textColor="#2B2B33" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" /></LinearLayout>
+    <LinearLayout android:id="@+id/mw_row2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingVertical="2dp" android:visibility="gone"><TextView android:id="@+id/mw_time2" android:layout_width="40dp" android:layout_height="wrap_content" android:text="21:00" android:textColor="@color/primary" android:textSize="10sp" /><TextView android:id="@+id/mw_title2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="配信" android:textColor="#2B2B33" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" /></LinearLayout>
+    <LinearLayout android:id="@+id/mw_row3" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingVertical="2dp" android:visibility="gone"><TextView android:id="@+id/mw_time3" android:layout_width="40dp" android:layout_height="wrap_content" android:text="21:00" android:textColor="@color/primary" android:textSize="10sp" /><TextView android:id="@+id/mw_title3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="配信" android:textColor="#2B2B33" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" /></LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">まいちゃん通知</string>
+    <string name="widget_count_desc">デビューからの日数や記念日までの日数</string>
+    <string name="widget_schedule_desc">これからの配信・予定</string>
+</resources>

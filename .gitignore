@@ -16,7 +16,16 @@ tmp/
 vapid.json
 webui/fontawesome-free-7.2.0-web/
 core
-mai_notification/
+# Android アプリはソースのみ追跡。秘密情報とビルド生成物は除外
+# （keystore.properties はパスワード平文のため必ず除外すること）
+mai_notification/.kotlin/
+mai_notification/.idea/
+mai_notification/release/
+mai_notification/local.properties
+mai_notification/keystore.properties
+mai_notification/*.jks
+mai_notification/*.keystore
+mai_notification/app/google-services.json
 add-platform-to-all.js
 config.json
 *.db-shm
