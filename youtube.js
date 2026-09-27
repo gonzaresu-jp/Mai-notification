@@ -477,6 +477,10 @@ if (require.main === module) {
 
 // ========= ライブ終了ポーリング =========
 const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10分おき
+// nassy 側は受信1件ごとにスレッドを立てて YouTube API を叩く。バックログを
+// 一斉に流すと同時API呼び出しが重なり、相手プロセスが SEGV で落ちた実例がある。
+// 送信間隔を空けて背負わせる（通常の候補は1件なので体感差は無い）。
+const POLL_SEND_GAP_MS = 4 * 1000;
 // 以前は「直近24時間のライブ」だけを対象にしていたが、worker 停止中に
 // 配信終了を逃した動画が永久にポーリング対象外になる欠陥があった
 // （実際8件が滞留した）。取得できない動画（削除・非公開）は YouTube API の
@@ -532,6 +536,7 @@ async function pollForEndedLives() {
                         polledAt: new Date().toISOString()
                     };
                     console.log(`[POLL] POST sent for ${videoId}`);
+                    await new Promise(r => setTimeout(r, POLL_SEND_GAP_MS));
                 } else {
                     console.error(`[POLL] Failed to POST for ${videoId}`);
                 }
