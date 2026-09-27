@@ -251,6 +251,9 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         web.onResume()
+        // インストール許可の設定画面から戻った時にアップデート案内を再表示する。
+        // 通常時は6時間クールダウンで弾かれるため、起動直後の二重表示にはならない
+        web.postDelayed({ com.yuzuki.mai_notification.UpdateChecker.checkOnLaunch(this) }, 1500)
     }
 
     override fun onPause() {

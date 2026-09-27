@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  アプリ内アップデートのダウンロード先。
+  Android 7+ は file:// URI が禁止のため FileProvider 経由の content:// で渡す。
+-->
+<paths>
+    <external-files-path name="external_updates" path="updates/" />
+    <files-path name="internal_updates" path="updates/" />
+    <cache-path name="cache" path="/" />
+</paths>
