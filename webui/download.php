@@ -8,10 +8,15 @@
     $extraHead = '<link rel="stylesheet" href="/css/download.css?v=' . @filemtime(__DIR__ . '/css/download.css') . '" />';
     include __DIR__ . '/head.php';
 
-    // Android APK
+    // Android APK（更新フィード android.json からバージョンを動的取得）
     $apkPath = __DIR__ . '/mai-notification.apk';
     $apkSize = @filesize($apkPath);
     $apkSizeMb = $apkSize ? round($apkSize / 1048576, 1) . " MB" : "";
+    $apkVersion = "";
+    $apkFeed = @json_decode(@file_get_contents(__DIR__ . '/dl/android.json'), true);
+    if (is_array($apkFeed)) {
+        $apkVersion = isset($apkFeed["versionName"]) ? (string)$apkFeed["versionName"] : "";
+    }
 
     // Windows (更新フィード desktop.json から動的取得)
     $winVersion = "";
@@ -56,7 +61,9 @@
                     </div>
                     <div class="dl-card-title">
                         <h2>Androidアプリ</h2>
-                        <span class="dl-badge dl-badge-apk">APK</span>
+                        <span class="dl-badge dl-badge-apk">
+                            <?php if ($apkVersion): ?>v<?= htmlspecialchars($apkVersion) ?><?php else: ?>APK<?php endif; ?>
+                        </span>
                     </div>
                 </div>
                 <p class="dl-card-desc">スマホ・タブレットにインストールして使う公式アプリ。FCM プッシュ通知で、画面を閉じていてもロック中もすぐに届きます。</p>
