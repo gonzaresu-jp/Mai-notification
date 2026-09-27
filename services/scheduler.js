@@ -41,6 +41,13 @@ function updateEventStatuses() {
   });
 }
 
+// CSP(img-src) は https のみ許可するため、http 配信のサムネは通知に載せる前に
+// https へ昇格させる（events の http は全て imagegw*.twitcasting.tv、証明書確認済み）。
+function toHttpsThumb(url) {
+  if (!url) return null;
+  return /^http:\/\/(?:[\w-]+\.)*twitcasting\.tv\//i.test(url) ? 'https://' + url.slice(7) : url;
+}
+
 function buildEventNotificationPayload(event, phase) {
   const startDate = new Date(event.start_time);
   const hh = String(startDate.getHours()).padStart(2, "0");
@@ -53,6 +60,7 @@ function buildEventNotificationPayload(event, phase) {
       title: event.title || "予定通知",
       body: isPre ? `開始${offsetMin}分前です（${hh}:${mm}予定）` : `予定時刻になりました（${hh}:${mm}）`,
       url: event.url || "/events.html", icon: "/icon.webp",
+      image: toHttpsThumb(event.thumbnail_url),
     },
   };
 }
@@ -65,7 +73,7 @@ async function syncEventNotifications() {
   const toIso = new Date(now + EVENT_NOTIFY_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const events = await new Promise((resolve, reject) => {
-    db.all(`SELECT id, title, start_time, url, platform, event_type, status, time_period FROM events WHERE start_time IS NOT NULL AND status != 'cancelled' AND event_type != 'memo' AND start_time >= ? AND start_time <= ?`, [fromIso, toIso], (err, rows) => {
+    db.all(`SELECT id, title, start_time, url, thumbnail_url, platform, event_type, status, time_period FROM events WHERE start_time IS NOT NULL AND status != 'cancelled' AND event_type != 'memo' AND start_time >= ? AND start_time <= ?`, [fromIso, toIso], (err, rows) => {
       if (err) { console.error("[Event Notify Sync] load err:", err.message); resolve([]); } else resolve(rows || []);
     });
   });
@@ -140,7 +148,7 @@ async function sendUserScheduleReminders() {
         await new Promise(r => db.run("UPDATE user_schedules SET reminder_sent_at = NULL WHERE id = ? AND reminder_sent_at = ?", [row.id, lockToken], () => r()));
         continue;
       }
-      const payload = { type: "event", settingKey: "schedule", clientId, data: { title: row.title || "マイスケジュール通知", body: row.note || "予定時刻が近づいています。", url: row.url || "/events.html", icon: row.thumbnail_url || "/icon.webp" } };
+      const payload = { type: "event", settingKey: "schedule", clientId, data: { title: row.title || "マイスケジュール通知", body: row.note || "予定時刻が近づいています。", url: row.url || "/events.html", icon: row.thumbnail_url || "/icon.webp", image: toHttpsThumb(row.thumbnail_url) } };
       const result = await notifier.handleAdminNotify(payload, "user-scheduler");
       if (result?.sentCount > 0) {
         await new Promise(r => db.run("UPDATE user_schedules SET reminder_sent_at = CURRENT_TIMESTAMP WHERE id = ? AND reminder_sent_at = ?", [row.id, lockToken], () => r()));
