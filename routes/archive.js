@@ -204,19 +204,31 @@ function register(app) {
     await proxyJson(res, `/api/video/${id}`);
   });
 
-  // 字幕の有無を判定（バッジ表示用）。上流が 404 を返したら {has_transcript:false} を返す。
+  // 字幕の有無と出自を判定（バッジ表示用）。上流が 404 を返したら {has_transcript:false} を返す。
   // 一覧の各カードで表示対象だけをチェックするため、ビデオ単体の有無判定に特化する。
+  // source は「その動画で実際に使われている字幕」（whisper 優先、なければ youtube_auto）。
+  // フルの字幕は1本400KB超あるため from_ms/to_ms で meta のみを取りに行く（約500B）。
   app.get("/api/archive/transcript/:id", async (req, res) => {
     const id = req.params.id;
     if (!VIDEO_ID_RE.test(id)) return res.status(400).json({ error: "invalid video_id" });
     let upstream;
     try {
-      upstream = await fetchUpstream(`/api/transcript/${id}`, JSON_TIMEOUT_MS);
+      upstream = await fetchUpstream(`/api/transcript/${id}?from_ms=1&to_ms=2`, JSON_TIMEOUT_MS);
     } catch (err) {
       markUpstream(false, err);
-      return res.status(504).json({ error: "アーカイブAPIに接続できません", has_transcript: null });
+      return res.status(504).json({ error: "アーカイブAPIに接続できません", has_transcript: null, source: null });
     }
-    return res.json({ video_id: id, has_transcript: upstream.status === 200 });
+    if (upstream.status !== 200) {
+      return res.json({ video_id: id, has_transcript: false, source: null });
+    }
+    let body = null;
+    try {
+      body = await upstream.json();
+    } catch (err) {
+      body = null;
+    }
+    const source = (body && body.meta && body.meta.source) || null;
+    return res.json({ video_id: id, has_transcript: true, source });
   });
 
   // チャプター（タイムスタンプ txt）を取得する。上流が 404 ならそのまま 404 を返す。

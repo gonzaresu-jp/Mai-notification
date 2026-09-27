@@ -331,6 +331,11 @@
             background: rgba(34,187,106,.12);
             color: #17a05e;
         }
+        /* YouTube自動字幕（＝生成字幕ではないもの）は赤で区別する */
+        .ar-badge-transcript-yt {
+            background: rgba(220,38,38,.13);
+            color: #dc2626;
+        }
         .ar-badge-chapters {
             background: rgba(240,166,33,.14);
             color: #c77d0a;

@@ -257,7 +257,12 @@
       var parts = [];
       if (info.has_minutes) parts.push('<span class="ar-badge ar-badge-minutes" data-minutes="1" role="button" tabindex="0" title="要約を表示"><i class="fa-solid fa-file-lines"></i> 要約</span>');
       if (info.has_chapters) parts.push('<span class="ar-badge ar-badge-chapters" data-chapters="1" role="button" tabindex="0" title="タイムスタンプを表示"><i class="fa-solid fa-list-ul"></i> タイムスタンプ</span>');
-      if (info.has_transcript) parts.push('<span class="ar-badge ar-badge-transcript"><i class="fa-solid fa-closed-captioning"></i> 字幕</span>');
+      if (info.has_transcript) {
+        // YouTube自動字幕は赤、whisper など生成字幕は従来の緑で色を分ける。
+        var yt = info.transcript_source === 'youtube_auto';
+        var trTitle = yt ? 'YouTube自動字幕' : (info.transcript_source ? '生成字幕（' + info.transcript_source + '）' : '字幕');
+        parts.push('<span class="ar-badge ar-badge-transcript' + (yt ? ' ar-badge-transcript-yt' : '') + '" title="' + trTitle + '"><i class="fa-solid fa-closed-captioning"></i> 字幕</span>');
+      }
       var slot = card.querySelector('.ar-badges');
       var current = slot ? slot.innerHTML : '';
       var next = parts.join('');
@@ -310,9 +315,11 @@
             .then(function (r) { return r.json().catch(function () { return {}; }); })
             .then(function (data) {
               badgeMark(vid, 'has_transcript', !!(data && data.has_transcript));
+              badgeMark(vid, 'transcript_source', (data && data.source) || null);
             })
             .catch(function () {
               badgeMark(vid, 'has_transcript', false);
+              badgeMark(vid, 'transcript_source', null);
             })
             .then(function () {
               active--;
