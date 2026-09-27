@@ -231,20 +231,50 @@ function ensureScheduledSchema() {
     if (err) { console.error("PRAGMA scheduled_notifications err:", err.message); return; }
     const colNames = columns.map(c => c.name);
     if (!colNames.includes("sent_at")) {
-      db.run("ALTER TABLE scheduled_notifications ADD COLUMN sent_at INTEGER");
-      console.log("scheduled_notifications.sent_at added");
+      db.run("ALTER TABLE scheduled_notifications ADD COLUMN sent_at INTEGER", (alterErr) => {
+        if (alterErr) console.error("scheduled_notifications.sent_at add failed:", alterErr.message);
+        else console.log("scheduled_notifications.sent_at added");
+      });
     }
-    if (!colNames.includes("kind")) {
+
+    // (kind, ref_id, sent) のインデックスは、この2列が揃ってから作る。
+    // 従来は initDatabase() の直後に ensureIndexes() が走り、ALTER より先に
+    // インデックスを作ろうとして "no such column: kind" になる。
+    // その失敗はコールバック無しの db.run から uncaughtException として放出され、
+    // uncaughtException ハンドラが 1 秒後にプロセスを落としていた
+    //（新規DBを作るたび＝回帰テスト毎回・新規クローン初回に発生していた）。
+    const needKind = !colNames.includes("kind");
+    const needRefId = !colNames.includes("ref_id");
+    let pending = (needKind ? 1 : 0) + (needRefId ? 1 : 0);
+    const afterAlter = () => {
+      pending -= 1;
+      if (pending === 0) ensureScheduledEventIndex();
+    };
+    if (needKind) {
       db.run("ALTER TABLE scheduled_notifications ADD COLUMN kind TEXT", (alterErr) => {
-        if (!alterErr) { console.log("scheduled_notifications.kind added"); ensureIndexes(); }
+        if (alterErr) console.error("scheduled_notifications.kind add failed:", alterErr.message);
+        else console.log("scheduled_notifications.kind added");
+        afterAlter();
       });
     }
-    if (!colNames.includes("ref_id")) {
+    if (needRefId) {
       db.run("ALTER TABLE scheduled_notifications ADD COLUMN ref_id INTEGER", (alterErr) => {
-        if (!alterErr) { console.log("scheduled_notifications.ref_id added"); ensureIndexes(); }
+        if (alterErr) console.error("scheduled_notifications.ref_id add failed:", alterErr.message);
+        else console.log("scheduled_notifications.ref_id added");
+        afterAlter();
       });
     }
+    if (pending === 0) ensureScheduledEventIndex(); // 両列とも既存の DB
   });
+}
+
+function ensureScheduledEventIndex() {
+  ctx.db.run(
+    "CREATE INDEX IF NOT EXISTS idx_scheduled_notifications_event_ref ON scheduled_notifications (kind, ref_id, sent)",
+    (err) => {
+      if (err) console.error("idx_scheduled_notifications_event_ref create err:", err.message);
+    },
+  );
 }
 
 function ensureSubscriptionsSchema() {
@@ -277,14 +307,22 @@ function ensureAndroidSchema() {
 
 function ensureIndexes() {
   const db = ctx.db;
-  db.run("CREATE INDEX IF NOT EXISTS idx_subscriptions_client_id ON subscriptions (client_id)");
-  db.run("CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions (user_id)");
-  db.run("CREATE INDEX IF NOT EXISTS idx_android_devices_client_id ON android_devices (client_id)");
-  db.run("CREATE INDEX IF NOT EXISTS idx_android_devices_user_id ON android_devices (user_id)");
-  db.run("CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC)");
-  db.run("CREATE INDEX IF NOT EXISTS idx_notifications_platform_created ON notifications (platform, created_at)");
-  db.run("CREATE INDEX IF NOT EXISTS idx_scheduled_notifications_due ON scheduled_notifications (sent, run_at)");
-  db.run("CREATE INDEX IF NOT EXISTS idx_scheduled_notifications_event_ref ON scheduled_notifications (kind, ref_id, sent)");
+  // コールバックを付けないと、失敗が uncaughtException として process を殺す。
+  // インデックス作成の失敗は（後から直せばよい）致命扱いにせず、ログに残すだけにする。
+  const createIndex = (sql) => {
+    db.run(sql, (err) => {
+      if (err) console.error("index create err:", err.message, "|", sql);
+    });
+  };
+  createIndex("CREATE INDEX IF NOT EXISTS idx_subscriptions_client_id ON subscriptions (client_id)");
+  createIndex("CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions (user_id)");
+  createIndex("CREATE INDEX IF NOT EXISTS idx_android_devices_client_id ON android_devices (client_id)");
+  createIndex("CREATE INDEX IF NOT EXISTS idx_android_devices_user_id ON android_devices (user_id)");
+  createIndex("CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC)");
+  createIndex("CREATE INDEX IF NOT EXISTS idx_notifications_platform_created ON notifications (platform, created_at)");
+  createIndex("CREATE INDEX IF NOT EXISTS idx_scheduled_notifications_due ON scheduled_notifications (sent, run_at)");
+  // (kind, ref_id, sent) のインデックスは ensureScheduledEventIndex() が
+  // 列追加完了後に作る（ここでは作らない — 上記の順序バグの原因だったため）
   console.log("indexes ensured");
 }
 
