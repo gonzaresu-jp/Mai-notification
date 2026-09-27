@@ -477,21 +477,19 @@ if (require.main === module) {
 
 // ========= ライブ終了ポーリング =========
 const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10分おき
-const POLL_LOOKBACK_HOURS = 24; // 直近24時間のライブに限定
+// 以前は「直近24時間のライブ」だけを対象にしていたが、worker 停止中に
+// 配信終了を逃した動画が永久にポーリング対象外になる欠陥があった
+// （実際8件が滞留した）。取得できない動画（削除・非公開）は YouTube API の
+// 応答に現れないため、そこで候補から外すことで無限ポーリングを防ぐ。
 
 async function pollForEndedLives() {
     const records = loadSentRecords();
-    const now = Date.now();
-    const lookbackMs = POLL_LOOKBACK_HOURS * 60 * 60 * 1000;
 
-    // liveSent があり newVideoSent がない videoId を抽出
+    // liveSent があり newVideoSent がない videoId を抽出（期間制限なし）
     const candidates = [];
     for (const [videoId, rec] of Object.entries(records)) {
         if (rec.liveSent && !rec.newVideoSent && rec.liveAt) {
-            const liveAtMs = new Date(rec.liveAt).getTime();
-            if (now - liveAtMs < lookbackMs) {
-                candidates.push(videoId);
-            }
+            candidates.push(videoId);
         }
     }
 
@@ -537,6 +535,23 @@ async function pollForEndedLives() {
                 } else {
                     console.error(`[POLL] Failed to POST for ${videoId}`);
                 }
+            }
+
+            // 削除・非公開などで API 応答に現れなかった videoId は、
+            // どのポーリングでも候補から外れないのでここで記録して対象外にする
+            const returned = new Set(items.map(it => it.id));
+            for (const videoId of batch) {
+                if (returned.has(videoId)) continue;
+                const rec = records[videoId];
+                if (!rec || rec.newVideoSent) continue;
+                console.log(`[POLL] ${videoId} unavailable on API (deleted/private), dropping from poll`);
+                records[videoId] = {
+                    ...rec,
+                    newVideoSent: true,
+                    newVideoAt: new Date().toISOString(),
+                    unavailable: true,
+                    polledAt: new Date().toISOString()
+                };
             }
             saveSentRecords(records);
         } catch (e) {
