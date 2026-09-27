@@ -270,17 +270,22 @@ function showNotification(log) {
 
 let injectPending = [];
 
+// 通知（トースト）のアプリID。electron-builder の appId と同じにする。
+// インストーラ（NSIS）がスタートメニューに作る「まいちゃん通知」ショートカットにこの ID が登録されるため、
+// 別の ID（旧: MaiPush.Desktop）で出すと、アップデートでショートカットが作り直された時に
+// Windows が通知を黙って捨てて何も表示されなくなる（v1.3.7 で修正）。
+const TOAST_AUMID = 'com.mai-push.desktop';
+
 function ensureAumid() {
+  try { app.setAppUserModelId(TOAST_AUMID); } catch (e) {}
+  const lnkPath = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'まいちゃん通知.lnk');
+  if (fs.existsSync(lnkPath)) {
+    console.log('[AUMID] installer shortcut found');
+    return;
+  }
+  // ポータブル版などショートカットが無い時だけ、アプリ本体を指すショートカットを作って ID を登録する
   try {
-    execFileSync(SNORETOAST, ['-install', 'まいちゃん通知', HELPER_EXE, 'MaiPush.Desktop'], { windowsHide: true, timeout: 10000 });
-    const lnkPath = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'まいちゃん通知.lnk');
-    const appIcon = iconLocalPath();
-    if (require('fs').existsSync(lnkPath)) {
-      execFileSync('powershell', ['-NoProfile', '-Command',
-        `$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('${lnkPath.Replace(/'/g, "''")}'); $sc.IconLocation = '${appIcon.Replace(/'/g, "''")},0'; $sc.Save()`
-      ], { windowsHide: true, timeout: 10000 });
-      console.log('[AUMID] shortcut icon set');
-    }
+    execFileSync(SNORETOAST, ['-install', 'まいちゃん通知', process.execPath, TOAST_AUMID], { windowsHide: true, timeout: 10000 });
     console.log('[AUMID] registered');
   } catch (err) {
     console.error('[AUMID] register failed:', err.message);
@@ -335,7 +340,7 @@ function iconLocalPath() {
 
 function showHelperNotif(data, imgPath) {
   const icon = iconPath();
-  const args = [data.title, data.body || '', imgPath || '', 'MaiPush.Desktop', data.url || '', icon];
+  const args = [data.title, data.body || '', imgPath || '', TOAST_AUMID, data.url || '', icon];
   const child = execFile(HELPER_EXE, args);
   const cleanup = () => { if (imgPath) try { fs.unlinkSync(imgPath); } catch {} };
   child.on('exit', (code) => {
