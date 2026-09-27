@@ -366,17 +366,24 @@ function showNativeNotif(data) {
     return;
   }
   const tmpPath = path.join(app.getPath('temp'), 'mai-notif-' + Date.now() + '.png');
+  // 通知画像の上限（Windows のトースト画像は 200KB 以下が安全）。
+  // 写真を 520x260 のフルカラー PNG にすると 200〜300KB になり、画像なしの通知に落ちていた（v1.3.6 で修正）。
+  // まず通常の PNG、超えたら減色 PNG（透過は維持・写真でも 60〜80KB 程度）で作り直す。
+  const MAX_TOAST_IMAGE = 200 * 1024;
   const showWithImg = (buf) => {
-    sharp(buf).resize(520, 260, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png({ compressionLevel: 9 }).toFile(tmpPath).then(() => {
-      const stat = fs.statSync(tmpPath);
-      if (stat.size > 200 * 1024) {
-        console.error('[Notif] image too large after resize:', stat.size);
-        try { fs.unlinkSync(tmpPath); } catch {}
+    const base = () => sharp(buf).resize(520, 260, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } });
+    base().png({ compressionLevel: 9 }).toBuffer().then((png) => {
+      if (png.length <= MAX_TOAST_IMAGE) return png;
+      return base().png({ palette: true, quality: 90, compressionLevel: 9 }).toBuffer();
+    }).then((out) => {
+      if (out.length > MAX_TOAST_IMAGE) {
+        console.error('[Notif] image too large after resize:', out.length);
         const n = new Notification({ title: data.title, body: data.body, icon });
         n.show();
         if (data.url) n.on('click', () => navigateToUrl(data.url));
         return;
       }
+      fs.writeFileSync(tmpPath, out);
       showHelperNotif(data, tmpPath);
     }).catch((e) => {
       console.error('[Notif] sharp error:', e.message);

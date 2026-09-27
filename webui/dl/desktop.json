@@ -1,5 +1,5 @@
 {
-  "version": "1.3.5",
-  "url": "https://mai.honna-yuzuki.com/dl/MaiPush-Setup-1.3.5.exe",
-  "notes": "起動とページ表示を高速化。起動のたびにキャッシュを消していた処理をアップデート後の初回だけに変更し、ページの通信をアプリ本体経由で書き換えていた処理をGoogleログイン時だけに限定しました。"
+  "version": "1.3.6",
+  "url": "https://mai.honna-yuzuki.com/dl/MaiPush-Setup-1.3.6.exe",
+  "notes": "画像付きの投稿（ツイートの写真など）が、画像なしで通知されてしまう問題を修正しました。"
 }
