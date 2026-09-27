@@ -596,6 +596,16 @@
             background: #fff3d6;
             color: #8a6d00;
         }
+        /* 字幕バッジ: YouTube自動字幕は赤、whisper 等の生成字幕は緑 */
+        .tr-badge {
+            font-weight: 700;
+        }
+        .tr-badge.is-yt {
+            color: #b3261e;
+        }
+        .tr-badge.is-gen {
+            color: #1a7f4b;
+        }
         .arc-chip {
             display: inline-block;
             font-size: .74rem;

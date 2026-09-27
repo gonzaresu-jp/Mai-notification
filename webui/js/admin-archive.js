@@ -401,7 +401,18 @@
     try {
       const tr = await api('/api/archive/transcript/' + videoId);
       const trEl = document.querySelector(`.tr-badge[data-id="${videoId}"]`);
-      if (trEl) trEl.textContent = tr.has_transcript ? '✅あり' : '❌なし';
+      if (trEl) {
+        trEl.classList.remove('is-yt', 'is-gen');
+        if (!tr.has_transcript) {
+          trEl.textContent = '❌なし';
+        } else if (tr.source === 'youtube_auto') {
+          trEl.textContent = '✅YT字幕';
+          trEl.classList.add('is-yt');
+        } else {
+          trEl.textContent = '✅生成字幕';
+          trEl.classList.add('is-gen');
+        }
+      }
     } catch {
       const trEl = document.querySelector(`.tr-badge[data-id="${videoId}"]`);
       if (trEl) trEl.textContent = '?';
