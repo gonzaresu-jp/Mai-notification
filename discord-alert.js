@@ -71,7 +71,9 @@ async function sendDiscordAlert(title, description, level = 'WARN', limitKey = n
       {
         headers: {
           'Authorization': `Bot ${token.replace(/"/g, '')}`, // 念のため引用符を除去
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          // Discord の Cloudflare は Python/Node の既定 User-Agent を 1010 で遮断する
+          'User-Agent': 'mai-push-alert (https://mai.honna-yuzuki.com, 1.0)'
         }
       }
     );

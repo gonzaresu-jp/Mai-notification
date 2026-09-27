@@ -1,16 +1,29 @@
 #!/bin/bash
 API_BASE="http://localhost:8080"
 WORKER_BASE="http://localhost:3002"
-# Webhookは .env の DISCORD_WEBHOOK_URL から読む（GitHubに直接書かない。判定: FriendlyScanner流出検知対策）
-WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-$(grep -m1 '^DISCORD_WEBHOOK_URL=' /var/www/html/mai-push/.env 2>/dev/null | cut -d= -f2- | tr -d "\"'")}"
+# Discord 通知は Bot API 経由で送る。
+# （DISCORD_WEBHOOK_URL は Discord 側で削除済み＝404 Unknown Webhook で、
+#   従来このスクリプトの通知は全て無言で失敗していた）
+# トークン類は .env から読む（GitHubに直接書かない。判定: FriendlyScanner流出検知対策）
+# .env の値は二重引用符で書かれていることがあるため除去する。
+env_val() {
+    grep -m1 "^$1=" /var/www/html/mai-push/.env 2>/dev/null | cut -d= -f2- | tr -d "\"'" | tr -d ' \r\n'
+}
+DISCORD_BOT_TOKEN="${DISCORD_BOT_TOKEN:-$(env_val DISCORD_BOT_TOKEN)}"
+DISCORD_CHANNEL_ID="${DISCORD_CHANNEL_ID:-$(env_val DISCORD_CHANNEL_ID)}"
 HOSTNAME=$(hostname)
 send_alert() {
     local level="$1" title="$2" desc="$3"
-    if [ ! -s "$WEBHOOK_URL" ]; then echo "healthcheck: webhook URLが空のためDiscord通知をスキップ" >&2; return 0; fi
+    if [ -z "$DISCORD_BOT_TOKEN" ] || [ -z "$DISCORD_CHANNEL_ID" ]; then
+        echo "healthcheck: Discord Bot 設定が空のため通知をスキップ" >&2
+        return 0
+    fi
     local color=16776960
     [ "$level" = "ERROR" ] && color=16711680
     curl -s -H "Content-Type: application/json" \
-         -X POST "$WEBHOOK_URL" \
+         -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
+         -H "User-Agent: mai-push-healthcheck (https://mai.honna-yuzuki.com, 1.0)" \
+         -X POST "https://discord.com/api/v10/channels/$DISCORD_CHANNEL_ID/messages" \
          -d "{
            \"embeds\": [{
              \"title\": \"$title\",
