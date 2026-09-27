@@ -51,6 +51,25 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+// ツイキャスのサムネは http で配信されるが、CSP(img-src) は https のみ許可している。
+// 証明書が *.twitcasting.tv で有効なため、履歴表示時は https に昇格させる。
+function toHttpsThumb(url) {
+  if (!url) return null;
+  return /^http:\/\/(?:[\w-]+\.)*twitcasting\.tv\//i.test(url) ? 'https://' + url.slice(7) : url;
+}
+
+// サムネ読込失敗時（期限切れURL・外部障害など）はサムネ枠ごと隠して
+// 壊れた画像アイコンが残らないようにする。
+function bindThumbFallbacks(root) {
+  if (!root) return;
+  root.querySelectorAll('.log-media-thumb img:not([data-thumb-bound])').forEach((img) => {
+    img.dataset.thumbBound = '1';
+    const drop = () => { const box = img.closest('.log-media-thumb'); if (box) box.remove(); };
+    if (img.complete && img.naturalWidth === 0) { drop(); return; }
+    img.addEventListener('error', drop, { once: true });
+  });
+}
+
 /**
  * URLをユーザー指定のテンプレートに基づいて変換する
  * @param {string} url 元のURL
@@ -130,11 +149,14 @@ export function createLogItem(log) {
   const platformData = normalizePlatformName(log.platform || '不明');
 
   // Generate HTML for log item with optional media thumbnail
-  const mediaThumbHtml = (log.media_url && log.media_type) ? `
-    <div class="log-media-thumb" data-media-url="${escapeHtml(log.media_url)}" data-media-type="${escapeHtml(log.media_type)}">
-      ${log.media_type === 'video' 
-        ? `<div class="media-thumb-content"><video src="${escapeHtml(log.media_url)}" preload="metadata" muted></video><div class="video-badge"><i class="fa-solid fa-play"></i> 動画</div></div>` 
-        : `<div class="media-thumb-content"><img src="${escapeHtml(log.media_url)}" alt="" loading="lazy"></div>`}
+  // Twitter 添付は media_url、YouTube/ツイキャスの配信サムネは image を使う
+  const thumbUrl = toHttpsThumb(log.media_url || log.image);
+  const thumbType = thumbUrl ? (log.media_url ? log.media_type : 'image') : null;
+  const mediaThumbHtml = (thumbUrl && thumbType) ? `
+    <div class="log-media-thumb" data-media-url="${escapeHtml(thumbUrl)}" data-media-type="${escapeHtml(thumbType)}">
+      ${thumbType === 'video' 
+        ? `<div class="media-thumb-content"><video src="${thumbUrl}" preload="metadata" muted></video><div class="video-badge"><i class="fa-solid fa-play"></i> 動画</div></div>` 
+        : `<div class="media-thumb-content"><img src="${thumbUrl}" alt="" loading="lazy"></div>`}
     </div>` : '';
 
   return `
@@ -355,7 +377,10 @@ export async function fetchHistory($logsEl, $statusEl, { append = false, useCach
       if (collectedLogs.length > 0) {
         const html = collectedLogs.map(createLogItem).join('');
         $logsEl.insertAdjacentHTML('beforeend', html);
-        requestAnimationFrame(() => applySequentialFadeIn());
+        requestAnimationFrame(() => {
+          applySequentialFadeIn();
+          bindThumbFallbacks($logsEl);
+        });
       } else if (!append) {
         $logsEl.innerHTML = '<p class="status-message info-message">表示できる履歴はありません</p>';
       }

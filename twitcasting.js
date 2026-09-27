@@ -293,7 +293,12 @@ async function checkLiveStatus(screenId){
 
                     console.log(`[Notify Preview] screenId=${screenId}, movieId=${currentLiveId}, title="${notifyTitle}", body="${notifyBody}"`);
 
-                    const thumbUrl = movie.large_thumbnail || movie.thumbnail || null;
+                    // ツイキャスのサムネは http 配信だが、CSP(img-src) は https のみ許可する。
+                    // imagegw*.twitcasting.tv は https 対応済みのため、保存前に正規化する。
+                    let thumbUrl = movie.large_thumbnail || movie.thumbnail || null;
+                    if (thumbUrl && /^http:\/\/(?:[\w-]+\.)*twitcasting\.tv\//i.test(thumbUrl)) {
+                        thumbUrl = 'https://' + thumbUrl.slice(7);
+                    }
                     try {
                         await sendNotify(screenId, currentLiveId, notifyTitle, notifyBody, thumbUrl);
                     } catch (e) {

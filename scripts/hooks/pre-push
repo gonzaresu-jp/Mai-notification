@@ -9,8 +9,8 @@
 #   このフックは push 直前に機械検査し、CI 等に頼らずにミスを塞ぐ。
 #
 # 実行内容:
-#   1. ステージ済みの .js に対し node --check
-#   2. ステージ済みの .php に対し php -l
+#   1. 送信コミット差分の .js に対し構文検査（CJS/ESM 両対応）
+#   2. 送信コミット差分の .php に対し php -l
 #   3. 回帰テスト（npm test / scripts/regression-test.js）
 #
 # 回避:
@@ -63,7 +63,12 @@ if [ -n "$JS_FILES" ]; then
   echo "[pre-push] JS 構文検査: $(echo "$JS_FILES" | wc -l) ファイル"
   while IFS= read -r f; do
     [ -f "$f" ] || continue
-    if ! out=$(node --check "$f" 2>&1); then
+    # package.json は commonjs のため node --check は ESM を弾く。
+    # CJS として検査し、失敗したら ES module として再検査する
+    # （webui/js/main.js や historyService.js は import/export を持つ）。
+    if out=$(node --check "$f" 2>&1) || out=$(node --input-type=module --check < "$f" 2>&1); then
+      :
+    else
       echo "${RED}[pre-push] ✗ 構文エラー: $f${RST}"
       echo "$out" | head -3 | sed 's/^/         /'
       fail=1
