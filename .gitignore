@@ -31,7 +31,6 @@ config.json
 *.db-shm
 *.db-wal
 data.db.bak.1763066928
-twitcasting-state.json
 twitcasting-token.json
 twitch_state.json
 webui/styles/

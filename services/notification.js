@@ -47,6 +47,11 @@ function initFcm() {
 }
 
 // --- Push Notification ---
+// webpush は送信前に鍵を検証して弾く。HTTP ステータスが付かないため status 判定では
+// 拾えず、購読が恒久的に壊れているのに毎回ここに来続けてノイズになる。
+// この2種は再登録しても治らない（＝その端末は受信不能）ため削除対象にする。
+const PERMANENT_SUBSCRIPTION_ERROR = /not valid for specified curve|must have 'auth' and 'p256dh' keys/;
+
 async function sendPushNotification(subscription, payload, isTest = false) {
   if (!subscription?.endpoint) { console.error("sendPushNotification: invalid subscription"); return false; }
   try {
@@ -55,7 +60,8 @@ async function sendPushNotification(subscription, payload, isTest = false) {
   } catch (err) {
     const status = err?.statusCode;
     console.error("Push send error", { endpoint: subscription.endpoint, status, message: err?.message });
-    if (status === 410 || status === 404) {
+    const permanent = PERMANENT_SUBSCRIPTION_ERROR.test(String(err?.message || ""));
+    if (status === 410 || status === 404 || permanent) {
       console.log("Removing expired subscription:", subscription.endpoint);
       if (ctx.db && typeof ctx.db.run === "function") {
         ctx.db.run("DELETE FROM subscriptions WHERE endpoint = ?", [subscription.endpoint]);

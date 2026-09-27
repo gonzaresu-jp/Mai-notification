@@ -5,6 +5,8 @@ const EVENT_PRE_OFFSETS_MS = [30 * 60 * 1000, 3 * 60 * 1000];
 const EVENT_NOTIFY_GRACE_MS = 2 * 60 * 1000;
 const EVENT_NOTIFY_LOOKAHEAD_DAYS = 14;
 const EVENT_NOTIFY_SYNC_INTERVAL_MS = 60 * 1000;
+// ライブ開始からこの時間を過ぎたら終了扱い（end_time が無いイベント用）
+const EVENT_AUTO_END_MS = 3 * 60 * 60 * 1000;
 
 function toLocalDateString(date) {
   const d = new Date(date);
@@ -26,19 +28,53 @@ function getWeekBoundsByDate(dateInput) {
   return { sunday, nextSunday, from: formatLocalDate(sunday), to: formatLocalDate(nextSunday), weekStart: toLocalDateString(sunday) };
 }
 
+// start_time / end_time は naive(JST) と UTC ISO(Z付き) が混在している。
+// SQL の文字列比較は両者を同一視できないため、naive 行の live→ended が
+// 約9時間遅れて「終了済みなのに LIVE 表示のまま」になる事故が起きていた。
+// Date に渡せば naive はローカル(JST)、Z 付きは UTC として正しく解釈される。
+function parseEventTime(value) {
+  if (!value) return NaN;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : NaN;
+}
+
 function updateEventStatuses() {
   const db = ctx.db;
-  const now = new Date().toISOString();
-  db.run("UPDATE events SET status = 'live', updated_at = CURRENT_TIMESTAMP WHERE status = 'scheduled' AND start_time <= ?", [now], function (err) {
-    if (!err && this.changes > 0) console.log(`[Event Status] ${this.changes} events marked as live`);
-  });
-  db.run("UPDATE events SET status = 'ended', updated_at = CURRENT_TIMESTAMP WHERE status = 'live' AND end_time IS NOT NULL AND end_time <= ?", [now], function (err) {
-    if (!err && this.changes > 0) console.log(`[Event Status] ${this.changes} events marked as ended`);
-  });
-  const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-  db.run("UPDATE events SET status = 'ended', updated_at = CURRENT_TIMESTAMP WHERE status = 'live' AND end_time IS NULL AND start_time <= ?", [threeHoursAgo], function (err) {
-    if (!err && this.changes > 0) console.log(`[Event Status] ${this.changes} events auto-ended`);
-  });
+  const nowMs = Date.now();
+  const autoEndMs = nowMs - EVENT_AUTO_END_MS;
+
+  db.all(
+    "SELECT id, status, start_time, end_time FROM events WHERE status IN ('scheduled','live')",
+    [],
+    function (err, rows) {
+      if (err) { console.error("[Event Status] load err:", err.message); return; }
+      const toLive = [];
+      const toEnded = [];
+      for (const row of rows || []) {
+        const startMs = parseEventTime(row.start_time);
+        if (!Number.isFinite(startMs)) continue;
+        if (row.status === "scheduled") {
+          if (startMs <= nowMs) toLive.push(row.id);
+          continue;
+        }
+        const endMs = parseEventTime(row.end_time);
+        const shouldEnd = Number.isFinite(endMs) ? endMs <= nowMs : startMs <= autoEndMs;
+        if (shouldEnd) toEnded.push(row.id);
+      }
+      if (toLive.length) {
+        db.run(`UPDATE events SET status = 'live', updated_at = CURRENT_TIMESTAMP WHERE id IN (${toLive.join(",")})`, function (e) {
+          if (e) console.error("[Event Status] live err:", e.message);
+          else if (this.changes > 0) console.log(`[Event Status] ${this.changes} events marked as live`);
+        });
+      }
+      if (toEnded.length) {
+        db.run(`UPDATE events SET status = 'ended', updated_at = CURRENT_TIMESTAMP WHERE id IN (${toEnded.join(",")})`, function (e) {
+          if (e) console.error("[Event Status] ended err:", e.message);
+          else if (this.changes > 0) console.log(`[Event Status] ${this.changes} events auto-ended`);
+        });
+      }
+    }
+  );
 }
 
 // CSP(img-src) は https のみ許可するため、http 配信のサムネは通知に載せる前に
