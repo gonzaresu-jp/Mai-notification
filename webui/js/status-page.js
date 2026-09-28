@@ -272,7 +272,7 @@
                             <span>残り <b>${cfRemain}</b> neurons（${cfPct}% 使用）</span>
                             <span>上限 ${fmtNum(cf.budget)} ・ 無料枠 ${fmtNum(cf.freeTier ?? 10000)} / 日</span>
                         </div>
-                        <div class="ai-muted">用途: 議事録生成 ・ ${cf.stale ? '※ 現在値は前日分（UTC日が変わってから再開されます）' : '日次: ' + esc(cf.day || '—')}</div>
+                        <div class="ai-muted">用途: 要約生成 ・ ${cf.stale ? '※ 現在値は前日分（UTC日が変わってから再開されます）' : '日次: ' + esc(cf.day || '—')}</div>
                     </div>
 
                     <!-- Gemini -->
@@ -299,9 +299,13 @@
                         <div class="resource-sub">
                             <span>レスポンス: <span class="ai-mono">${gq.statuses ? esc(JSON.stringify(gq.statuses)) : '—'}</span></span>
                         </div>
+                        <div class="resource-sub">
+                            <span>無料枠: <b>20</b> req/分 ・ <b>2,000</b> req/日</span>
+                            <span>音声 <b>7,200</b> 秒/時 ・ <b>28,800</b> 秒/日</span>
+                        </div>
                         ${hdrBlock(gq.headers)}
                         <div class="resource-sub">
-                            <span>Whisper 字幕: <b>${fmtNum(wh.segments ?? 0)}</b> セグメント / <b>${fmtNum(Math.round((wh.seconds ?? 0) / 60))}</b> 分</span>
+                            <span>Whisper 字幕（本番）: <b>${fmtNum(wh.segments ?? 0)}</b> セグメント / <b>${fmtNum(Math.round((wh.seconds ?? 0) / 60))}</b> 分</span>
                         </div>
                     </div>
 
@@ -312,7 +316,7 @@
                             <div class="resource-value">${fmtNum(chat.total ?? 0)}<span class="resource-unit">件</span></div>
                         </div>
                         <div class="resource-sub">
-                            <span>議事録: <b>${fmtNum(mn.videos ?? 0)}</b> 本（5分チャンク単位）</span>
+                            <span>要約: <b>${fmtNum(mn.videos ?? 0)}</b> 本（5分チャンク単位）</span>
                         </div>
                         ${dailyBars(chat.daily)}
                     </div>
