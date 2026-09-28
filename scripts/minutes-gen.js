@@ -214,6 +214,10 @@ async function resolveVideos(db, args) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!API_KEY) { console.error("API key required (MINUTES_API_KEY or GEMINI_API_KEY)"); process.exit(1); }
+  // 日次予算は実行ごとではなく UTC 日ごとに積み上げる。起動時に既存の使用量を読み込み、
+  // 読めなかった場合・UTC 日が変わっている場合のみ 0 から始める（loadNeuronState の仕様）。
+  neuronState = loadNeuronState();
+  console.log(`[neurons] 起動時: day=${neuronState.day} used=${neuronState.used.toFixed(1)} 残=${neuronsLeft().toFixed(1)}`);
   const db = await dbOpen();
   await dbRun(db, `CREATE TABLE IF NOT EXISTS video_minutes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
