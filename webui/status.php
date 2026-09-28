@@ -22,7 +22,7 @@ include __DIR__ . '/head.php';
         <div class="resource-section">
             <div class="resource-section-title"><i class="fa-solid fa-server" style="margin-right:6px"></i>サーバーリソース</div>
             <div id="resource-grid" class="resource-grid">
-                <div style="color:rgba(255,255,255,0.4)">Loading...</div>
+                <div class="ai-muted">Loading...</div>
             </div>
         </div>
 
@@ -32,7 +32,7 @@ include __DIR__ . '/head.php';
         <div class="resource-section">
             <div class="resource-section-title"><i class="fa-solid fa-brain" style="margin-right:6px"></i>AI 使用量と上限</div>
             <div id="ai-grid" class="resource-grid">
-                <div style="color:rgba(255,255,255,0.4)">Loading...</div>
+                <div class="ai-muted">Loading...</div>
             </div>
         </div>
 

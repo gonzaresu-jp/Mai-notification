@@ -65,7 +65,7 @@
             try {
                 const res  = await fetchWithRetry('/api/system-info');
                 if (!res.ok) {
-                    if (grid) grid.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:0.85rem">リソース情報を取得できませんでした</div>';
+                    if (grid) grid.innerHTML = '<div class="ai-muted">リソース情報を取得できませんでした</div>';
                     return;
                 }
                 const d    = await res.json();
@@ -83,7 +83,7 @@
                     <div class="resource-card">
                         <div class="resource-card-top">
                             <div class="resource-label"><i class="fa-solid fa-microchip"></i>CPU 使用率</div>
-                            <div class="resource-value">${cpuPct}<span style="font-size:0.85rem;font-weight:400;color:rgba(255,255,255,0.5)">%</span></div>
+                            <div class="resource-value">${cpuPct}<span class="resource-unit">%</span></div>
                         </div>
                         <div class="resource-bar-wrap">
                             <div class="resource-bar cpu ${barClass(cpuPct, 'cpu')}" style="width:${cpuPct}%"></div>
@@ -112,7 +112,7 @@
                     <div class="resource-card">
                         <div class="resource-card-top">
                             <div class="resource-label"><i class="fa-solid fa-memory"></i>メモリ</div>
-                            <div class="resource-value">${memPct}<span style="font-size:0.85rem;font-weight:400;color:rgba(255,255,255,0.5)">%</span></div>
+                            <div class="resource-value">${memPct}<span class="resource-unit">%</span></div>
                         </div>
                         <div class="resource-bar-wrap">
                             <div class="resource-bar mem ${barClass(memPct, 'mem')}" style="width:${memPct}%"></div>
@@ -150,7 +150,7 @@
                     </div>
                 `;
             } catch (e) {
-                grid.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:0.85rem">リソース情報を取得できませんでした</div>';
+                grid.innerHTML = '<div class="ai-muted">リソース情報を取得できませんでした</div>';
             }
         }
 
@@ -163,7 +163,7 @@
                 const items = data.items || [];
 
                 if (items.length === 0) {
-                    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4)">No statistics reported yet. Processes might be starting...</div>';
+                    grid.innerHTML = '<div class="ai-muted" style="grid-column:1/-1;text-align:center">No statistics reported yet. Processes might be starting...</div>';
                     return;
                 }
 
@@ -198,7 +198,7 @@
                 }).join('');
 
             } catch (e) {
-                grid.innerHTML = '<div style="color:#f44336">Failed to load status. Please try again.</div>';
+                grid.innerHTML = '<div class="ai-muted" style="color:#ff8a80">Failed to load status. Please try again.</div>';
             }
         }
 
@@ -211,24 +211,31 @@
         // レート制限ヘッダは取得できているものだけ表示（未取得なら「未取得」）
         function hdrBlock(headers) {
             if (!headers || !Object.keys(headers).length) {
-                return '<span style="opacity:.5">ヘッダ未取得（次回のAI呼び出し以降に記録）</span>';
+                return '<div class="ai-muted">ヘッダ未取得（次回のAI呼び出し以降に記録）</div>';
             }
-            return Object.entries(headers)
-                .map(([k, v]) => `<span style="opacity:.8">${esc(k)}: <b>${esc(v)}</b></span>`)
-                .join('<br>');
+            return '<div class="ai-kv">' + Object.entries(headers)
+                .map(([k, v]) => `<div class="ai-kv-row"><span class="ai-kv-key">${esc(k)}</span><span class="ai-kv-val">${esc(v)}</span></div>`)
+                .join('') + '</div>';
         }
 
         function dailyBars(daily) {
             if (!daily || !daily.length) return '';
             const max = Math.max(1, ...daily.map(d => d.count));
-            return `<div class="loadavg-row">` + daily.map(d => {
-                const h = Math.round((d.count / max) * 22);
-                return `<div class="loadavg-item" title="${esc(d.date)}: ${d.count}">
-                    <div class="lv" style="font-size:.7rem;color:rgba(255,255,255,.75)">${d.count || ''}</div>
-                    <div style="height:${h}px;width:12px;margin:3px auto 0;border-radius:2px;background:linear-gradient(180deg,#b11e7c,#7b1fa2)"></div>
-                    <div class="lt" style="font-size:.6rem">${esc(d.date.slice(5))}</div>
+            return `<div class="ai-daily">` + daily.map(d => {
+                const n = Number(d.count) || 0;
+                const h = n > 0 ? Math.max(5, Math.round((n / max) * 26)) : 3;
+                return `<div class="ai-daily-cell" title="${esc(d.date)}: ${n} 件">
+                    <div class="ai-daily-count${n ? '' : ' is-zero'}">${n}</div>
+                    <div class="ai-daily-barwrap"><div class="ai-daily-bar${n ? '' : ' is-zero'}" style="height:${h}px"></div></div>
+                    <div class="ai-daily-date">${esc(String(d.date).slice(5))}</div>
                 </div>`;
             }).join('') + `</div>`;
+        }
+
+        function fmtNum(n) {
+            if (n == null || n === '' || isNaN(Number(n))) return String(n ?? '—');
+            const v = Number(n);
+            return v.toLocaleString('ja-JP', { maximumFractionDigits: 1 });
         }
 
         async function loadAiUsage() {
@@ -246,43 +253,40 @@
                 const mn   = d.minutes || {};
                 const wh   = d.whisper || {};
 
-                const cfPct = Number(cf.pct) || 0;
-                const cfUsed = cf.used ?? 0;
-                const cfRemain = cf.remaining == null ? '—' : cf.remaining;
+                const cfPct = Math.min(Number(cf.pct) || 0, 100);
+                const cfUsed = fmtNum(cf.used ?? 0);
+                const cfRemain = cf.remaining == null ? '—' : fmtNum(cf.remaining);
+                const e429 = gm.errors429 || 0;
 
                 grid.innerHTML = `
                     <!-- Cloudflare Workers AI -->
                     <div class="resource-card">
                         <div class="resource-card-top">
-                            <div class="resource-label"><i class="fa-solid fa-cloud"></i>Cloudflare AI（議事録）</div>
-                            <div class="resource-value">${cfUsed}<span style="font-size:.85rem;font-weight:400;color:rgba(255,255,255,.5)"> / ${cf.budget ?? '—'} neurons</span></div>
+                            <div class="resource-label"><i class="fa-solid fa-cloud"></i>Cloudflare AI</div>
+                            <div class="resource-value">${cfUsed}</div>
                         </div>
                         <div class="resource-bar-wrap">
                             <div class="resource-bar cpu ${barClass(cfPct, 'cpu')}" style="width:${cfPct}%"></div>
                         </div>
                         <div class="resource-sub">
-                            <span>本日の残り: <b>${cfRemain}</b>（${cfPct}% 使用）</span>
-                            <span>無料枠 ${cf.freeTier ?? 10000}/日</span>
+                            <span>残り <b>${cfRemain}</b> neurons（${cfPct}% 使用）</span>
+                            <span>上限 ${fmtNum(cf.budget)} ・ 無料枠 ${fmtNum(cf.freeTier ?? 10000)} / 日</span>
                         </div>
-                        <div class="resource-sub" style="margin-top:2px">
-                            <span style="opacity:.6">${cf.stale ? '※ 現在値は前日（UTC日が変わってから再開される）' : '日次: ' + esc(cf.day || '—')}</span>
-                        </div>
+                        <div class="ai-muted">用途: 議事録生成 ・ ${cf.stale ? '※ 現在値は前日分（UTC日が変わってから再開されます）' : '日次: ' + esc(cf.day || '—')}</div>
                     </div>
 
                     <!-- Gemini -->
                     <div class="resource-card">
                         <div class="resource-card-top">
                             <div class="resource-label"><i class="fa-solid fa-gem"></i>Gemini（ツイート解析）</div>
-                            <div class="resource-value">${gm.calls ?? 0}<span style="font-size:.85rem;font-weight:400;color:rgba(255,255,255,.5)"> 回</span></div>
+                            <div class="resource-value">${fmtNum(gm.calls ?? 0)}<span class="resource-unit">回</span></div>
                         </div>
                         <div class="resource-sub">
-                            <span>429（上限超過）: <b style="color:${(gm.errors429||0) > 0 ? '#ff8a65' : 'inherit'}">${gm.errors429 ?? 0} 回</b></span>
+                            <span>429（上限超過）: <b class="${e429 > 0 ? 'ai-alert' : 'ai-ok'}">${e429} 回</b></span>
                             <span>予備モデル切替: ${gm.fallback ?? 0} 回</span>
                         </div>
-                        <div class="resource-sub" style="margin-top:4px;flex-direction:column;align-items:flex-start;gap:2px">
-                            ${hdrBlock(gm.headers)}
-                            ${gm.usage ? `<span style="opacity:.8">usage: ${esc(JSON.stringify(gm.usage))}</span>` : ''}
-                        </div>
+                        ${hdrBlock(gm.headers)}
+                        ${gm.usage ? `<div class="ai-mono">usage: ${esc(JSON.stringify(gm.usage))}</div>` : ''}
                         ${dailyBars(gm.daily)}
                     </div>
 
@@ -290,16 +294,14 @@
                     <div class="resource-card">
                         <div class="resource-card-top">
                             <div class="resource-label"><i class="fa-solid fa-bolt"></i>Groq（予備 / Whisper）</div>
-                            <div class="resource-value" style="font-size:1.1rem">${gq.calls ?? 0}<span style="font-size:.85rem;font-weight:400;color:rgba(255,255,255,.5)"> 回記録</span></div>
+                            <div class="resource-value">${fmtNum(gq.calls ?? 0)}<span class="resource-unit">回記録</span></div>
                         </div>
                         <div class="resource-sub">
-                            <span>レスポンス: ${gq.statuses ? esc(JSON.stringify(gq.statuses)) : '—'}</span>
+                            <span>レスポンス: <span class="ai-mono">${gq.statuses ? esc(JSON.stringify(gq.statuses)) : '—'}</span></span>
                         </div>
-                        <div class="resource-sub" style="margin-top:4px;flex-direction:column;align-items:flex-start;gap:2px">
-                            ${hdrBlock(gq.headers)}
-                        </div>
-                        <div class="resource-sub" style="margin-top:4px">
-                            <span>Whisper 字幕: ${wh.segments ?? 0} セグメント / ${Math.round((wh.seconds ?? 0) / 60)} 分</span>
+                        ${hdrBlock(gq.headers)}
+                        <div class="resource-sub">
+                            <span>Whisper 字幕: <b>${fmtNum(wh.segments ?? 0)}</b> セグメント / <b>${fmtNum(Math.round((wh.seconds ?? 0) / 60))}</b> 分</span>
                         </div>
                     </div>
 
@@ -307,16 +309,16 @@
                     <div class="resource-card">
                         <div class="resource-card-top">
                             <div class="resource-label"><i class="fa-solid fa-comments"></i>まいAI（チャット）</div>
-                            <div class="resource-value">${chat.total ?? 0}<span style="font-size:.85rem;font-weight:400;color:rgba(255,255,255,.5)"> 件</span></div>
+                            <div class="resource-value">${fmtNum(chat.total ?? 0)}<span class="resource-unit">件</span></div>
                         </div>
                         <div class="resource-sub">
-                            <span>議事録: ${mn.videos ?? 0} 本 / 5分チャンク単位で生成</span>
+                            <span>議事録: <b>${fmtNum(mn.videos ?? 0)}</b> 本（5分チャンク単位）</span>
                         </div>
                         ${dailyBars(chat.daily)}
                     </div>
                 `;
             } catch (e) {
-                grid.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:0.85rem">AI 使用量を取得できませんでした</div>';
+                grid.innerHTML = '<div class="ai-muted">AI 使用量を取得できませんでした</div>';
             }
         }
 
