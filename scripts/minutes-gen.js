@@ -11,6 +11,7 @@ const fs = require("fs");
 const os = require("os");
 const sqlite3 = require("sqlite3");
 const path = require("path");
+const aiQuota = require(path.join(__dirname, "..", "services", "ai-quota"));
 
 const DB_PATH = process.env.RAG_DB_PATH || path.join(__dirname, "..", "data.db");
 const ARCHIVE_API_BASE = process.env.ARCHIVE_API_BASE || "http://192.168.1.70:8766";
@@ -122,15 +123,20 @@ async function summarize(chunk) {
   ];
   let lastErr;
   for (let i = 0; i < MAX_RETRY; i++) {
+    let res = null;
     try {
-      const res = await fetch(API_URL, {
+      res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
         body: JSON.stringify({ model: MODEL, messages, temperature: 0.2, max_tokens: 2048 }),
         timeout: 90000,
       });
-      if (!res.ok) throw new Error(`api ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      if (!res.ok) {
+        aiQuota.record("cloudflare", res, null, { kind: "minutes", model: MODEL, error: `api ${res.status}` });
+        throw new Error(`api ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      }
       const data = await res.json();
+      aiQuota.record("cloudflare", res, data, { kind: "minutes", model: MODEL });
       // Cloudflare Workers AI は usage.neurons に実消費量を返す
       if (data?.usage?.neurons != null) {
         neuronState.used = Math.min(NEURON_BUDGET, neuronState.used + data.usage.neurons);
@@ -144,6 +150,7 @@ async function summarize(chunk) {
       return [parsed];
     } catch (e) {
       lastErr = e;
+      if (!res) aiQuota.record("cloudflare", null, null, { kind: "minutes", model: MODEL, error: e.message });
       await sleepMs(2000 * (i + 1));
     }
   }

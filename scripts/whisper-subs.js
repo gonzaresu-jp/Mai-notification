@@ -26,6 +26,27 @@ const YTDLP = process.env.YTDLP_PATH || "yt-dlp";
 const COOKIES = process.env.YTDLP_COOKIES_FILE || "";
 const CHUNK_SEC = parseInt(process.env.WHISPER_CHUNK_SEC || "600", 10); // 10分/chunk (25MB制限対策)
 const WORK_DIR = process.env.WHISPER_WORK_DIR || path.join(os.tmpdir(), "whisper-subs");
+const aiQuota = require(path.join(__dirname, "..", "services", "ai-quota"));
+
+// curl -D で吐いたヘッダファイルを Response 相当に変換する（status 行 + ヘッダ行）。
+// リダイレクトでブロックが積むため、末尾ブロックだけを採用する。
+function readCurlHeaders(hdrFile) {
+  try {
+    const raw = fs.readFileSync(hdrFile, "utf8");
+    const block = raw.split(/\r?\n\r?\n/).filter(s => s.trim()).pop() || raw;
+    const lines = block.split(/\r?\n/);
+    const statusLine = lines.find(l => /^HTTP\/\S+\s+\d{3}/.test(l));
+    const status = statusLine ? parseInt((statusLine.match(/(\d{3})\s*$/) || [])[1], 10) : 0;
+    const headers = new Map();
+    for (const line of lines.slice(1)) {
+      const i = line.indexOf(":");
+      if (i > 0) headers.set(line.slice(0, i).trim().toLowerCase(), line.slice(i + 1).trim());
+    }
+    return { status, headers };
+  } catch (e) {
+    return null;
+  }
+}
 
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 function sh(cmd, args, opts = {}) {
@@ -109,8 +130,10 @@ function parseRetryAfter(msg) {
   return 0;
 }
 async function transcribeChunk(mp3Path) {
+  const hdrFile = path.join(os.tmpdir(), `groq-whisper-${process.pid}-${Date.now()}.hdr`);
   const args = ["-s", "-X", "POST", "https://api.groq.com/openai/v1/audio/transcriptions",
     "-H", "Authorization: Bearer " + GROQ_API_KEY,
+    "-D", hdrFile,
     "-F", `file=@${mp3Path}`,
     "-F", `model=${GROQ_MODEL}`,
     "-F", "language=ja",
@@ -120,9 +143,11 @@ async function transcribeChunk(mp3Path) {
   for (let attempt = 0; attempt < 12; attempt++) {
     try {
       const out = await sh("curl", args, { timeout: 300000 });
+      const res = readCurlHeaders(hdrFile);
       const j = JSON.parse(out);
       if (j.error) {
         const msg = j.error.message || JSON.stringify(j.error).slice(0, 200);
+        aiQuota.record("groq", res, null, { kind: "whisper", model: GROQ_MODEL, error: msg });
         const wait = parseRetryAfter(msg);
         if (/rate.?limit|429|try again/i.test(msg) && wait > 0 && wait < 45 * 60 * 1000) {
           console.log(`  rate limited, waiting ${(wait / 1000).toFixed(0)}s+margin...`);
@@ -131,6 +156,8 @@ async function transcribeChunk(mp3Path) {
         }
         throw new Error(msg);
       }
+      aiQuota.record("groq", res, j, { kind: "whisper", model: GROQ_MODEL });
+      try { fs.unlinkSync(hdrFile); } catch (_) {}
       return j;
     } catch (e) {
       if (/rate.?limit|try again/i.test(e.message)) {

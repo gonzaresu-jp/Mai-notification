@@ -235,6 +235,7 @@ require("./routes/admin-archive").register(app, db);
   require("./routes/admin-twitter-stats").register(app, db);
 require("./routes/scraper-status").register(app, db);
 require("./routes/system").register(app);
+require("./routes/ai-usage").register(app, db);
 require("./routes/history").register(app, db);
 require("./routes/notify").register(app, db);
 require("./routes/twitter-media").register(app, db);

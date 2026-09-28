@@ -28,6 +28,16 @@ include __DIR__ . '/head.php';
 
         <div class="section-divider"></div>
 
+        <!-- AI 使用量 -->
+        <div class="resource-section">
+            <div class="resource-section-title"><i class="fa-solid fa-brain" style="margin-right:6px"></i>AI 使用量と上限</div>
+            <div id="ai-grid" class="resource-grid">
+                <div style="color:rgba(255,255,255,0.4)">Loading...</div>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
         <!-- スクレイパー状況 -->
         <div class="scraper-section-title"><i class="fa-solid fa-circle-nodes" style="margin-right:6px"></i>プロセスステータス</div>
         <div id="status-grid" class="status-grid">

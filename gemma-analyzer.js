@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
+const aiQuota = require('./services/ai-quota');
 
 const LOG_DIR = path.join(__dirname, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'gemma.log');
@@ -58,10 +59,14 @@ async function callFallback(prompt) {
     });
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
+      aiQuota.record('groq', response, null, {
+        kind: 'tweet-analysis-fallback', model: FALLBACK_MODEL, error: `HTTP ${response.status}`,
+      });
       throw new Error(`fallback API ${response.status}: ${detail.slice(0, 200)}`);
     }
     const data = await response.json();
-    // 推論モデルの <think>…</think> は取り除く
+    aiQuota.record('groq', response, data, { kind: 'tweet-analysis-fallback', model: FALLBACK_MODEL });
+    // 推論モデルの  <think>...</think> は取り除く
     return (data.choices[0].message.content || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
   } finally {
     clearTimeout(timeoutId);
@@ -75,11 +80,12 @@ async function callAiServer(prompt, retries = RETRY_TIMES) {
   if (!API_KEY) throw new Error("GEMINI_API_KEY not configured");
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt++) {
+    let response = null;
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-      const response = await fetch(SERVER_ENDPOINT, {
+      response = await fetch(SERVER_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
         body: JSON.stringify({
@@ -97,13 +103,21 @@ async function callAiServer(prompt, retries = RETRY_TIMES) {
       clearTimeout(timeoutId);
       if (!response.ok) {
         const detail = await response.text().catch(() => "");
+        // 429 の時こそヘッダ（残量）が要るので、失敗時も必ず記録する
+        aiQuota.record('gemini', response, null, {
+          kind: 'tweet-analysis', model: MODEL, error: `HTTP ${response.status}`,
+        });
         throw new Error(`Gemini API ${response.status}: ${detail.slice(0, 200)}`);
       }
 
       const data = await response.json();
+      aiQuota.record('gemini', response, data, { kind: 'tweet-analysis', model: MODEL });
       return (data.choices[0].message.content || "").trim();
     } catch (err) {
       lastError = err;
+      if (!response) aiQuota.record('gemini', null, null, {
+        kind: 'tweet-analysis', model: MODEL, error: err.message,
+      });
       // 429（1日の上限など）は数秒待っても回復しないので、リトライせず予備のモデルへ切り替える
       if (/Gemini API 429/.test(String(err && err.message)) && FALLBACK_API_KEY) {
         gemmaLogger.warn(`[Gemini] 上限(429)のため予備モデル ${FALLBACK_MODEL} で解析します`);

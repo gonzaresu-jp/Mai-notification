@@ -8,6 +8,7 @@ const path = require("path");
 const fetch = require("node-fetch");
 const embeddings = require("../services/embeddings");
 const vectordb = require("../services/vectordb");
+const aiQuota = require("../services/ai-quota");
 const { dbGet, dbRun, dbAll } = require("./user-helpers");
 
 const KNOWLEDGE_FILE = process.env.KNOWLEDGE_FILE || path.join(__dirname, "..", "rag-knowledge.json");
@@ -531,11 +532,16 @@ async function chat(messages, useGroq = false) {
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
+    // レート制限ヘッダと body.usage を記録して残量を後から見られるようにする。
+    // useGroq の先は GROQ_CHAT_ENDPOINT = MINUTES_API_URL = Cloudflare なので注意。
+    const provider = isNormalGemini ? "gemini" : (useGroq ? "cloudflare" : "ollama");
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
+      aiQuota.record(provider, res, null, { kind: "mai-ai-chat", model, error: `HTTP ${res.status}` });
       throw new Error(`Chat server ${res.status}: ${detail.slice(0, 300)}`);
     }
     const data = await res.json();
+    aiQuota.record(provider, res, data, { kind: "mai-ai-chat", model });
     return (data?.choices?.[0]?.message?.content || data?.choices?.[0]?.message?.reasoning_content || "").trim();
   } finally {
     clearTimeout(timer);
