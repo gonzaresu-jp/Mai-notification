@@ -123,7 +123,7 @@ async function syncVectors() {
         if (n < BATCH) break;
       }
     }
-    // minutes(議事録) の増分同期
+    // minutes(要約) の増分同期
     if (ctx.db) {
       try {
         const minutesSync = require("./minutes-sync");

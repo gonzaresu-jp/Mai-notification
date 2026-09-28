@@ -68,13 +68,13 @@ const CHAT_MAX_TOKENS = parseInt(process.env.RAG_MAX_TOKENS || "384", 10);
 // 通常会話の温度。事実回答用の低すぎる温度だと「質問応答AI」になるため、雑談向けに 0.65〜0.75 を推奨。
 const CHAT_TEMPERATURE = parseFloat(process.env.RAG_TEMPERATURE || "0.7");
 // R18モード用のバックエンド（管理者専用）。Geminiは規約上NGなのでGroq(オープンウェイト)へ切り替える。
-// 議事録生成と同じ MINUTES_* 設定を流用する。
+// 要約生成と同じ MINUTES_* 設定を流用する。
 const GROQ_CHAT_ENDPOINT = process.env.MINUTES_API_URL || "";
 const GROQ_CHAT_API_KEY = process.env.MINUTES_API_KEY || "";
 const GROQ_CHAT_MODEL = process.env.MINUTES_MODEL || "";
 // qwen/qwen3.8-27b の無料枠は OTPM(分間出力) 1000 上限のため、Groq向けは max_tokens を抑える
 const GROQ_CHAT_MAX_TOKENS = parseInt(process.env.RAG_GROQ_MAX_TOKENS || "700", 10);
-// 議事録ヒットから親字幕を引用する際の最低スコア（無関係な議事録引用ノイズを減らす）
+// 要約ヒットから親字幕を引用する際の最低スコア（無関係な要約引用ノイズを減らす）
 // bge-m3 の実測で良質マッチ ~0.60、ノイズ 0.55〜0.60 なので 0.58 に設定
 const MINUTES_PARENT_MIN_SCORE = parseFloat(process.env.RAG_MINUTES_MIN_SCORE || "0.58");
 
@@ -393,7 +393,7 @@ function fmtTranscript(h) {
   return `- [${h.stream_date_jst || ""} | ${ti}] (${h.start || ""}) ${t} ${h.url || ""}`;
 }
 
-// minutes(配信議事録)ヒットに対応する生字幕セグメントを取得する（parent-document引用）
+// minutes(配信要約)ヒットに対応する生字幕セグメントを取得する（parent-document引用）
 // minutes.payload には video_id / start_ms / end_ms（引用元の5分チャンク範囲）が入っている
 async function fetchParentTranscripts(minuteHits, limit) {
   if (!minuteHits.length) return [];
@@ -405,7 +405,7 @@ async function fetchParentTranscripts(minuteHits, limit) {
     const st = Number(p.start_ms || 0);
     const ed = Number(p.end_ms || st + 300 * 1000);
     if (!vid) continue;
-    // チャンク全体を取得した後、前後40秒の余白を足す（引用区間をヒット議事録に一致させる）
+    // チャンク全体を取得した後、前後40秒の余白を足す（引用区間をヒット要約に一致させる）
     const from = Math.max(0, st - 40 * 1000);
     const to = ed + 40 * 1000;
     const key = `${vid}|${from}|${to}`;
@@ -437,7 +437,7 @@ async function fetchParentTranscripts(minuteHits, limit) {
   return out;
 }
 
-// minutes(配信議事録)のヒット整形
+// minutes(配信要約)のヒット整形
 function fmtMinutes(p) {
   const parts = [];
   if (p.title) parts.push(p.title);
@@ -462,7 +462,7 @@ function sourceLine(hit) {
     return `[予定] ${p.title || ""}${p.start_time ? `（${p.start_time}）` : ""}${p.url ? ` ${p.url}` : ""}`;
   }
   if (p.source === "minutes") {
-    return `[議事録] ${fmtMinutes(p)}`;
+    return `[要約] ${fmtMinutes(p)}`;
   }
   return `[${p.platform || "通知"}] ${p.title || ""}${p.body ? `: ${p.body}` : ""}${p.url ? ` ${p.url}` : ""}`;
 }
@@ -589,7 +589,7 @@ function register(app, db) {
       ]);
       const hitLines = hits.map((h, i) => `${i + 1}. ${sourceLine(h)}`).join("\n");
 
-      // minutes(配信議事録)ヒット → parent-document(生字幕) を引用として補強
+      // minutes(配信要約)ヒット → parent-document(生字幕) を引用として補強
       // スコア閾値でふるい、video_id ごとに最良1件だけを選ぶ（同配信の重複引用ノイズを防止）
       const minuteHits = hits
         .filter(h => h.payload?.source === "minutes")
@@ -607,7 +607,7 @@ function register(app, db) {
       const parentLines = parents.map(p =>
         `- [${p.stream_date_jst || ""} | ${p.title || ""}] ${p.url}\n${p.text}`).join("\n\n");
       const parentBlock = parentLines
-        ? `■ 配信アーカイブ（議事録ヒットに対応する生字幕の引用・時刻付き）:\n${parentLines}\n\n`
+        ? `■ 配信アーカイブ（要約ヒットに対応する生字幕の引用・時刻付き）:\n${parentLines}\n\n`
         : "";
       const upLines = upcoming.length ? upcoming.map(fmtUpcoming).join("\n") : "(登録されている今後の予定はありません)";
       const knowledge = loadKnowledge();
@@ -683,7 +683,7 @@ const r18Extra = r18
             ? `現在日時: ${nowStr}（JST）\n\n` +
               `■ 恋乃夜まいの基本情報（プロフィール）:\n${kLines}\n\n` +
               styleTweetsBlock +
-              `（R18モード中です。配信アーカイブ・議事録・予定の引用は不要で、まいとしてシチュエーションRPのみに集中します。回答は必ず恋乃夜まい本人の口調で）\n` +
+              `（R18モード中です。配信アーカイブ・要約・予定の引用は不要で、まいとしてシチュエーションRPのみに集中します。回答は必ず恋乃夜まい本人の口調で）\n` +
               `質問: ${question}`
             : `現在日時: ${nowStr}（JST）\n\n` +
               `■ 恋乃夜まいの基本情報（プロフィール）:\n${kLines}\n\n` +

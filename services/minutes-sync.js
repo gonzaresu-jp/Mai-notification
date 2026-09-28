@@ -1,4 +1,4 @@
-// minutes-sync.js - 議事録(video_minutes) -> ベクトルDB 同期
+// minutes-sync.js - 要約(video_minutes) -> ベクトルDB 同期
 // vector-sync.js のサブセット。source='minutes' として Pi へ埋め込み・upsert する。
 // 生成直後（minutes-gen.js）と定期同期（vector-sync.js）の両方から呼ばれる。
 
@@ -52,7 +52,7 @@ async function upsertRows(db, rows) {
   return rows.length;
 }
 
-// 全議事録を upsert（冪等：同じ id は上書き）。生成直後や全再同期に使う。
+// 全要約を upsert（冪等：同じ id は上書き）。生成直後や全再同期に使う。
 async function embedMinutes(db, batchSize = BATCH) {
   if (!vectordb.isEnabled() || !embeddings.isEnabled()) return 0;
   await vectordb.ensureCollection(embeddings.getDim());

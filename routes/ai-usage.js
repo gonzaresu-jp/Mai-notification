@@ -6,7 +6,7 @@
 //   - Gemini / Groq         : logs/gemma.log のパース（呼び出し回数・429・予備切替）
 //                             + services/ai-quota.js が保存したレート制限ヘッダと usage
 //   - まいAIチャット        : chat_messages（role='assistant'）
-//   - 議事録                : video_minutes
+//   - 要約                : video_minutes
 //   - Whisper 字幕          : video_whisper_segments
 //
 // ログ（197KB・ローテ無し）とDBを毎回読むと重いため60秒キャッシュする。

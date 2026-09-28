@@ -239,7 +239,7 @@ function register(app) {
     await proxyJson(res, `/api/chapters/${id}`);
   });
 
-  // 要約（旧・議事録）の有無を、与えられた video_ids から判定して返す（バッジ表示用）
+  // 要約の有無を、与えられた video_ids から判定して返す（バッジ表示用）
   // data: { flags: { <video_id>: { has_minutes: true } , ... } }
   app.get("/api/archive/minutes", async (req, res) => {
     const ids = String(req.query.ids || "")

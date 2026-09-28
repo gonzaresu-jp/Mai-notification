@@ -105,7 +105,7 @@ function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => { if (err) console.error("vector_sync_state create err:", err.message); });
 
-    // 配信ごとの議事録（字幕チャンク要約）。source='minutes' としてベクトルDBへ埋め込まれる。
+    // 配信ごとの要約（字幕チャンク要約）。source='minutes' としてベクトルDBへ埋め込まれる。
     db.run(`CREATE TABLE IF NOT EXISTS video_minutes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       video_id TEXT NOT NULL,
