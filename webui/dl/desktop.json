@@ -1,5 +1,5 @@
 {
-  "version": "1.3.7",
-  "url": "https://mai.honna-yuzuki.com/dl/MaiPush-Setup-1.3.7.exe",
-  "notes": "アップデート後に通知が表示されなくなる問題を修正しました。あわせて、画像付きの投稿が画像なしで通知される問題も修正しています（1.3.6）。"
+  "version": "1.3.8",
+  "url": "https://mai.honna-yuzuki.com/dl/MaiPush-Setup-1.3.8.exe",
+  "notes": "システムトレイにアイコンが2つ表示される問題と、自動起動に重複エントリが登録される問題を修正しました（1.3.8）。"
 }

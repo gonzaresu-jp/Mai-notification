@@ -10,6 +10,22 @@ const HELPER_EXE = path.join(__dirname, 'toast-helper.exe');
 const SNORETOAST = path.join(path.dirname(require.resolve('node-notifier')), 'vendor', 'snoretoast', process.arch === 'x64' ? 'snoretoast-x64.exe' : 'snoretoast-x86.exe');
 
 app.name = 'まいちゃん通知';
+
+// ── 単一インスタンスガード ──
+// 以前は無く、起動のたびに別プロセス＋別トレイアイコンが生成されて二重化していた。
+// 既に起動中ならそちらを前面に出し、自分は何も生成せず終了する。
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 const DEFAULT_URL = 'https://mai.honna-yuzuki.com';
 // const DEFAULT_URL = 'data:text/html,<h1>Hello Electron</h1><script>console.log("Page JS works")</script>';
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
@@ -820,7 +836,12 @@ function updateTrayMenu() {
     { type: 'separator' },
     { type: 'checkbox', label: '自動起動', checked: autoStart, click: () => {
       const next = !app.getLoginItemSettings().openAtLogin;
-      app.setLoginItemSettings({ openAtLogin: next, args: ['--hidden'] });
+      app.setLoginItemSettings({
+        openAtLogin: next,
+        path: app.getPath('exe'),
+        args: ['--hidden'],
+        env: { MAI_START_HIDDEN: '1' },
+      });
       updateTrayMenu();
     }},
     { label: '更新を確認', click: () => { checkForUpdates({ manual: true }); } },
@@ -876,15 +897,151 @@ ipcMain.handle('open-login', async () => {
   }
 });
 
-app.whenReady().then(() => {
-  ensureAumid();
-  setupPermissions();
+// ── ログオン時自動起動（HKCU Run）の一元化 ──
+// 過去は起動のたびに openAtLogin:true を強制上書きしていたため、
+//  ① トレイの「自動起動」をオフにしても次回起動で強制的にオンに戻る
+//  ② 別名（appId / 開発時の electron.app.Electron 等）で重複エントリが残り
+// 起動時に両方が発火して二重トレイになっていた。
+const RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+const LEGACY_RUN_NAMES = ['com.mai-push.desktop', 'electron.app.Electron'];
+
+function canonicalRunValueName() {
+  return 'electron.app.' + app.name;
+}
+
+function normalizePathStr(p) {
+  return String(p || '').replace(/\//g, '\\').replace(/^"|"$/g, '').trim().toLowerCase();
+}
+
+function extractExePath(data) {
+  const t = String(data || '').trim();
+  if (!t) return '';
+  if (t.startsWith('"')) {
+    const i = t.indexOf('"', 1);
+    return i > 0 ? t.slice(1, i) : t.slice(1);
+  }
+  return t.split(/\s+/)[0];
+}
+
+// Run キーを読む。`reg query` は OEM コードページで出力されるため UTF-8 で読むと
+// 日本語の値名が化け、自分の正規エントリを誤って重複扱いにする恐れがある。
+// PowerShell 経由で明示的に UTF-8 出力させて Unicode のまま受け取る。
+// 失敗時は null を返す（＝読込に依存しない既知名の削除にフォールバックする）。
+function readRunEntries() {
+  if (process.platform !== 'win32') return null;
+  const script = [
+    '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;',
+    '$k="HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";',
+    'if (-not (Test-Path $k)) { exit 0 };',
+    '$key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");',
+    'foreach ($n in $key.GetValueNames()) {',
+    '  $v = $key.GetValue($n);',
+    '  if ($v -is [array]) { $v = [string]::Join([char]0, [string[]]$v) };',
+    '  Write-Output ($n + [char]9 + $v)',
+    '}',
+    '$key.Close()',
+  ].join(' ');
+  let out = '';
+  try {
+    out = execFileSync('powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { encoding: 'utf8', windowsHide: true });
+  } catch (e) {
+    console.warn('[auto-start] Run キーの読込失敗:', e.message);
+    return null;
+  }
+  const rows = [];
+  for (const line of out.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    const i = line.indexOf('\t');
+    if (i <= 0) continue;
+    rows.push({ name: line.slice(0, i).trim(), data: line.slice(i + 1).trim() });
+  }
+  return rows;
+}
+
+function runValueExists(name) {
+  if (process.platform !== 'win32') return false;
+  try {
+    execFileSync('reg', ['query', RUN_KEY, '/v', name], { windowsHide: true, stdio: 'ignore' });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 同一 exe への重複登録・旧エントリ・死にエントリを削除する（自分自身は残す）
+function cleanupAutoStartEntries() {
+  if (process.platform !== 'win32') return;
+  const canonical = canonicalRunValueName();
+  const ownExe = normalizePathStr(app.getPath('exe'));
+  let ownExeReal = ownExe;
+  try { ownExeReal = normalizePathStr(fs.realpathSync(app.getPath('exe'))); } catch (e) {}
+
+  const toDelete = new Map(); // name -> 削除理由
+  const rows = readRunEntries();
+
+  if (rows) {
+    for (const row of rows) {
+      if (row.name === canonical) continue;
+      const target = extractExePath(row.data);
+      let targetReal = normalizePathStr(target);
+      if (targetReal && fs.existsSync(target)) {
+        try { targetReal = normalizePathStr(fs.realpathSync(target)); } catch (e) {}
+      }
+      const sameExe = targetReal && (targetReal === ownExe || targetReal === ownExeReal);
+      if (sameExe) {
+        toDelete.set(row.name, '同一 exe への重複: ' + row.data);
+      } else if (LEGACY_RUN_NAMES.includes(row.name)) {
+        toDelete.set(row.name, '既知の旧エントリ: ' + row.data);
+      } else if (target && !fs.existsSync(target) &&
+                 (row.name.includes('mai-push') || row.name.includes('まいちゃん'))) {
+        toDelete.set(row.name, '死にエントリ(対象なし): ' + row.data);
+      }
+    }
+  } else {
+    // 読込に失敗した場合は ASCII の既知名だけを確実に掃除する
+    for (const n of LEGACY_RUN_NAMES) {
+      if (n !== canonical && runValueExists(n)) toDelete.set(n, '既知の旧エントリ');
+    }
+  }
+
+  for (const [name, reason] of toDelete) {
+    if (name === canonical) continue;
+    try {
+      execFileSync('reg', ['delete', RUN_KEY, '/v', name, '/f'],
+        { windowsHide: true, stdio: 'ignore' });
+      console.log('[auto-start] 削除:', name, '→', reason);
+    } catch (e) {
+      console.warn('[auto-start] 削除失敗:', name, e.message);
+    }
+  }
+}
+
+// 初回のみ既定値(ON)を書き込む。以降はトレイのチェック状態を尊重しつつ、
+// パス (--hidden / MAI_START_HIDDEN) のみ毎回正規に保つ。
+function syncLoginItemSettings() {
+  const s = loadSettings();
+  const openAtLogin = s.autoStartInitialized
+    ? app.getLoginItemSettings().openAtLogin
+    : true;
   app.setLoginItemSettings({
-    openAtLogin: true,
+    openAtLogin,
     path: app.getPath('exe'),
     args: ['--hidden'],
     env: { MAI_START_HIDDEN: '1' },
   });
+  if (!s.autoStartInitialized) {
+    s.autoStartInitialized = true;
+    saveSettings(s);
+  }
+  cleanupAutoStartEntries();
+}
+
+app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return;
+  ensureAumid();
+  setupPermissions();
+  syncLoginItemSettings();
   createWindow();
   createTray();
   scheduleUpdateChecks();
