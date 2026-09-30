@@ -443,6 +443,67 @@
     return chapModal.querySelector('.ar-chap-body');
   }
 
+  // ------------------------------------------------ YTコメント用コピー
+  // YouTube は「行頭が m:ss / h:mm:ss」のときだけ時刻をリンク化する。
+  // したがって貼り付け用テキストは「時刻 タイトル」の行形式で組み立てる（番号や記号は足せない）。
+  var copyStore = { chapters: '', minutes: '' };
+
+  function ytTs(sec) {
+    sec = Math.max(0, Math.floor(Number(sec) || 0));
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    var p = function (n) { return n < 10 ? '0' + n : String(n); };
+    return h ? h + ':' + p(m) + ':' + p(s) : m + ':' + p(s);
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error('copy failed'));
+    });
+  }
+
+  function copyToolbarHtml(kind) {
+    return '<div class="ar-toolbar">'
+      + '<button type="button" class="ar-copy-btn" data-copy-kind="' + kind + '">'
+      + '<i class="fa-solid fa-copy" aria-hidden="true"></i> コメント用にコピー</button>'
+      + '<span class="ar-copy-note">行頭が時刻なのでYouTubeに貼るとリンクになります</span>'
+      + '<details class="ar-copy-preview"><summary>貼り付け用テキストを見る</summary><pre></pre></details>'
+      + '</div>';
+  }
+
+  function wireCopyToolbar(root, kind) {
+    var btn = root.querySelector('[data-copy-kind="' + kind + '"]');
+    if (!btn) return;
+    var pre = root.querySelector('.ar-copy-preview pre');
+    if (pre) pre.textContent = copyStore[kind] || '';
+    btn.addEventListener('click', function () {
+      var text = copyStore[kind] || '';
+      if (!text) return;
+      var label = btn.innerHTML;
+      var restore = function (msg) {
+        btn.innerHTML = msg;
+        setTimeout(function () { btn.innerHTML = label; }, 2000);
+      };
+      copyToClipboard(text).then(function () {
+        btn.classList.add('is-copied');
+        restore('<i class="fa-solid fa-check" aria-hidden="true"></i> コピーしました');
+      }).catch(function () {
+        restore('コピーに失敗しました');
+      });
+    });
+  }
+
   /** チャプター一覧をモーダル表示する */
   function showChapterPopup(vid) {
     var body = openModalShell(vid, 'タイムスタンプ', 'fa-list-ul');
@@ -453,8 +514,11 @@
         body.innerHTML = '<div class="ar-chap-empty">タイムスタンプがありません</div>';
         return;
       }
-      body.innerHTML = '<div class="ar-chap-list"></div>';
-      var listEl = body.firstChild;
+      copyStore.chapters = list.map(function (ch) {
+        return ytTs(ch.time_sec) + ' ' + (ch.title || '');
+      }).join('\n');
+      body.innerHTML = copyToolbarHtml('chapters') + '<div class="ar-chap-list"></div>';
+      var listEl = body.querySelector('.ar-chap-list');
       list.forEach(function (ch) {
         var a = document.createElement('a');
         a.className = 'ar-chap-item';
@@ -463,7 +527,7 @@
         a.rel = 'noopener noreferrer';
         var t = document.createElement('span');
         t.className = 'ar-chap-time';
-        t.textContent = ch.time_str;
+        t.textContent = ytTs(ch.time_sec);
         var l = document.createElement('span');
         l.className = 'ar-chap-label';
         l.textContent = ch.title || '';
@@ -471,13 +535,35 @@
         a.appendChild(l);
         listEl.appendChild(a);
       });
+      wireCopyToolbar(body, 'chapters');
     }).catch(function () {
       if (!chapModal) return;
       body.innerHTML = '<div class="ar-chap-empty">読み込めませんでした</div>';
     });
   }
 
-  /** 要約（5分刻みの topic/summary）をモーダル表示する */
+  /** 要約の1行。章(section)配下のトピックは isChild=true で階層表示する。
+      トピック行は高さが伸びるため facts は既定で畳み、行全体はリンクにしない
+      （行内に開閉可能な facts を置くため）。ジャンプは時刻とトピックの2箇所。 */
+  function minItemHtml(vid, s, isChild) {
+    var href = esc(s.url || videoUrl(vid)) + '&t=' + Math.floor(s.start_ms / 1000) + 's';
+    var facts = (s.facts || []).map(function (f) {
+      return '<li>' + esc(f) + '</li>';
+    }).join('');
+    var factsBox = facts
+      ? '<details class="ar-min-facts-box"><summary>明言した事実 ' + (s.facts || []).length + '件</summary>'
+        + '<ul class="ar-min-facts">' + facts + '</ul></details>'
+      : '';
+    return '<div class="ar-min-item' + (isChild ? ' ar-min-child' : '') + '">'
+      + '<a class="ar-min-time" href="' + href + '" target="_blank" rel="noopener noreferrer">' + esc(timeLabel(s.start_ms)) + '</a>'
+      + '<span class="ar-min-body">'
+      + (s.topic ? '<a class="ar-min-topic" href="' + href + '" target="_blank" rel="noopener noreferrer">' + esc(s.topic) + '</a>' : '')
+      + (s.summary ? '<span class="ar-min-text">' + esc(s.summary) + '</span>' : '')
+      + factsBox
+      + '</span></div>';
+  }
+
+  /** 要約（章＞トピックの階層）をモーダル表示する。section 無しの旧データは従来どおりフラット */
   function showSummaryPopup(vid) {
     var body = openModalShell(vid, '要約', 'fa-file-lines');
 
@@ -490,22 +576,48 @@
           body.innerHTML = '<div class="ar-chap-empty">要約がありません</div>';
           return;
         }
-        var html = '<div class="ar-min-list">';
+        // 連続する同じ section を1つの章にまとめる（章が5分チャンクで割れるのを防ぐ）
+        var groups = [];
         segs.forEach(function (s) {
-          var facts = (s.facts || []).map(function (f) {
-            return '<li>' + esc(f) + '</li>';
-          }).join('');
-          html += '<a class="ar-min-item" href="' + esc(s.url || videoUrl(vid)) + '&t=' + Math.floor(s.start_ms / 1000) + 's"'
-            + ' target="_blank" rel="noopener noreferrer">'
-            + '<span class="ar-min-time">' + esc(timeLabel(s.start_ms)) + '</span>'
-            + '<span class="ar-min-body">'
-            + (s.topic ? '<span class="ar-min-topic">' + esc(s.topic) + '</span>' : '')
-            + (s.summary ? '<span class="ar-min-text">' + esc(s.summary) + '</span>' : '')
-            + (facts ? '<ul class="ar-min-facts">' + facts + '</ul>' : '')
-            + '</span></a>';
+          var sec = s.section || '';
+          var last = groups.length ? groups[groups.length - 1] : null;
+          if (sec && last && last.section === sec) last.items.push(s);
+          else groups.push({ section: sec, items: [s] });
+        });
+        // コメント用テキスト: 章があれば章、無ければトピックを1行ずつ（旧データはトピック≒5分毎）
+        var lines = [];
+        groups.forEach(function (g) {
+          if (g.section) {
+            lines.push(ytTs(Math.floor(g.items[0].start_ms / 1000)) + ' ' + g.section);
+          } else {
+            g.items.forEach(function (s) {
+              var label = s.topic || (s.summary || '').slice(0, 30);
+              if (!label) return;
+              lines.push(ytTs(Math.floor(s.start_ms / 1000)) + ' ' + label);
+            });
+          }
+        });
+        copyStore.minutes = lines.join('\n');
+
+        var html = '<div class="ar-min-list">';
+        groups.forEach(function (g) {
+          if (g.section) {
+            var head = g.items[0];
+            var headHref = esc(head.url || videoUrl(vid)) + '&t=' + Math.floor(head.start_ms / 1000) + 's';
+            html += '<div class="ar-min-group">'
+              + '<div class="ar-min-section">'
+              + '<a class="ar-min-time ar-min-section-time" href="' + headHref + '" target="_blank" rel="noopener noreferrer">' + esc(timeLabel(head.start_ms)) + '</a>'
+              + '<span class="ar-min-section-title">' + esc(g.section) + '</span>'
+              + '</div>';
+            g.items.forEach(function (s) { html += minItemHtml(vid, s, true); });
+            html += '</div>';
+          } else {
+            g.items.forEach(function (s) { html += minItemHtml(vid, s, false); });
+          }
         });
         html += '</div>';
-        body.innerHTML = html;
+        body.innerHTML = copyToolbarHtml('minutes') + html;
+        wireCopyToolbar(body, 'minutes');
       })
       .catch(function () {
         if (!chapModal) return;

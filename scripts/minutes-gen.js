@@ -5,12 +5,13 @@
 //   node scripts/minutes-gen.js --recent 20 --embed   # 生成後に埋め込み→Pi upsert まで実行
 //   node scripts/minutes-gen.js --file list.txt --embed
 // 進捗: video_minutes に video_id が存在すればスキップ（--reset で再生成）
-require("dotenv").config({ path: "/var/www/html/mai-push/.env" });
+// path は dotenv より前に require する（固定パスだと staging が本番 .env を読む事故のため）
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const fetch = require("node-fetch");
 const fs = require("fs");
 const os = require("os");
 const sqlite3 = require("sqlite3");
-const path = require("path");
 const aiQuota = require(path.join(__dirname, "..", "services", "ai-quota"));
 
 const DB_PATH = process.env.RAG_DB_PATH || path.join(__dirname, "..", "data.db");
@@ -112,12 +113,14 @@ async function summarize(chunk) {
     {
       role: "system",
       content:
-        "あなたは配信の文字起こしから「要約」を作るアシスタントです。与えられた字幕区間から、" +
+        "あなたは配信の文字起こしから「章立ての要約」を作るアシスタントです。与えられた字幕区間から、" +
         "まいちゃん(恋乃夜まい)が話した話題・明言した事実（好きなもの、エピソード、意見、予定、人間関係などの具体的な名前・固有名詞は省略しない）を抽出します。" +
         "自動字幕なので誤字・誤認識が含まれますが、文脈から意味を推測して要点をまとめてください。" +
-        "字幕は複数の話題が混ざるので、話題ごとに別の要素に分割してください。字幕に含まれない要素は一切でっち上げないでください。" +
-        "時刻情報は不要です。必ず有効なJSON配列を1つだけ出力してください。Markdownのコードブロックや余計な説明は不要です。\n" +
-        '形式: [{"topic": "話題タイトル(15字以内)", "facts": ["事実1", "事実2", ...]または[], "detail": "この区間の1〜3文の要約"}, ...]',
+        "字幕は複数の話題が混ざるので、話題ごとに別の要素に分割してください。字幕に含まれない要素は一切でっち上げないでください。\n" +
+        "出力は次のJSONオブジェクトを1つだけ。Markdownのコードブロックや余計な説明は禁止です。\n" +
+        '形式: {"section": "この区間全体の見出し(15字以内)", "items": [{"ts": "HH:MM:SS", "topic": "話題タイトル(15字以内)", "facts": ["事実1", "事実2", ...]または[], "detail": "この話題の1〜3文の要約"}]}\n' +
+        "- ts はその話題が始まる字幕行の時刻。必ず入力に含まれる時刻と完全一致させる（推測・丸め・区間外の時刻は禁止）。\n" +
+        "- items は ts の昇順。区間内に複数の話題があれば、それぞれを独立した items として漏らさず全部出す。",
     },
     { role: "user", content: `区間字幕（各行頭は先頭の [HH:MM:SS] 開始時刻）:\n${text}` },
   ];
@@ -145,9 +148,7 @@ async function summarize(chunk) {
       }
       const out = (data.choices?.[0]?.message?.content || "").trim();
       const cleaned = out.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
-      const parsed = JSON.parse(cleaned);
-      if (Array.isArray(parsed)) return parsed;
-      return [parsed];
+      return JSON.parse(cleaned);
     } catch (e) {
       lastErr = e;
       if (!res) aiQuota.record("cloudflare", null, null, { kind: "minutes", model: MODEL, error: e.message });
@@ -155,6 +156,109 @@ async function summarize(chunk) {
     }
   }
   throw new Error(`summarize failed: ${lastErr?.message || lastErr}`);
+}
+
+// モデルが出した ts（"HH:MM:SS" / 秒数 / ms）をチャンク内 ms へ。不正・範囲外は寄せる。
+function parseTs(ts, chunk) {
+  let ms = null;
+  if (typeof ts === "number" && isFinite(ts)) {
+    if (ts >= chunk.start && ts <= chunk.end) ms = ts;
+    else if (ts * 1000 >= chunk.start && ts * 1000 <= chunk.end) ms = ts * 1000;
+  } else {
+    const s = String(ts == null ? "" : ts).trim();
+    const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (m) {
+      ms = m[3] !== undefined
+        ? ((+m[1]) * 3600 + (+m[2]) * 60 + (+m[3])) * 1000
+        : ((+m[1]) * 60 + (+m[2])) * 1000;
+    }
+  }
+  if (ms == null || !isFinite(ms)) return chunk.start;
+  return Math.min(Math.max(ms, chunk.start), chunk.end);
+}
+
+// モデル出力（新形式 {section, items} / 旧形式配列どちらでも動く）を正規化する
+function normalizeResult(parsed, chunk) {
+  let section = "";
+  let raw = [];
+  if (Array.isArray(parsed)) raw = parsed; // 旧形式（section 無し・ts 無し）
+  else if (parsed && typeof parsed === "object") {
+    if (typeof parsed.section === "string") section = parsed.section.trim().slice(0, 24);
+    if (Array.isArray(parsed.items)) raw = parsed.items;
+  }
+  const items = [];
+  for (const it of raw) {
+    if (!it || typeof it !== "object") continue;
+    const facts = (Array.isArray(it.facts) ? it.facts : []).filter(Boolean).map(f => String(f).trim()).filter(Boolean);
+    const item = {
+      start_ms: parseTs(it.ts, chunk),
+      topic: String(it.topic || "").trim(),
+      detail: String(it.detail || "").trim(),
+      facts,
+    };
+    if (!item.topic && !item.detail && !item.facts.length) continue;
+    items.push(item);
+  }
+  items.sort((a, b) => a.start_ms - b.start_ms);
+  if (!items.length) {
+    items.push({ start_ms: chunk.start, topic: "", detail: "", facts: [] });
+  }
+  return { section, items };
+}
+
+// 1チャンク分の items を全件書き込む（start_ms=話題の実開始、end_ms=次の話題開始）
+// 重複キーは (chunk_start_ms, topic)。旧実装は start_ms 単一で判定していたため
+// 同一チャンクの2件目以降が捨てられていた。
+async function insertItems(db, { videoId, chunk, section, items, title, streamDateJst, url }) {
+  let inserted = 0;
+  for (let k = 0; k < items.length; k++) {
+    const it = items[k];
+    let end = chunk.end;
+    for (let j = k + 1; j < items.length; j++) {
+      if (items[j].start_ms > it.start_ms) { end = items[j].start_ms; break; }
+    }
+    const dup = await dbGet(db,
+      "SELECT 1 FROM video_minutes WHERE video_id=? AND chunk_start_ms=? AND topic=?",
+      [videoId, chunk.start, it.topic]);
+    if (dup) continue;
+    await dbRun(db,
+      `INSERT INTO video_minutes (video_id, start_ms, end_ms, topic, summary, facts,
+        title, stream_date_jst, url, section, chunk_start_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [videoId, it.start_ms, Math.max(end, it.start_ms), it.topic, it.detail,
+       JSON.stringify(it.facts), title, streamDateJst, url,
+       section || null, chunk.start]);
+    inserted++;
+  }
+  return inserted;
+}
+
+// video_minutes のスキーマ保証（冪等）。旧形式行は chunk_start_ms=start_ms で後付けする
+//（旧実装は start_ms がそのまま5分チャンク先頭だったため）。
+async function ensureSchema(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS video_minutes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id TEXT NOT NULL,
+    start_ms INTEGER NOT NULL,
+    end_ms INTEGER NOT NULL,
+    topic TEXT,
+    summary TEXT,
+    facts TEXT,
+    title TEXT,
+    stream_date_jst TEXT,
+    url TEXT,
+    section TEXT,
+    chunk_start_ms INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_video_minutes_video_id ON video_minutes (video_id)`);
+  const cols = await dbAll(db, `PRAGMA table_info(video_minutes)`);
+  const names = new Set(cols.map(c => c.name));
+  if (!names.has("topic")) await dbRun(db, `ALTER TABLE video_minutes ADD COLUMN topic TEXT`);
+  if (!names.has("section")) await dbRun(db, `ALTER TABLE video_minutes ADD COLUMN section TEXT`);
+  if (!names.has("chunk_start_ms")) await dbRun(db, `ALTER TABLE video_minutes ADD COLUMN chunk_start_ms INTEGER`);
+  await dbRun(db,
+    `UPDATE video_minutes SET chunk_start_ms = start_ms WHERE chunk_start_ms IS NULL AND section IS NULL`);
 }
 
 function dbOpen() {
@@ -219,20 +323,7 @@ async function main() {
   neuronState = loadNeuronState();
   console.log(`[neurons] 起動時: day=${neuronState.day} used=${neuronState.used.toFixed(1)} 残=${neuronsLeft().toFixed(1)}`);
   const db = await dbOpen();
-  await dbRun(db, `CREATE TABLE IF NOT EXISTS video_minutes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    video_id TEXT NOT NULL,
-    start_ms INTEGER NOT NULL,
-    end_ms INTEGER NOT NULL,
-    topic TEXT,
-    summary TEXT,
-    facts TEXT,
-    title TEXT,
-    stream_date_jst TEXT,
-    url TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_video_minutes_video_id ON video_minutes (video_id)`);
+  await ensureSchema(db);
   // 字幕が無い(404)動画を記録し、NO_TRANSCRIPT_RECHECK_DAYS 日は再確認しない。
   // whisper が字幕を作れば、再確認時に 200 が返って自動的に生成対象へ戻る。
   await dbRun(db, `CREATE TABLE IF NOT EXISTS minutes_no_transcript (
@@ -269,7 +360,7 @@ async function main() {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
 
     const chunks = chunkSegments(tr.segments || [], CHUNK_MS);
-    const existing = await dbGet(db, "SELECT COUNT(DISTINCT start_ms) n FROM video_minutes WHERE video_id=?", [videoId]);
+    const existing = await dbGet(db, "SELECT COUNT(DISTINCT chunk_start_ms) n FROM video_minutes WHERE video_id=?", [videoId]);
     if (existing && existing.n >= chunks.length && !args.reset) {
       console.log(`skip (already done): ${videoId} (${existing.n}/${chunks.length} chunks)`);
       skipped++;
@@ -290,24 +381,11 @@ async function main() {
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
             await ensureNeurons();
-            const items = await summarize(chunk);
-            // トピックごとに1行。start_ms/end_ms は Gemini の推測でなくチャンクの実字幕時刻を使う
-            // （Gemini は start_ms を誤った単位で返すことがあり、引用時刻として不正確のため）。
-            let inserted = 0;
-            for (const it of items) {
-              const dup = await dbGet(db, "SELECT 1 FROM video_minutes WHERE video_id=? AND start_ms=?", [videoId, chunk.start]);
-              if (dup) continue;
-              await dbRun(db,
-                `INSERT INTO video_minutes (video_id, start_ms, end_ms, topic, summary, facts, title, stream_date_jst, url)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [videoId, chunk.start, chunk.end,
-                 it.topic || "", it.detail || "",
-                 JSON.stringify((it.facts || []).filter(Boolean)),
-                 title, streamDateJst, url]);
-              inserted++;
-            }
-            totalItems += items.length;
-            console.log(`  [${ci + 1}/${chunks.length}] ${fmtJst(chunk.start)} items=${items.length}`);
+            const parsed = await summarize(chunk);
+            const { section, items } = normalizeResult(parsed, chunk);
+            const inserted = await insertItems(db, { videoId, chunk, section, items, title, streamDateJst, url });
+            totalItems += inserted;
+            console.log(`  [${ci + 1}/${chunks.length}] ${fmtJst(chunk.start)}${section ? ` | ${section}` : ""} items=${items.length} inserted=${inserted}`);
             await sleepMs(PACE_MS);
             break;
           } catch (e) {
@@ -318,23 +396,12 @@ async function main() {
             await sleepMs(waitMs);
             if (attempt === 0) continue;
             await ensureNeurons();
-            const attempt2retry = await summarize(chunk).catch(() => null);
-            if (attempt2retry) {
-              let inserted = 0;
-              for (const it of attempt2retry) {
-                const dup = await dbGet(db, "SELECT 1 FROM video_minutes WHERE video_id=? AND start_ms=?", [videoId, chunk.start]);
-                if (dup) continue;
-                await dbRun(db,
-                  `INSERT INTO video_minutes (video_id, start_ms, end_ms, topic, summary, facts, title, stream_date_jst, url)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                  [videoId, chunk.start, chunk.end,
-                   it.topic || "", it.detail || "",
-                   JSON.stringify((it.facts || []).filter(Boolean)),
-                   title, streamDateJst, url]);
-                inserted++;
-              }
-              totalItems += attempt2retry.length;
-              console.log(`  [${ci + 1}/${chunks.length}] (retry ok) items=${attempt2retry.length}`);
+            const retryParsed = await summarize(chunk).catch(() => null);
+            if (retryParsed) {
+              const r = normalizeResult(retryParsed, chunk);
+              const inserted = await insertItems(db, { videoId, chunk, section: r.section, items: r.items, title, streamDateJst, url });
+              totalItems += inserted;
+              console.log(`  [${ci + 1}/${chunks.length}] (retry ok) items=${r.items.length} inserted=${inserted}`);
             } else {
               console.error(`  chunk ${ci} dropped`);
             }

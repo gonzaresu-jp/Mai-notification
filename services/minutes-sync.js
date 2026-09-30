@@ -20,6 +20,7 @@ function buildText(m) {
   try { detail = JSON.parse(m.summary || "[]").join(" "); } catch { detail = m.summary || ""; }
   const parts = [];
   if (m.title) parts.push(m.title);
+  if (m.section) parts.push(m.section);
   if (m.topic) parts.push(m.topic);
   if (Array.isArray(topics) && topics.length) parts.push(topics.join("、"));
   if (Array.isArray(facts) && facts.length) parts.push(facts.join("。 "));
@@ -46,6 +47,7 @@ async function upsertRows(db, rows) {
       title: m.title || "",
       stream_date_jst: m.stream_date_jst || "",
       url: m.url || "",
+      section: m.section || "",
     },
   }));
   await vectordb.upsert(points);
@@ -59,7 +61,7 @@ async function embedMinutes(db, batchSize = BATCH) {
   let total = 0, offset = 0;
   while (true) {
     const rows = await dbAll(
-      db, "SELECT id, video_id, start_ms, end_ms, topic, summary, facts, title, stream_date_jst, url " +
+      db, "SELECT id, video_id, start_ms, end_ms, topic, summary, facts, title, stream_date_jst, url, section " +
         "FROM video_minutes ORDER BY id LIMIT ? OFFSET ?", [batchSize, offset]);
     if (!rows.length) break;
     total += await upsertRows(db, rows);
@@ -78,7 +80,7 @@ async function syncMinutesIncremental(db, limit = BATCH) {
   const lastId = await new Promise((resolve, reject) =>
     db.get("SELECT last_id FROM vector_sync_state WHERE source='minutes'", [], (e, r) => (e ? reject(e) : resolve(r ? Number(r.last_id) : 0))));
   const rows = await dbAll(
-    db, "SELECT id, video_id, start_ms, end_ms, topic, summary, facts, title, stream_date_jst, url " +
+    db, "SELECT id, video_id, start_ms, end_ms, topic, summary, facts, title, stream_date_jst, url, section " +
       "FROM video_minutes WHERE id > ? ORDER BY id LIMIT ?", [lastId, limit]);
   if (!rows.length) return 0;
   const n = await upsertRows(db, rows);

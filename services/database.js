@@ -106,20 +106,36 @@ function initDatabase() {
     )`, (err) => { if (err) console.error("vector_sync_state create err:", err.message); });
 
     // 配信ごとの要約（字幕チャンク要約）。source='minutes' としてベクトルDBへ埋め込まれる。
+    // カラム定義は scripts/minutes-gen.js の ensureSchema と完全一致させること（互いに冪等ALTERで補完）。
     db.run(`CREATE TABLE IF NOT EXISTS video_minutes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       video_id TEXT NOT NULL,
       start_ms INTEGER NOT NULL,
       end_ms INTEGER NOT NULL,
+      topic TEXT,
       summary TEXT,
-      topics TEXT,
       facts TEXT,
       title TEXT,
       stream_date_jst TEXT,
       url TEXT,
+      section TEXT,
+      chunk_start_ms INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => { if (err) console.error("video_minutes create err:", err.message); });
     db.run(`CREATE INDEX IF NOT EXISTS idx_video_minutes_video_id ON video_minutes (video_id)`);
+    // 既存DBへ章立て用カラムを追加（旧DBは topics のみ・section 無しのため）
+    db.all(`PRAGMA table_info(video_minutes)`, [], (err, cols) => {
+      if (err) return console.error("video_minutes pragma err:", err.message);
+      const names = new Set((cols || []).map(c => c.name));
+      const alters = [];
+      if (!names.has("topic")) alters.push(`ALTER TABLE video_minutes ADD COLUMN topic TEXT`);
+      if (!names.has("section")) alters.push(`ALTER TABLE video_minutes ADD COLUMN section TEXT`);
+      if (!names.has("chunk_start_ms")) alters.push(`ALTER TABLE video_minutes ADD COLUMN chunk_start_ms INTEGER`);
+      alters.forEach(sql => db.run(sql, e => { if (e) console.error("video_minutes alter err:", e.message); }));
+      // 旧形式の行は start_ms がそのまま5分チャンク先頭だったため後付けする
+      db.run(`UPDATE video_minutes SET chunk_start_ms = start_ms WHERE chunk_start_ms IS NULL AND section IS NULL`,
+        e => { if (e) console.error("video_minutes backfill err:", e.message); });
+    });
 
     // まいAIチャットの会話セッション（管理者ユーザー別）
     db.run(`CREATE TABLE IF NOT EXISTS chat_sessions (

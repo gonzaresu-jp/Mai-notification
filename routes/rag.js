@@ -425,6 +425,7 @@ async function fetchParentTranscripts(minuteHits, limit) {
       if (text) out.push({
         video_id: vid,
         start_ms: st,
+        section: p.section || "",
         stream_date_jst: p.stream_date_jst || "",
         title: p.title || (data.meta?.title || ""),
         url: p.url || `https://www.youtube.com/watch?v=${vid}`,
@@ -441,6 +442,7 @@ async function fetchParentTranscripts(minuteHits, limit) {
 function fmtMinutes(p) {
   const parts = [];
   if (p.title) parts.push(p.title);
+  if (p.section) parts.push(p.section); // 章（配信要約の章タイトル）
   if (p.topic) parts.push(`「${p.topic}」`);
   if (p.stream_date_jst) parts.push(p.stream_date_jst);
   const facts = [];
@@ -605,7 +607,7 @@ function register(app, db) {
       });
       const parents = bestMinuteHits.length ? await fetchParentTranscripts(bestMinuteHits, 4) : [];
       const parentLines = parents.map(p =>
-        `- [${p.stream_date_jst || ""} | ${p.title || ""}] ${p.url}\n${p.text}`).join("\n\n");
+        `- [${p.stream_date_jst || ""} | ${p.title || ""}${p.section ? " | " + p.section : ""}] ${p.url}\n${p.text}`).join("\n\n");
       const parentBlock = parentLines
         ? `■ 配信アーカイブ（要約ヒットに対応する生字幕の引用・時刻付き）:\n${parentLines}\n\n`
         : "";
@@ -704,7 +706,7 @@ const r18Extra = r18
       let sessionTitle = null;
       if (sessionId && req.adminUser) {
         const srcJson = JSON.stringify(
-          hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, url: h.payload?.url })).slice(0, 5)
+          hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, section: h.payload?.section, url: h.payload?.url })).slice(0, 5)
         );
         await dbRun(db,
           "INSERT INTO chat_messages (session_id, role, content, sources_json) VALUES (?,?,?,?)",
@@ -727,9 +729,9 @@ const r18Extra = r18
         answer,
         sessionTitle,
         upcoming: upcoming.map(e => ({ title: e.title, start_time: e.start_time, time_period: e.time_period, url: e.url })),
-        sources: hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, url: h.payload?.url })),
+        sources: hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, section: h.payload?.section, url: h.payload?.url })),
         transcripts: transcriptHits.map(h => ({ title: h.title, stream_date_jst: h.stream_date_jst, start: h.start, url: h.url, text: (h.text || "").slice(0, 200) })),
-        minutes: parents.map(p => ({ title: p.title, stream_date_jst: p.stream_date_jst, start_ms: p.start_ms, url: p.url, text: p.text })),
+        minutes: parents.map(p => ({ title: p.title, stream_date_jst: p.stream_date_jst, section: p.section, start_ms: p.start_ms, url: p.url, text: p.text })),
       });
     } catch (e) {
       console.error("[/api/ask] error:", e?.message);

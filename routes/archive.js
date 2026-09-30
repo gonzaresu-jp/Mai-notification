@@ -266,8 +266,8 @@ function register(app) {
     if (!VIDEO_ID_RE.test(id)) return res.status(400).json({ error: "invalid video_id" });
     if (!ctx.db) return res.status(503).json({ error: "db unavailable" });
     ctx.db.all(
-      `SELECT start_ms, end_ms, topic, summary, facts, title, stream_date_jst, url
-       FROM video_minutes WHERE video_id=? ORDER BY start_ms ASC LIMIT 400`,
+      `SELECT start_ms, end_ms, topic, summary, facts, title, stream_date_jst, url, section
+       FROM video_minutes WHERE video_id=? ORDER BY start_ms ASC LIMIT 800`,
       [id],
       (err, rows) => {
         if (err) return res.status(500).json({ error: "db error" });
@@ -279,6 +279,7 @@ function register(app) {
           return {
             start_ms: r.start_ms, end_ms: r.end_ms,
             topic: r.topic || "", summary: r.summary || "",
+            section: r.section || "",
             facts, url: r.url || "",
           };
         });
