@@ -1,6 +1,6 @@
 {
   "name": "mai-push-desktop",
-  "version": "1.3.8",
+  "version": "1.3.9",
   "description": "Mai Push Desktop - Web版と同じ通知をデスクトップで",
   "main": "main.js",
   "scripts": {
@@ -30,7 +30,13 @@
       "tabs-preload.js",
       "settings.html",
       "toast-helper.exe",
-      "icons/**/*"
+      "icons/**/*",
+      "!**/node_modules/@img/sharp-linux*/**",
+      "!**/node_modules/@img/sharp-libvips-linux*/**",
+      "!**/node_modules/@img/sharp-darwin*/**",
+      "!**/node_modules/@img/sharp-libvips-darwin*/**",
+      "!**/node_modules/@img/sharp-wasm32/**",
+      "!**/node_modules/@img/sharp-win32-ia32/**"
     ],
     "asarUnpack": [
       "toast-helper.exe",
