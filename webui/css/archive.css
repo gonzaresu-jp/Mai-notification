@@ -460,6 +460,21 @@
             min-width: var(--ar-time-w, auto);
             flex: none;
         }
+        .ar-chap-mark {
+            flex: none;
+            width: 1.2em;
+            color: #9aabbd;
+            font-weight: 700;
+        }
+        .ar-chap-item.is-major {
+            background: #f6f9ff;
+            border-left: 3px solid #1a6fd6;
+            padding-left: 11px;
+        }
+        .ar-chap-item.is-major .ar-chap-mark { color: #1a6fd6; }
+        .ar-chap-item.is-major .ar-chap-label { font-weight: 700; color: #111; }
+        .ar-chap-item.is-sub .ar-chap-label { color: #444; }
+        .ar-chap-item.is-sub:hover .ar-chap-label { color: #1a6fd6; }
         .ar-chap-label {
             color: #333;
         }

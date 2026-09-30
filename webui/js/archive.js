@@ -473,13 +473,46 @@
     return maxW;
   }
 
-  // entries: [{t:'1:07', title:'…'}] → 時刻列を揃えたコメント用テキスト
+  // entries: [{t:'1:07', mark:'▶ ', title:'…'}] → 時刻列を揃えたコメント用テキスト
   function buildCopyText(entries) {
     var w = maxTsWidth(entries.map(function (e) { return e.t; }));
     return entries.map(function (e) {
       var t = String(e.t || '');
-      return t + ' ' + repeatNbsp(w - t.length) + (e.title || '');
+      return t + ' ' + repeatNbsp(w - t.length) + (e.mark || '') + (e.title || '');
     }).join('\n');
+  }
+
+  // タイムスタンプを大枠(▶)と詳細(└)に分ける。
+  //  - 最初の章は必ず大枠
+  //  - 前の章から長く空いた箇所（10分以上、かつ平均間隔の1.5倍以上）を大枠にする
+  //  - 大枠が1本しか無く、章が6本以上ある場合は間隔の大きい上位3本を大枠にする
+  // 時刻の小さい方から見ても、大きな区切りだけ先に目に入るようにするため。
+  var MAJOR_MIN_GAP_SEC = 600;
+  function markMajorChapters(list) {
+    var n = list.length;
+    var major = [];
+    var i;
+    for (i = 0; i < n; i++) major.push(false);
+    if (!n) return major;
+    major[0] = true;
+    if (n < 2) return major;
+    var gaps = [], sum = 0;
+    for (i = 1; i < n; i++) {
+      var g = Math.max(0, (Number(list[i].time_sec) || 0) - (Number(list[i - 1].time_sec) || 0));
+      gaps.push(g);
+      sum += g;
+    }
+    var thresh = Math.max(MAJOR_MIN_GAP_SEC, (sum / gaps.length) * 1.5);
+    var count = 1;
+    for (i = 0; i < gaps.length; i++) {
+      if (gaps[i] >= thresh) { major[i + 1] = true; count++; }
+    }
+    if (count < 2 && n >= 6) {
+      var order = gaps.map(function (g, idx) { return { g: g, idx: idx }; })
+        .sort(function (a, b) { return b.g - a.g; });
+      for (var k = 0; k < 3 && k < order.length; k++) major[order[k].idx + 1] = true;
+    }
+    return major;
   }
 
   function copyToClipboard(text) {
@@ -504,7 +537,7 @@
     return '<div class="ar-toolbar">'
       + '<button type="button" class="ar-copy-btn" data-copy-kind="' + kind + '">'
       + '<i class="fa-solid fa-copy" aria-hidden="true"></i> コメント用にコピー</button>'
-      + '<span class="ar-copy-note">行頭が時刻なのでYouTubeに貼るとリンクになります</span>'
+      + '<span class="ar-copy-note">▶が大枠 └が詳細・行頭が時刻なのでYouTubeでリンク化</span>'
       + '<details class="ar-copy-preview"><summary>貼り付け用テキストを見る</summary><pre></pre></details>'
       + '</div>';
   }
@@ -541,27 +574,36 @@
         body.innerHTML = '<div class="ar-chap-empty">タイムスタンプがありません</div>';
         return;
       }
-      var chapEntries = list.map(function (ch) {
-        return { t: ytTs(ch.time_sec), title: ch.title || '' };
+      var major = markMajorChapters(list);
+      var chapEntries = list.map(function (ch, i) {
+        return {
+          t: ytTs(ch.time_sec),
+          mark: major[i] ? '▶ ' : '└ ',
+          title: ch.title || '',
+        };
       });
       copyStore.chapters = buildCopyText(chapEntries);
       body.innerHTML = copyToolbarHtml('chapters') + '<div class="ar-chap-list"></div>';
       body.style.setProperty('--ar-time-w',
         maxTsWidth(chapEntries.map(function (e) { return e.t; })) + 'ch');
       var listEl = body.querySelector('.ar-chap-list');
-      list.forEach(function (ch) {
+      list.forEach(function (ch, i) {
         var a = document.createElement('a');
-        a.className = 'ar-chap-item';
+        a.className = 'ar-chap-item' + (major[i] ? ' is-major' : ' is-sub');
         a.href = 'https://www.youtube.com/watch?v=' + encodeURIComponent(vid) + '&t=' + ch.time_sec + 's';
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
         var t = document.createElement('span');
         t.className = 'ar-chap-time';
         t.textContent = ytTs(ch.time_sec);
+        var mk = document.createElement('span');
+        mk.className = 'ar-chap-mark';
+        mk.textContent = major[i] ? '▶' : '└';
         var l = document.createElement('span');
         l.className = 'ar-chap-label';
         l.textContent = ch.title || '';
         a.appendChild(t);
+        a.appendChild(mk);
         a.appendChild(l);
         listEl.appendChild(a);
       });
@@ -619,7 +661,11 @@
         var shownTimes = [];
         groups.forEach(function (g) {
           if (g.section) {
-            entries.push({ t: ytTs(Math.floor(g.items[0].start_ms / 1000)), title: g.section });
+            entries.push({
+              t: ytTs(Math.floor(g.items[0].start_ms / 1000)),
+              mark: '▶ ',
+              title: g.section,
+            });
           } else {
             g.items.forEach(function (s) {
               var label = s.topic || (s.summary || '').slice(0, 30);
