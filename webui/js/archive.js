@@ -455,6 +455,33 @@
     return h ? h + ':' + p(m) + ':' + p(s) : m + ':' + p(s);
   }
 
+  // 貼り付け文面の桁揃え。YouTube はコメント中の「半角スペース連続」を潰すため、
+  // 余白には改行されない NBSP(U+00A0) を使う。時刻直後の半角スペースは
+  // タイムスタンプのリンク判定に必要なので1つだけ残す。
+  function repeatNbsp(n) {
+    var out = '';
+    for (var i = 0; i < n; i++) out += '\u00a0';
+    return out;
+  }
+
+  function maxTsWidth(times) {
+    var maxW = 0;
+    for (var i = 0; i < times.length; i++) {
+      var len = times[i] ? String(times[i]).length : 0;
+      if (len > maxW) maxW = len;
+    }
+    return maxW;
+  }
+
+  // entries: [{t:'1:07', title:'…'}] → 時刻列を揃えたコメント用テキスト
+  function buildCopyText(entries) {
+    var w = maxTsWidth(entries.map(function (e) { return e.t; }));
+    return entries.map(function (e) {
+      var t = String(e.t || '');
+      return t + ' ' + repeatNbsp(w - t.length) + (e.title || '');
+    }).join('\n');
+  }
+
   function copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       return navigator.clipboard.writeText(text);
@@ -514,10 +541,13 @@
         body.innerHTML = '<div class="ar-chap-empty">タイムスタンプがありません</div>';
         return;
       }
-      copyStore.chapters = list.map(function (ch) {
-        return ytTs(ch.time_sec) + ' ' + (ch.title || '');
-      }).join('\n');
+      var chapEntries = list.map(function (ch) {
+        return { t: ytTs(ch.time_sec), title: ch.title || '' };
+      });
+      copyStore.chapters = buildCopyText(chapEntries);
       body.innerHTML = copyToolbarHtml('chapters') + '<div class="ar-chap-list"></div>';
+      body.style.setProperty('--ar-time-w',
+        maxTsWidth(chapEntries.map(function (e) { return e.t; })) + 'ch');
       var listEl = body.querySelector('.ar-chap-list');
       list.forEach(function (ch) {
         var a = document.createElement('a');
@@ -585,19 +615,21 @@
           else groups.push({ section: sec, items: [s] });
         });
         // コメント用テキスト: 章があれば章、無ければトピックを1行ずつ（旧データはトピック≒5分毎）
-        var lines = [];
+        var entries = [];
+        var shownTimes = [];
         groups.forEach(function (g) {
           if (g.section) {
-            lines.push(ytTs(Math.floor(g.items[0].start_ms / 1000)) + ' ' + g.section);
+            entries.push({ t: ytTs(Math.floor(g.items[0].start_ms / 1000)), title: g.section });
           } else {
             g.items.forEach(function (s) {
               var label = s.topic || (s.summary || '').slice(0, 30);
               if (!label) return;
-              lines.push(ytTs(Math.floor(s.start_ms / 1000)) + ' ' + label);
+              entries.push({ t: ytTs(Math.floor(s.start_ms / 1000)), title: label });
             });
           }
+          g.items.forEach(function (s) { shownTimes.push(ytTs(Math.floor(s.start_ms / 1000))); });
         });
-        copyStore.minutes = lines.join('\n');
+        copyStore.minutes = buildCopyText(entries);
 
         var html = '<div class="ar-min-list">';
         groups.forEach(function (g) {
@@ -617,6 +649,7 @@
         });
         html += '</div>';
         body.innerHTML = copyToolbarHtml('minutes') + html;
+        body.style.setProperty('--ar-time-w', maxTsWidth(shownTimes) + 'ch');
         wireCopyToolbar(body, 'minutes');
       })
       .catch(function () {

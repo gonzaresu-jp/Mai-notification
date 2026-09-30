@@ -457,6 +457,8 @@
             font-weight: 700;
             color: #1a6fd6;
             white-space: nowrap;
+            min-width: var(--ar-time-w, auto);
+            flex: none;
         }
         .ar-chap-label {
             color: #333;
@@ -489,6 +491,8 @@
             color: #1a6fd6;
             white-space: nowrap;
             padding-top: 1px;
+            min-width: var(--ar-time-w, auto);
+            flex: none;
         }
         .ar-min-body {
             display: flex;
