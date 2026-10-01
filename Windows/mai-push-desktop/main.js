@@ -802,6 +802,17 @@ ipcMain.handle('tabs:get', () => tabsState());
 ipcMain.handle('tab-new', (e, url) => newTab(url || getBaseUrl()));
 ipcMain.handle('tab-close', (e, id) => closeTab(Number(id)));
 ipcMain.handle('tab-activate', (e, id) => activateTab(Number(id)));
+ipcMain.handle('tab-reorder', (e, ids) => {
+  if (!Array.isArray(ids)) return false;
+  const want = ids.map(Number);
+  if (want.length !== tabs.length || new Set(want).size !== want.length) return false;
+  const map = new Map(tabs.map(t => [t.id, t]));
+  if (want.some(id => !map.has(id))) return false;
+  tabs = want.map(id => map.get(id));
+  notifyTabs();
+  console.log(`[tabs] reordered: ${want.join(',')}`);
+  return true;
+});
 ipcMain.handle('tab-reload', (e, id) => {
   const tab = id != null ? tabs.find(t => t.id === Number(id)) : activeTab();
   if (tab && !tab.view.webContents.isDestroyed()) {

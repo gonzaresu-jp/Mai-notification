@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('tabAPI', {
   newTab: (url) => ipcRenderer.invoke('tab-new', url),
   closeTab: (id) => ipcRenderer.invoke('tab-close', id),
   activateTab: (id) => ipcRenderer.invoke('tab-activate', id),
+  reorderTabs: (ids) => ipcRenderer.invoke('tab-reorder', ids),
   reloadTab: (id) => ipcRenderer.invoke('tab-reload', id),
   onUpdate: (cb) => ipcRenderer.on('tabs:update', () => { try { cb(); } catch (e) {} }),
 });

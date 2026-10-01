@@ -33,6 +33,7 @@
     flex: 1 1 0;
     min-width: 60px;
     max-width: 220px;
+    position: relative;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -45,6 +46,19 @@
   }
   .tab:hover { background: #93276a; color: #fff; }
   .tab.active { background: #b11e7c; color: #fff; }
+  .tab.dragging { opacity: 0.4; }
+  .tab.drop-before::before,
+  .tab.drop-after::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    width: 3px;
+    border-radius: 2px;
+    background: #ffe9f5;
+  }
+  .tab.drop-before::before { left: -4px; }
+  .tab.drop-after::after { right: -4px; }
   .tab img.fav {
     width: 14px;
     height: 14px;
@@ -97,6 +111,8 @@
 <script>
   (function() {
     var listEl = document.getElementById('tabs');
+    var lastTabs = [];
+    var dragging = false;
     document.getElementById('newtab').addEventListener('click', function() {
       if (window.tabAPI) window.tabAPI.newTab();
     });
@@ -107,12 +123,15 @@
       return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
     function render(tabs) {
+      lastTabs = tabs || [];
+      if (dragging) return;
       listEl.innerHTML = '';
       (tabs || []).forEach(function(t) {
         var el = document.createElement('div');
         el.className = 'tab' + (t.active ? ' active' : '');
         el.dataset.id = t.id;
         el.title = t.title || t.url || '';
+        el.draggable = true;
         var fav = t.favicon
           ? '<img class="fav" src="' + esc(t.favicon) + '" alt="" />'
           : '<img class="fav hidden" alt="" />';
@@ -170,6 +189,74 @@
         window.tabAPI.activateTab(tabs[next].id);
       }).catch(function() {});
     }, { passive: false });
+
+    // ドラッグでタブを入れ替える
+    var dragId = null;
+    var dropHint = null;
+    function clearDropHint() {
+      if (dropHint) {
+        dropHint.el.classList.remove('drop-before', 'drop-after');
+        dropHint = null;
+      }
+    }
+    function reorderTo(fromId, targetId, before) {
+      var ids = lastTabs.map(function(t) { return t.id; });
+      var from = ids.indexOf(fromId);
+      if (from === -1) return;
+      ids.splice(from, 1);
+      var to = ids.indexOf(targetId);
+      if (to === -1) return;
+      if (!before) to += 1;
+      ids.splice(to, 0, fromId);
+      if (window.tabAPI && window.tabAPI.reorderTabs) window.tabAPI.reorderTabs(ids);
+    }
+    listEl.addEventListener('dragstart', function(e) {
+      var el = e.target.closest ? e.target.closest('.tab') : null;
+      if (!el || !el.dataset.id) return;
+      dragId = Number(el.dataset.id);
+      dragging = true;
+      el.classList.add('dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', el.dataset.id); } catch (err) {}
+      }
+    });
+    listEl.addEventListener('dragover', function(e) {
+      if (dragId == null) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      var el = e.target.closest ? e.target.closest('.tab') : null;
+      if (!el || !el.dataset.id || Number(el.dataset.id) === dragId) {
+        clearDropHint();
+        return;
+      }
+      var rect = el.getBoundingClientRect();
+      var side = (e.clientX < rect.left + rect.width / 2) ? 'drop-before' : 'drop-after';
+      if (dropHint && dropHint.el === el && dropHint.side === side) return;
+      clearDropHint();
+      el.classList.add(side);
+      dropHint = { el: el, side: side };
+    });
+    listEl.addEventListener('drop', function(e) {
+      if (dragId == null) return;
+      e.preventDefault();
+      var el = e.target.closest ? e.target.closest('.tab') : null;
+      var id = dragId;
+      dragId = null;
+      var before = dropHint ? dropHint.side === 'drop-before' : true;
+      clearDropHint();
+      if (!el || !el.dataset.id || Number(el.dataset.id) === id) return;
+      reorderTo(id, Number(el.dataset.id), before);
+    });
+    listEl.addEventListener('dragend', function() {
+      dragId = null;
+      dragging = false;
+      clearDropHint();
+      Array.prototype.forEach.call(listEl.querySelectorAll('.dragging'), function(x) {
+        x.classList.remove('dragging');
+      });
+      refresh();
+    });
   })();
 </script>
 </body>
