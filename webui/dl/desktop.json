@@ -1,5 +1,5 @@
 {
-  "version": "1.3.9",
-  "url": "https://mai.honna-yuzuki.com/dl/MaiPush-Setup-1.3.9.exe",
-  "notes": "システムトレイにアイコンが2つ表示される問題と、自動起動に重複エントリが登録される問題を修正しました（1.3.9）。"
+  "version": "1.4.0",
+  "url": "https://mai.honna-yuzuki.com/dl/MaiPush-Setup-1.4.0.exe",
+  "notes": "タブをドラッグで入れ替えられるようになりました。ページ内のコピーボタンが動作しない問題も修正しました（1.4.0）。"
 }
