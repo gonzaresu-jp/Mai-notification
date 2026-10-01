@@ -322,6 +322,10 @@ async function main() {
   // 読めなかった場合・UTC 日が変わっている場合のみ 0 から始める（loadNeuronState の仕様）。
   neuronState = loadNeuronState();
   console.log(`[neurons] 起動時: day=${neuronState.day} used=${neuronState.used.toFixed(1)} 残=${neuronsLeft().toFixed(1)}`);
+  // UTC 日が変わったリセット値(used=0)を起動時に永続化する。
+  // 保存しないと、その日 Workers AI を呼ばない間 status API が古い日付の値を
+  // stale 付きで出し続ける（2026-10-01 確認: 9/28 の値が3日間そのまま表示されていた）。
+  saveNeuronState();
   const db = await dbOpen();
   await ensureSchema(db);
   // 字幕が無い(404)動画を記録し、NO_TRANSCRIPT_RECHECK_DAYS 日は再確認しない。

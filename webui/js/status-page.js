@@ -272,7 +272,7 @@
                             <span>残り <b>${cfRemain}</b> neurons（${cfPct}% 使用）</span>
                             <span>上限 ${fmtNum(cf.budget)} ・ 無料枠 ${fmtNum(cf.freeTier ?? 10000)} / 日</span>
                         </div>
-                        <div class="ai-muted">用途: 要約生成 ・ ${cf.stale ? '※ 現在値は前日分（UTC日が変わってから再開されます）' : '日次: ' + esc(cf.day || '—')}</div>
+                        <div class="ai-muted">用途: 要約生成 ・ ${cf.stale ? (cf.day ? `※ ${esc(cf.day)} 時点の値（以降使用なし・UTC日次リセット）` : '※ 使用記録なし') : '日次: ' + esc(cf.day || '—')}</div>
                     </div>
 
                     <!-- Gemini -->
