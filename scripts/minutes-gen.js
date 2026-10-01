@@ -437,8 +437,13 @@ async function main() {
             console.error(`  chunk ${ci} attempt ${attempt + 1} fail:`, e.message);
             // 429（レート制限）は間隔を空けてリトライ
             const is429 = /429|quota|rate.?limit/i.test(e.message);
-            const waitMs = is429 ? 15000 : 3000;
-            await sleepMs(waitMs);
+            if (/tokens per day|TPD/i.test(e.message)) {
+              // Groq 日次TPD枯渇は翌UTC 00:15（≒JST 09:15）まで待機してから続行。
+              // 枯渇中に進めると全チャンクをドロップするだけなので待つ。
+              await waitUntilNextUtcDay();
+            } else {
+              await sleepMs(is429 ? 15000 : 3000);
+            }
             if (attempt === 0) continue;
             await ensureNeurons();
             const retryParsed = await summarize(chunk).catch(() => null);
