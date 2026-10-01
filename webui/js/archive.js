@@ -473,15 +473,16 @@
     return maxW;
   }
 
-  // entries: [{t:'1:07', mark:'▶ ', title:'…', major:true}] → 時刻列を揃えたコメント用テキスト。
-  // major:true の行の前に空行を入れて大枠ごとに区切る（YT リンク維持のため行頭は時刻のまま）。
+  // entries: [{t:'1:07', mark:'▶ ', title:'…', major:true}] → 記号→時刻→タイトルのコメント用テキスト。
+  // major:true の行の前に空行を入れて大枠ごとに区切る。時刻の前後は必ず空白を残す
+  // （YT は前後が空白で囲まれた時刻をリンク化する。記号を直後に付けるとリンクが外れる）。
   function buildCopyText(entries) {
     var w = maxTsWidth(entries.map(function (e) { return e.t; }));
     var out = [];
     entries.forEach(function (e, i) {
       var t = String(e.t || '');
       if (i > 0 && e.major) out.push('');
-      out.push(t + ' ' + repeatNbsp(w - t.length) + (e.mark || '') + (e.title || ''));
+      out.push((e.mark || '') + t + ' ' + repeatNbsp(w - t.length) + (e.title || ''));
     });
     return out.join('\n');
   }
@@ -550,7 +551,7 @@
     return '<div class="ar-toolbar">'
       + '<button type="button" class="ar-copy-btn" data-copy-kind="' + kind + '">'
       + '<i class="fa-solid fa-copy" aria-hidden="true"></i> コメント用にコピー</button>'
-      + '<span class="ar-copy-note">▶が大枠 └が詳細・大枠ごとに空行・行頭が時刻なのでYouTubeでリンク化</span>'
+      + '<span class="ar-copy-note">▶が大枠 └が詳細・大枠ごとに空行・時刻の前後に空白＝YouTubeでリンク化</span>'
       + '<details class="ar-copy-preview"><summary>貼り付け用テキストを見る</summary><pre></pre></details>'
       + '</div>';
   }
@@ -605,8 +606,8 @@
       var chapEntries = list.map(function (ch, i) {
         return {
           t: ytTs(ch.time_sec),
-          // 詳細は記号を1字右へずらして階層を見せる（行頭は時刻のまま＝YTリンク維持）
-          mark: major[i] ? '▶ ' : '\u00a0└ ',
+          // 詳細は記号を1字右へずらして階層を見せる
+          mark: major[i] ? '▶ ' : '　└ ',
           major: major[i],
           title: ch.title || '',
         };
