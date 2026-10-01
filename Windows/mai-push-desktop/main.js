@@ -119,10 +119,12 @@ function setupPermissions() {
   const ses = session.defaultSession;
   ses.setPermissionRequestHandler((wc, permission, callback) => {
     if (permission === 'notifications') return callback(true);
+    // navigator.clipboard.writeText() に必要（拒否するとサイトのコピーボタンが失敗する）
+    if (permission === 'clipboard-sanitized-write') return callback(true);
     callback(false);
   });
   ses.setPermissionCheckHandler((wc, permission) => {
-    return permission === 'notifications';
+    return permission === 'notifications' || permission === 'clipboard-sanitized-write';
   });
 }
 
