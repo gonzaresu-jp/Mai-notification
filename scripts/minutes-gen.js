@@ -277,6 +277,13 @@ async function ensureSchema(db) {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_video_minutes_video_id ON video_minutes (video_id)`);
+  // 完了マーカー。video_minutes に1行でもある＝完了ではない（途中クラッシュの部分完了が
+  // 残るため、行の有無で done 判定すると部分完了動画が永遠に再処理対象から外れてしまう）。
+  // 全チャンク処理を終えた時点で記録し、次回はマーカーのみで skip する。
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS video_minutes_done (
+    video_id TEXT PRIMARY KEY,
+    completed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
   const cols = await dbAll(db, `PRAGMA table_info(video_minutes)`);
   const names = new Set(cols.map(c => c.name));
   if (!names.has("topic")) await dbRun(db, `ALTER TABLE video_minutes ADD COLUMN topic TEXT`);
@@ -316,7 +323,7 @@ async function resolveVideos(db, args) {
     //（2026-10-01 修正: limit=100 固定だと最新100本しか見ず、それより古い未要約
     //  バックログ341本が永久に放置されていた）。
     const rows = await dbAll(db,
-      `SELECT video_id, title, stream_date_jst FROM video_minutes`, []);
+      `SELECT video_id FROM video_minutes_done`, []);
     const done = new Set(rows.map(r => r.video_id));
     const out = [];
     let offset = 0;
@@ -399,6 +406,7 @@ async function main() {
     const existing = await dbGet(db, "SELECT COUNT(DISTINCT chunk_start_ms) n FROM video_minutes WHERE video_id=?", [videoId]);
     if (existing && existing.n >= chunks.length && !args.reset) {
       console.log(`skip (already done): ${videoId} (${existing.n}/${chunks.length} chunks)`);
+      await dbRun(db, `INSERT OR REPLACE INTO video_minutes_done (video_id) VALUES (?)`, [videoId]);
       skipped++;
       continue;
     }
@@ -448,6 +456,8 @@ async function main() {
     const workers = Array.from({ length: CONCURRENCY }, worker);
     await Promise.all(workers);
     console.log(`done: ${videoId} (${chunks.length} chunks)`);
+    // 全チャンク処理完了をマーカーへ（途中クラッシュ時は記録されず、次回再処理で自動回復）
+    await dbRun(db, `INSERT OR REPLACE INTO video_minutes_done (video_id) VALUES (?)`, [videoId]);
   }
 
   console.log(`\n=== SUMMARY: chunks=${totalChunks} items=${totalItems} skipped=${skipped}`);
