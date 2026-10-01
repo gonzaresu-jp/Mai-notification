@@ -418,6 +418,7 @@ async function main() {
 
     // 直列→並列実行(小並列)
     let index = 0;
+    let droppedChunks = 0;
     const worker = async () => {
       while (index < chunks.length) {
         const ci = index++;
@@ -447,6 +448,7 @@ async function main() {
               totalItems += inserted;
               console.log(`  [${ci + 1}/${chunks.length}] (retry ok) items=${r.items.length} inserted=${inserted}`);
             } else {
+              droppedChunks++;
               console.error(`  chunk ${ci} dropped`);
             }
           }
@@ -455,9 +457,13 @@ async function main() {
     };
     const workers = Array.from({ length: CONCURRENCY }, worker);
     await Promise.all(workers);
-    console.log(`done: ${videoId} (${chunks.length} chunks)`);
-    // 全チャンク処理完了をマーカーへ（途中クラッシュ時は記録されず、次回再処理で自動回復）
-    await dbRun(db, `INSERT OR REPLACE INTO video_minutes_done (video_id) VALUES (?)`, [videoId]);
+    // 全チャンク成功時のみマーカーへ（ドロップ1つでも欠損のまま残し、次回実行で自動補完）
+    if (droppedChunks === 0) {
+      console.log(`done: ${videoId} (${chunks.length} chunks)`);
+      await dbRun(db, `INSERT OR REPLACE INTO video_minutes_done (video_id) VALUES (?)`, [videoId]);
+    } else {
+      console.log(`done (partial): ${videoId} (${chunks.length} chunks, ${droppedChunks} dropped → マーカー未記録・次回再処理)`);
+    }
   }
 
   console.log(`\n=== SUMMARY: chunks=${totalChunks} items=${totalItems} skipped=${skipped}`);
