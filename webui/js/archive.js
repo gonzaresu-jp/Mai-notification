@@ -519,22 +519,31 @@
     return major;
   }
 
-  function copyToClipboard(text) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      return navigator.clipboard.writeText(text);
-    }
+  function legacyCopy(text) {
     return new Promise(function (resolve, reject) {
       var ta = document.createElement('textarea');
       ta.value = text;
       ta.setAttribute('readonly', '');
       ta.style.cssText = 'position:fixed;top:0;left:-9999px';
       document.body.appendChild(ta);
+      ta.focus();
       ta.select();
       var ok = false;
       try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
       document.body.removeChild(ta);
       ok ? resolve() : reject(new Error('copy failed'));
     });
+  }
+
+  // Electron（まいちゃん通知アプリ）は clipboard 書込権限を拒否して writeText が
+  // reject するため、必ず execCommand フォールバックを試す
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () {
+        return legacyCopy(text);
+      });
+    }
+    return legacyCopy(text);
   }
 
   function copyToolbarHtml(kind) {
@@ -563,7 +572,21 @@
         btn.classList.add('is-copied');
         restore('<i class="fa-solid fa-check" aria-hidden="true"></i> コピーしました');
       }).catch(function () {
-        restore('コピーに失敗しました');
+        var det = root.querySelector('.ar-copy-preview');
+        if (det) {
+          det.open = true;
+          var preEl = det.querySelector('pre');
+          if (preEl && window.getSelection && document.createRange) {
+            try {
+              var range = document.createRange();
+              range.selectNodeContents(preEl);
+              var sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+            } catch (e) {}
+          }
+        }
+        restore('コピー失敗（下を選択してCtrl+C）');
       });
     });
   }
