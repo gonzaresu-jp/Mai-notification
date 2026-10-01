@@ -473,13 +473,17 @@
     return maxW;
   }
 
-  // entries: [{t:'1:07', mark:'▶ ', title:'…'}] → 時刻列を揃えたコメント用テキスト
+  // entries: [{t:'1:07', mark:'▶ ', title:'…', major:true}] → 時刻列を揃えたコメント用テキスト。
+  // major:true の行の前に空行を入れて大枠ごとに区切る（YT リンク維持のため行頭は時刻のまま）。
   function buildCopyText(entries) {
     var w = maxTsWidth(entries.map(function (e) { return e.t; }));
-    return entries.map(function (e) {
+    var out = [];
+    entries.forEach(function (e, i) {
       var t = String(e.t || '');
-      return t + ' ' + repeatNbsp(w - t.length) + (e.mark || '') + (e.title || '');
-    }).join('\n');
+      if (i > 0 && e.major) out.push('');
+      out.push(t + ' ' + repeatNbsp(w - t.length) + (e.mark || '') + (e.title || ''));
+    });
+    return out.join('\n');
   }
 
   // タイムスタンプを大枠(▶)と詳細(└)に分ける。
@@ -537,7 +541,7 @@
     return '<div class="ar-toolbar">'
       + '<button type="button" class="ar-copy-btn" data-copy-kind="' + kind + '">'
       + '<i class="fa-solid fa-copy" aria-hidden="true"></i> コメント用にコピー</button>'
-      + '<span class="ar-copy-note">▶が大枠 └が詳細・行頭が時刻なのでYouTubeでリンク化</span>'
+      + '<span class="ar-copy-note">▶が大枠 └が詳細・大枠ごとに空行・行頭が時刻なのでYouTubeでリンク化</span>'
       + '<details class="ar-copy-preview"><summary>貼り付け用テキストを見る</summary><pre></pre></details>'
       + '</div>';
   }
@@ -578,7 +582,9 @@
       var chapEntries = list.map(function (ch, i) {
         return {
           t: ytTs(ch.time_sec),
-          mark: major[i] ? '▶ ' : '└ ',
+          // 詳細は記号を1字右へずらして階層を見せる（行頭は時刻のまま＝YTリンク維持）
+          mark: major[i] ? '▶ ' : '\u00a0└ ',
+          major: major[i],
           title: ch.title || '',
         };
       });
@@ -602,8 +608,8 @@
         var l = document.createElement('span');
         l.className = 'ar-chap-label';
         l.textContent = ch.title || '';
-        a.appendChild(t);
         a.appendChild(mk);
+        a.appendChild(t);
         a.appendChild(l);
         listEl.appendChild(a);
       });

@@ -462,7 +462,7 @@
         }
         .ar-chap-mark {
             flex: none;
-            width: 1.2em;
+            width: 1.4em;
             color: #9aabbd;
             font-weight: 700;
         }
@@ -471,8 +471,13 @@
             border-left: 3px solid #1a6fd6;
             padding-left: 11px;
         }
+        .ar-chap-item.is-major:not(:first-child) { margin-top: 7px; }
         .ar-chap-item.is-major .ar-chap-mark { color: #1a6fd6; }
         .ar-chap-item.is-major .ar-chap-label { font-weight: 700; color: #111; }
+        .ar-chap-item.is-sub {
+            padding-left: calc(14px + 1.1em);
+            border-left: 1px solid #e3eaf3;
+        }
         .ar-chap-item.is-sub .ar-chap-label { color: #444; }
         .ar-chap-item.is-sub:hover .ar-chap-label { color: #1a6fd6; }
         .ar-chap-label {
