@@ -19,6 +19,15 @@ const ARCHIVE_API_BASE = process.env.ARCHIVE_API_BASE || "http://192.168.1.70:87
 const API_URL = process.env.MINUTES_API_URL || process.env.GEMINI_URL || "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const API_KEY = process.env.MINUTES_API_KEY || process.env.GEMINI_API_KEY || "";
 const MODEL = process.env.MINUTES_MODEL || "gemini-3.5-flash-lite";
+// --- Groq 予備経路（OpenAI互換chat。CF日次予算を使い切ったら自動でこちらへ切り替える）---
+const GROQ_API_URL = process.env.MINUTES_GROQ_URL || "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const GROQ_MODEL = process.env.MINUTES_GROQ_MODEL || "qwen/qwen3.8-27b";
+let provider = "cloudflare"; // 現在の要約生成経路（ensureNeurons が切り替える）
+function activeCfg() {
+  if (provider === "groq") return { name: "groq", url: GROQ_API_URL, key: GROQ_API_KEY, model: GROQ_MODEL };
+  return { name: "cloudflare", url: API_URL, key: API_KEY, model: MODEL };
+}
 const CHUNK_MS = 300 * 1000; // 5分チャンク
 const CONCURRENCY = 1; // API 呼び出しの並列数（レート制限対策で1）
 const MAX_RETRY = 3;
@@ -27,7 +36,8 @@ const PACE_MS = parseInt(process.env.MINUTES_PACE_MS || "60000", 10); // 成功�
 
 // --- Cloudflare Workers AI 日次無料枠(Neurons)管理 ----------------------------------
 // Workers AI は USD $0.011 / 1,000 neurons、無料枠は 10,000 neurons/日 (UTC 00:00 リセット)。
-// 使い切ったら翌日のリセットまで眠る。--force-free-tier で無料枠を無視する。
+// 使い切ったら Groq 予備経路へ自動切替（Groqキー未設定なら従来どおり翌日まで待機）。
+// --force-free-tier で無料枠を無視する。
 const NEURON_BUDGET = Math.min(
   parseFloat(process.env.CF_NEURON_BUDGET || "9500"), // 既定: 無料枠10,000のうち安全マージン込み
   10000
@@ -74,9 +84,23 @@ async function waitUntilNextUtcDay() {
   neuronState = loadNeuronState();
 }
 async function ensureNeurons() {
-  while (neuronState.used >= NEURON_BUDGET) {
-    await waitUntilNextUtcDay();
+  // UTC 日跨ぎで in-memory 使用量を更新し、CF 予算が翌日復活したら CF に戻す
+  if (neuronState.day !== NEURON_STATE_DAY()) neuronState = loadNeuronState();
+  if (neuronsLeft() > 0) {
+    if (provider !== "cloudflare") {
+      provider = "cloudflare";
+      console.log(`[provider] Cloudflare 予算が利用可能 → CF に戻す (model=${MODEL})`);
+    }
+    return;
   }
+  if (GROQ_API_KEY) {
+    if (provider !== "groq") {
+      provider = "groq";
+      console.log(`[provider] CF 日次予算切れ → Groq 予備経路に切替 (model=${GROQ_MODEL})`);
+    }
+    return;
+  }
+  await waitUntilNextUtcDay();
 }
 
 function fmtJst(ms) {
@@ -127,20 +151,21 @@ async function summarize(chunk) {
   let lastErr;
   for (let i = 0; i < MAX_RETRY; i++) {
     let res = null;
+    const cfg = activeCfg(); // リトライ毎に再評価（ensureNeurons が経路を切り替えている場合がある）
     try {
-      res = await fetch(API_URL, {
+      res = await fetch(cfg.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
-        body: JSON.stringify({ model: MODEL, messages, temperature: 0.2, max_tokens: 2048 }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.key}` },
+        body: JSON.stringify({ model: cfg.model, messages, temperature: 0.2, max_tokens: 2048 }),
         timeout: 90000,
       });
       if (!res.ok) {
-        aiQuota.record("cloudflare", res, null, { kind: "minutes", model: MODEL, error: `api ${res.status}` });
+        aiQuota.record(cfg.name, res, null, { kind: "minutes", model: cfg.model, error: `api ${res.status}` });
         throw new Error(`api ${res.status}: ${(await res.text()).slice(0, 200)}`);
       }
       const data = await res.json();
-      aiQuota.record("cloudflare", res, data, { kind: "minutes", model: MODEL });
-      // Cloudflare Workers AI は usage.neurons に実消費量を返す
+      aiQuota.record(cfg.name, res, data, { kind: "minutes", model: cfg.model });
+      // Cloudflare Workers AI は usage.neurons に実消費量を返す（Groq には無い）
       if (data?.usage?.neurons != null) {
         neuronState.used = Math.min(NEURON_BUDGET, neuronState.used + data.usage.neurons);
         saveNeuronState();
@@ -151,7 +176,7 @@ async function summarize(chunk) {
       return JSON.parse(cleaned);
     } catch (e) {
       lastErr = e;
-      if (!res) aiQuota.record("cloudflare", null, null, { kind: "minutes", model: MODEL, error: e.message });
+      if (!res) aiQuota.record(cfg.name, null, null, { kind: "minutes", model: cfg.model, error: e.message });
       await sleepMs(2000 * (i + 1));
     }
   }
@@ -286,24 +311,31 @@ function parseArgs(argv) {
 
 async function resolveVideos(db, args) {
   if (args.recent) {
-    // 字幕持ち・雑談/マシュマロ系を stream_at 降順で指定数
+    // 字幕持ち・雑談/マシュマロ系を stream_at 降順で指定数。
+    // archive /api/videos は limit 最大100のため offset ページングで全件を走査する
+    //（2026-10-01 修正: limit=100 固定だと最新100本しか見ず、それより古い未要約
+    //  バックログ341本が永久に放置されていた）。
     const rows = await dbAll(db,
       `SELECT video_id, title, stream_date_jst FROM video_minutes`, []);
     const done = new Set(rows.map(r => r.video_id));
-    // include_deleted=1 で「YTから削除された動画」も要約生成の対象にする（AIのみ利用）
-    const list = await fetch(`${ARCHIVE_API_BASE}/api/videos?limit=100&sort=stream_at_desc&include_deleted=1`).then(r => r.json()).catch(() => null);
-    let candidates = [];
-    if (list && Array.isArray(list.videos)) {
-      // v_catalog には caption 有無の列が無いため、タイトルで候補を絞る。
-      // 字幕が無い動画は getTranscript が 404 を返すので呼び出し側で skip される。
-      candidates = list.videos.filter(v =>
-        /(雑談|マシュマロ|相談|晩酌|ごごまい|ASMR)/.test(v.title || ""));
-    } else throw new Error("archive /api/videos failed");
     const out = [];
-    for (const v of candidates) {
-      if (done.has(v.video_id)) continue;
-      out.push(v);
-      if (out.length >= args.recent) break;
+    let offset = 0;
+    for (;;) {
+      // include_deleted=1 で「YTから削除された動画」も要約生成の対象にする（AIのみ利用）
+      const list = await fetch(`${ARCHIVE_API_BASE}/api/videos?limit=100&offset=${offset}&sort=stream_at_desc&include_deleted=1`).then(r => r.json()).catch(() => null);
+      if (!list || !Array.isArray(list.videos)) throw new Error("archive /api/videos failed");
+      const page = list.videos;
+      for (const v of page) {
+        if (done.has(v.video_id)) continue;
+        // v_catalog には caption 有無の列が無いため、タイトルで候補を絞る。
+        // 字幕が無い動画は getTranscript が 404 を返すので呼び出し側で skip される。
+        if (!/(雑談|マシュマロ|相談|晩酌|ごごまい|ASMR)/.test(v.title || "")) continue;
+        out.push(v);
+        if (out.length >= args.recent) return out;
+      }
+      if (page.length === 0) break;
+      offset += page.length;
+      if (list.total != null && offset >= list.total) break;
     }
     return out;
   }
