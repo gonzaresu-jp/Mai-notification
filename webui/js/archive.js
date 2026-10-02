@@ -602,7 +602,14 @@
         body.innerHTML = '<div class="ar-chap-empty">タイムスタンプがありません</div>';
         return;
       }
-      var major = markMajorChapters(list);
+      // サーバー側で2階層生成済み(major フラグ付き)ならそれを優先。
+      // 無い動画(旧txt)は従来どおり時刻間隔から大枠を推定する。
+      var hasServerMajor = list.length > 0 && list.every(function (c) {
+        return typeof c.major === 'boolean';
+      });
+      var major = hasServerMajor
+        ? list.map(function (c) { return !!c.major; })
+        : markMajorChapters(list);
       var chapEntries = list.map(function (ch, i) {
         return {
           t: ytTs(ch.time_sec),
