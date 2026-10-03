@@ -12,9 +12,6 @@
   let busy = false;
   let lastUrl = null;
 
-  // ページ読込時にTTSコンテナを先に起こしておく（コールドスタート約37秒の吸収）
-  fetch("/api/admin/chat/tts-warm", { credentials: "include" }).catch(() => {});
-
   function setStatus(msg, isErr) {
     if (!statusEl) return;
     statusEl.textContent = msg || "";
