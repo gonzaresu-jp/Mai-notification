@@ -272,11 +272,13 @@
   }
   if (prefsSave) prefsSave.addEventListener("click", saveSessionPrefs);
 
-  // ===== 自動読み上げ（まいの声・/api/admin/chat/speak 経由） =====
+  // ===== 自動読み上げ（まいの声・/api/admin/chat/speak 経由・SSE文単位ストリーム再生） =====
   const SPEAK_KEY = "mai_chat_speak";
   let speakOn = false;
   let speakAbort = null;   // 進行中のfetch（新しい応答やOFFで打ち切り）
   let speakAudio = null;   // 再生中のAudio
+  let speakQueue = [];     // 未再生のチャンク（Blob URL）
+  let speakDone = false;   // ストリーム受信完了
   let speaking = false;    // 生成中〜再生中
 
   function syncSpeak() {
@@ -295,9 +297,39 @@
   function stopSpeak() {
     if (speakAbort) { try { speakAbort.abort(); } catch {} speakAbort = null; }
     if (speakAudio) { try { speakAudio.pause(); } catch {} speakAudio = null; }
+    speakQueue.forEach(u => { try { URL.revokeObjectURL(u); } catch {} });
+    speakQueue = [];
+    speakDone = false;
     speaking = false;
     syncSpeak();
   }
+
+  function pumpSpeak(ac) {
+    if (speakAbort !== ac) return;            // 打ち切り済み
+    if (speakAudio) return;                   // 再生中
+    if (!speakQueue.length) {
+      if (speakDone) { speaking = false; syncSpeak(); }
+      return;
+    }
+    const url = speakQueue.shift();
+    const audio = new Audio(url);
+    speakAudio = audio;
+    const done = () => {
+      try { URL.revokeObjectURL(url); } catch {}
+      if (speakAudio === audio) { speakAudio = null; pumpSpeak(ac); }
+    };
+    audio.onended = done;
+    audio.onerror = done;
+    audio.play().catch(done);
+  }
+
+  function b64ToUrl(b64) {
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return URL.createObjectURL(new Blob([arr], { type: "audio/wav" }));
+  }
+
   if (speakToggle) {
     speakToggle.addEventListener("click", () => {
       speakOn = !speakOn;
@@ -332,7 +364,7 @@
       const r = await fetch("/api/admin/chat/speak", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: cleaned }),
+        body: JSON.stringify({ text: cleaned, stream: true }),
         signal: ac.signal,
       });
       if (speakAbort !== ac) return; // 打ち切り済み
@@ -341,18 +373,51 @@
         speaking = false; syncSpeak();
         return;
       }
-      const blob = await r.blob();
-      if (speakAbort !== ac) return;
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      speakAudio = audio;
-      const done = () => {
-        URL.revokeObjectURL(url);
-        if (speakAudio === audio) { speakAudio = null; speaking = false; syncSpeak(); }
+      const ctype = (r.headers.get("content-type") || "");
+      if (!r.body || ctype.indexOf("audio/") !== -1) {
+        // フォールバック: 旧プロキシの一括WAV
+        const blob = await r.blob();
+        if (speakAbort !== ac) return;
+        speakQueue.push(URL.createObjectURL(blob));
+        speakDone = true;
+        pumpSpeak(ac);
+        return;
+      }
+      // SSE: 文単位チャンクが完成するごとに届き、先頭から順に再生
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      const handleBlock = (block) => {
+        let ev = "", dataStr = "";
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event:")) ev = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+        }
+        if (!dataStr) return;
+        let d;
+        try { d = JSON.parse(dataStr); } catch { return; }
+        if (ev === "audio_chunk" && d.audio_base64) {
+          speakQueue.push(b64ToUrl(d.audio_base64));
+          pumpSpeak(ac);
+        } else if (ev === "error") {
+          console.warn("[speak] stream error:", d && d.error && d.error.message);
+        }
       };
-      audio.onended = done;
-      audio.onerror = done;
-      await audio.play();
+      for (;;) {
+        const { value, done: rdone } = await reader.read();
+        if (rdone) break;
+        if (speakAbort !== ac) { try { reader.cancel(); } catch {} return; }
+        buf += dec.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          handleBlock(buf.slice(0, idx));
+          buf = buf.slice(idx + 2);
+        }
+      }
+      if (buf.trim()) handleBlock(buf);
+      if (speakAbort !== ac) return;
+      speakDone = true;
+      pumpSpeak(ac);
     } catch (e) {
       if (e && e.name === "AbortError") return;
       console.warn("[speak] error:", e);

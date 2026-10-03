@@ -751,6 +751,7 @@ const r18Extra = r18
       const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 1200);
       if (!text) return res.status(400).json({ error: "text required" });
       const ttsUrl = process.env.CHAT_TTS_URL || "http://127.0.0.1:8088/v1/audio/speech";
+      const wantStream = req.body?.stream === true || req.body?.stream === "true";
       let numSteps = Number.parseInt(req.body?.num_steps, 10);
       if (!Number.isInteger(numSteps)) numSteps = Number.parseInt(process.env.CHAT_TTS_NUM_STEPS || "", 10);
       if (Number.isInteger(numSteps)) numSteps = Math.min(4, Math.max(1, numSteps));
@@ -763,6 +764,7 @@ const r18Extra = r18
           input: text,
           voice: process.env.CHAT_TTS_VOICE || "mai",
           response_format: "wav",
+          ...(wantStream ? { stream_format: "sse" } : {}),
           ...(numSteps ? { num_steps: numSteps } : {}),
         }),
         timeout: 180000,
@@ -771,6 +773,18 @@ const r18Extra = r18
         const detail = await r.text().catch(() => "");
         console.error(`[/api/admin/chat/speak] tts ${r.status}: ${detail.slice(0, 300)}`);
         return res.status(502).json({ error: "tts failed" });
+      }
+      if (wantStream && r.body) {
+        res.status(200);
+        res.set("Content-Type", r.headers.get("content-type") || "text/event-stream");
+        res.set("Cache-Control", "no-cache");
+        res.set("X-Accel-Buffering", "no");
+        const src = r.body && typeof r.body.pipe === "function"
+          ? r.body
+          : require("stream").Readable.fromWeb(r.body);
+        res.on("close", () => { try { src.destroy(); } catch {} });
+        src.pipe(res);
+        return;
       }
       const buf = await r.buffer();
       res.set("Content-Type", "audio/wav");
