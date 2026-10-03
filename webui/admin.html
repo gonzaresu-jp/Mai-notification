@@ -108,6 +108,19 @@
             <p style="margin:0 0 10px; color:#666; font-size:.9rem;">通知履歴・配信予定・プロフィールに基づいてQ&Aできる専用チャットです。</p>
             <a href="./chat.html" class="btn-primary" style="display:inline-block; text-decoration:none; padding:10px 18px; border-radius:999px;"><i class="fa-solid fa-comments"></i> まいAI チャットを開く</a>
 
+                <h3 style="margin:22px 0 4px;"><i class="fa-solid fa-volume-high"></i> 声テスト（テキスト → まいの声）</h3>
+                <p style="margin:0 0 10px; color:#666; font-size:.84rem;">入力したテキストをまいちゃんの声（Irodori-TTS・CPU生成）で読み上げます。チャットの自動読み上げと同じ音声パイプを通ります。</p>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <textarea id="tts-test-text" rows="4" placeholder="例: やっほー、だーりん！ 今日も一日がんばろうね♡">やっほー、だーりん！ 声のテストです。うまく聞こえてる？</textarea>
+                    <div class="helper-text">1200文字以内（長いほど生成に時間がかかります）</div>
+                </div>
+                <div class="inline-actions">
+                    <button type="button" class="btn-primary" id="btn-tts-gen"><i class="fa-solid fa-volume-high"></i> まいの声で生成</button>
+                    <a id="tts-dl" class="btn-secondary" style="display:none; text-decoration:none; padding:8px 14px;" download="mai-tts.wav" href="#"><i class="fa-solid fa-download"></i> ダウンロード</a>
+                    <span id="tts-status" style="font-size:.85rem; color:#666;"></span>
+                </div>
+                <audio id="tts-audio" controls style="display:none; width:100%; margin-top:10px;"></audio>
+
                 <h3 style="margin:22px 0 4px;"><i class="fa-solid fa-chart-line"></i> ツイート統計（まいちゃんのX）</h3>
                 <p style="margin:0 0 12px; color:#666; font-size:.84rem;">過去ログとGemma/Gemini分析ラベルから集計。新着ツイートの分析結果は自動で蓄積されます。</p>
                 <div id="tw-stats" style="display:flex; flex-direction:column; gap:14px;">
@@ -298,5 +311,6 @@
     <script src="./js/admin-archive.js?v=20260927"></script>
     <script src="./js/admin-ai.js?v=20260923c"></script>
     <script src="./js/admin-mai-state.js?v=20260924a"></script>
+    <script src="./js/admin-tts.js?v=20261003a"></script>
 </body>
 </html>

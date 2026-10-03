@@ -146,4 +146,13 @@ dirty になる事故（2026-09-26、main.js を含む8ファイル）を防止�
   `postprocess.log` が 9/19 で停止、の 2 件が起きていた。systemd 化で解消済み。
   **手動 `python download.py` で起動しないこと。**
 
-最終更新: 2026-09-27（nassy download.py を systemd 化 / gh トークン insecure-storage 化 / elza OOM 対策）
+## 9. 未確定メモ（2026-10-03）
+- **RAG回答モデル候補: OpenRouter × Nous Hermes 3 Llama 3.1 70B**（検討中・未実装）。
+  無検閲応答が目的。実装する場合は `routes/rag.js` の `chat()`（RAG_CHAT_PROVIDER 分岐）に
+  OpenRouter（OpenAI互換 `https://openrouter.ai/api/v1/chat/completions`）を追加する想定。
+- **本番チャットの埋め込みが停止中**: `EMBEDDING_ENDPOINT`（旧 ollama bge-m3）が止まり `/api/ask` が
+  503。回答生成は Gemini（クラウド）で問題なし。候補は CF Workers AI の `@cf/baai/bge-m3`（同一モデル・
+  再埋め込み不要の可能性、日次10k neurons枠で他用途と競合）または Gemini embedding（次元変更で全件再投入要）。
+  ローカルLLM運用は**不可**（ユーザー指示）。
+
+最終更新: 2026-10-03（チャット読み上げ追加 / TTS systemd化・int8＋ONNX高速化 / AGENTS.md §9 追加）
