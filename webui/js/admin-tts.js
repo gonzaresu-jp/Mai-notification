@@ -29,7 +29,7 @@
     busy = true;
     btn.disabled = true;
     const t0 = performance.now();
-    setStatus("まいが生成中…（コンテナ起動中は40秒ほど、それ以降は10秒前後かかります）");
+    setStatus("生成中…（数秒かかります）");
     try {
       const r = await fetch("/api/admin/chat/speak", {
         method: "POST",

@@ -881,6 +881,52 @@ const r18Extra = r18
     try {
       const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 1200);
       if (!text) return res.status(400).json({ error: "text required" });
+
+      // --- ローカル最速パス: AivisSpeech Engine（VOICEVOX互換API・CPU/ONNX） ---
+      // CHAT_TTS_PROVIDER=aivis の時のみ有効。audio_query→synthesis のワンショットWAVを返す。
+      // クライアント(chat.js)は audio/* 応答を単一チャンク再生として扱えるため互換。
+      if ((process.env.CHAT_TTS_PROVIDER || "modal").toLowerCase() === "aivis") {
+        const baseUrl = (process.env.CHAT_TTS_AIVIS_URL || "http://127.0.0.1:10101").replace(/\/+$/, "");
+        const speaker = String(process.env.CHAT_TTS_AIVIS_SPEAKER || "888753760");
+        const t0 = Date.now();
+        const ctlQ = new AbortController();
+        const timerQ = setTimeout(() => ctlQ.abort(), 15000);
+        let query;
+        try {
+          const qr = await fetch(
+            `${baseUrl}/audio_query?text=${encodeURIComponent(text)}&speaker=${speaker}`,
+            { method: "POST", signal: ctlQ.signal }
+          );
+          if (!qr.ok) throw new Error(`audio_query ${qr.status}`);
+          query = await qr.text();
+        } finally {
+          clearTimeout(timerQ);
+        }
+        const ctlS = new AbortController();
+        const timerS = setTimeout(() => ctlS.abort(), 60000);
+        let wav;
+        try {
+          const sr = await fetch(`${baseUrl}/synthesis?speaker=${speaker}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: query,
+            signal: ctlS.signal,
+          });
+          if (!sr.ok) {
+            const detail = await sr.text().catch(() => "");
+            throw new Error(`synthesis ${sr.status}: ${detail.slice(0, 200)}`);
+          }
+          wav = await sr.buffer();
+        } finally {
+          clearTimeout(timerS);
+        }
+        console.log(`[/api/admin/chat/speak] aivis ${Date.now() - t0}ms bytes=${wav.length} chars=${text.length}`);
+        res.set("Content-Type", "audio/wav");
+        res.set("Content-Length", String(wav.length));
+        res.set("Cache-Control", "no-store");
+        return res.send(wav);
+      }
+
       const ttsUrl = process.env.CHAT_TTS_URL || "http://127.0.0.1:8088/v1/audio/speech";
       const wantStream = req.body?.stream === true || req.body?.stream === "true";
       let numSteps = Number.parseInt(req.body?.num_steps, 10);
