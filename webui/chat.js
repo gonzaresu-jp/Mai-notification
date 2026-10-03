@@ -295,6 +295,7 @@
     syncSpeak();
   }
   function stopSpeak() {
+    ttsReset();
     if (speakAbort) { try { speakAbort.abort(); } catch {} speakAbort = null; }
     if (speakAudio) { try { speakAudio.pause(); } catch {} speakAudio = null; }
     speakQueue.forEach(u => { try { URL.revokeObjectURL(u); } catch {} });
@@ -351,13 +352,80 @@
     return s;
   }
 
-  async function speakAnswer(text) {
-    if (!speakOn) return;
-    const cleaned = cleanForSpeech(text).slice(0, 1000);
-    if (!cleaned) return;
-    stopSpeak(); // 前回の読み上げを打ち切ってから
-    const ac = new AbortController();
-    speakAbort = ac;
+  // ===== 読み上げパイプライン（回答生成と並列・文単位で逐次TTS） =====
+  // 回答はSSEでストリーミングされ、文が確定するごとにTTSへ発行する。
+  // セッション単位の AbortController（speakAbort）で再生と取得をまとめて打ち切る。
+  let ttsPending = "";     // 未送信の生テキスト
+  let ttsActive = false;   // TTS fetch進行中
+  let ttsStarted = false;  // 今回の回答でTTSを1回でも発したか
+  let ttsFeedOpen = false; // 回答テキストの受信中
+
+  function ttsReset() {
+    ttsPending = "";
+    ttsActive = false;
+    ttsStarted = false;
+    ttsFeedOpen = false;
+  }
+
+  function ttsFeed(delta) {
+    if (!delta) return;
+    ttsPending += delta;
+    ttsTryDispatch();
+  }
+
+  function ttsFinish() {
+    ttsFeedOpen = false;
+    ttsTryDispatch();
+  }
+
+  function ttsTakeSegment(final) {
+    const s = ttsPending;
+    if (!s) return "";
+    if (final) {
+      ttsPending = "";
+      const c = cleanForSpeech(s);
+      return c ? c.slice(0, 1000) : "";
+    }
+    const m = Math.max(
+      s.lastIndexOf("。"), s.lastIndexOf("！"), s.lastIndexOf("？"),
+      s.lastIndexOf("!"), s.lastIndexOf("?"), s.lastIndexOf("…"), s.lastIndexOf("\n")
+    );
+    if (m >= 0) {
+      const head = s.slice(0, m + 1);
+      // 初回は短文だとTTFB固定費が倒掛するので12文字以上を待つ。2回目以降は文境界で即送る。
+      if (ttsStarted || head.length >= 12) {
+        ttsPending = s.slice(m + 1);
+        const c = cleanForSpeech(head);
+        if (c) { ttsStarted = true; return c; }
+        return "";
+      }
+    }
+    // 文境界が無くても80字たまったら文途中で切って送る
+    if (s.length >= 80) {
+      const head2 = s.slice(0, 60);
+      ttsPending = s.slice(60);
+      const c = cleanForSpeech(head2);
+      if (c) { ttsStarted = true; return c; }
+    }
+    return "";
+  }
+
+  function ttsTryDispatch() {
+    if (!speakOn || ttsActive) return;
+    const seg = ttsTakeSegment(!ttsFeedOpen);
+    if (seg) { ttsRun(seg); return; }
+    if (!ttsFeedOpen && !ttsPending && ttsStarted) ttsComplete();
+  }
+
+  function ttsComplete() {
+    speakDone = true;
+    pumpSpeak(speakAbort);
+  }
+
+  async function ttsRun(cleaned) {
+    ttsActive = true;
+    if (!speakAbort) speakAbort = new AbortController(); // 読み上げセッション単位（再生中も有効）
+    const ac = speakAbort;
     speaking = true;
     syncSpeak();
     try {
@@ -370,7 +438,6 @@
       if (speakAbort !== ac) return; // 打ち切り済み
       if (!r.ok) {
         console.warn("[speak] failed:", r.status);
-        speaking = false; syncSpeak();
         return;
       }
       const ctype = (r.headers.get("content-type") || "");
@@ -379,7 +446,6 @@
         const blob = await r.blob();
         if (speakAbort !== ac) return;
         speakQueue.push(URL.createObjectURL(blob));
-        speakDone = true;
         pumpSpeak(ac);
         return;
       }
@@ -415,15 +481,15 @@
         }
       }
       if (buf.trim()) handleBlock(buf);
-      if (speakAbort !== ac) return;
-      speakDone = true;
-      pumpSpeak(ac);
     } catch (e) {
       if (e && e.name === "AbortError") return;
       console.warn("[speak] error:", e);
-      speaking = false; syncSpeak();
     } finally {
-      if (speakAbort === ac) speakAbort = null;
+      // セッションが変わっていない時だけ次セグメントへ連鎖（stopSpeak後は無効）
+      if (speakAbort === ac) {
+        ttsActive = false;
+        ttsTryDispatch();
+      }
     }
   }
 
@@ -494,17 +560,76 @@
       const r = await fetch("/api/admin/ask", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, sessionId: currentSessionId, r18: r18 ? true : false })
+        body: JSON.stringify({ question, sessionId: currentSessionId, r18: r18 ? true : false, stream: true })
       });
       if (r.status === 401) { location.href = "/admin/login.html"; return; }
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        const errMsg = "エラー: " + (j.error || r.status);
-        showError(bubble, errMsg, question);
+      const ctype = (r.headers.get("content-type") || "");
+      if (ctype.indexOf("text/event-stream") === -1) {
+        // ストリーム未対応サーバー向けの従来JSON経路
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          showError(bubble, "エラー: " + (j.error || r.status), question);
+        } else {
+          renderAnswer(bubble, j.answer, j.sources);
+          ttsFeed(j.answer);
+          ttsFinish();
+          await loadSessions(currentSessionId);
+        }
       } else {
-        renderAnswer(bubble, j.answer, j.sources);
-        speakAnswer(j.answer); // 読み上げOFF時は即return（awaitしない）
-        await loadSessions(currentSessionId);
+        // SSE: deltaを逐次表示しつつ、文単位で読み上げへ発行（生成と並列）
+        const reader = r.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+        let answerAcc = "";
+        let sources = null;
+        let streamErr = null;
+        let lastRender = 0;
+        const renderPartial = (force) => {
+          const now = Date.now();
+          if (!force && now - lastRender < 80) return;
+          lastRender = now;
+          renderAnswer(bubble, answerAcc, null);
+        };
+        const handleBlock = (block) => {
+          let ev = "", dataStr = "";
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event:")) ev = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+          }
+          if (!dataStr) return;
+          let d;
+          try { d = JSON.parse(dataStr); } catch { return; }
+          if (ev === "delta" && d.text) {
+            answerAcc += d.text;
+            renderPartial(false);
+            ttsFeed(d.text);
+          } else if (ev === "meta") {
+            sources = d.sources || null;
+          } else if (ev === "done") {
+            if (d.answer) answerAcc = d.answer;
+          } else if (ev === "error") {
+            streamErr = d.error || "stream error";
+          }
+        };
+        for (;;) {
+          const { value, done: rdone } = await reader.read();
+          if (rdone) break;
+          buf += dec.decode(value, { stream: true });
+          let idx;
+          while ((idx = buf.indexOf("\n\n")) >= 0) {
+            handleBlock(buf.slice(0, idx));
+            buf = buf.slice(idx + 2);
+          }
+        }
+        if (buf.trim()) handleBlock(buf);
+        ttsFinish();
+        if (streamErr && !answerAcc) {
+          showError(bubble, "エラー: " + streamErr, question);
+        } else {
+          if (streamErr) console.warn("[ask] stream error:", streamErr);
+          renderAnswer(bubble, answerAcc, sources);
+          await loadSessions(currentSessionId);
+        }
       }
     } catch (e) {
       const errMsg = "通信エラー: " + e.message;

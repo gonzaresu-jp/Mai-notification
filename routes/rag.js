@@ -550,6 +550,75 @@ async function chat(messages, useGroq = false) {
   }
 }
 
+// 回答生成をOpenAI互換SSEでストリーミングし、確定トークンを onDelta へ逐次渡す。
+// 戻り値は連結済みの完全なテキスト。cancelSignal でクライアント切断時などに上流を中断する。
+async function chatStream(messages, useGroq = false, onDelta, cancelSignal) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
+  const onCancel = () => controller.abort();
+  if (cancelSignal) {
+    if (cancelSignal.aborted) controller.abort();
+    else cancelSignal.addEventListener("abort", onCancel, { once: true });
+  }
+  try {
+    const useGemini = CHAT_PROVIDER === "gemini" && !!GEMINI_API_KEY;
+    const isNormalGemini = useGemini && !useGroq;
+    const endpoint = isNormalGemini ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" : useGroq ? GROQ_CHAT_ENDPOINT : CHAT_ENDPOINT;
+    const model = useGroq ? GROQ_CHAT_MODEL : CHAT_MODEL;
+    const payload = isNormalGemini
+      ? { model, messages, temperature: CHAT_TEMPERATURE, max_tokens: CHAT_MAX_TOKENS, stream: true }
+      : useGroq
+        ? { model, messages, temperature: 0.9, max_tokens: GROQ_CHAT_MAX_TOKENS, stream: true }
+        : { model, messages, temperature: CHAT_TEMPERATURE, max_tokens: CHAT_MAX_TOKENS, stream: true, extra_body: { think: false } };
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(isNormalGemini ? { Authorization: `Bearer ${GEMINI_API_KEY}` } : { Authorization: `Bearer ${GROQ_CHAT_API_KEY}` }) },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const provider = isNormalGemini ? "gemini" : (useGroq ? "cloudflare" : "ollama");
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      aiQuota.record(provider, res, null, { kind: "mai-ai-chat", model, error: `HTTP ${res.status}` });
+      throw new Error(`Chat server ${res.status}: ${detail.slice(0, 300)}`);
+    }
+    let full = "";
+    let usage = null;
+    const dec = new TextDecoder();
+    let buf = "";
+    const handleLine = (line) => {
+      if (!line.startsWith("data:")) return;
+      const payloadStr = line.slice(5).trim();
+      if (!payloadStr || payloadStr === "[DONE]") return;
+      let d;
+      try { d = JSON.parse(payloadStr); } catch { return; }
+      if (d.usage) usage = d.usage;
+      const delta = d?.choices?.[0]?.delta?.content || "";
+      if (delta) {
+        full += delta;
+        if (onDelta) onDelta(delta);
+      }
+    };
+    // node-fetch v2 の body は Node ストリーム（getReader 無し）。Web ReadableStream も
+    // async iterable として扱えるため for await で統一する。
+    for await (const chunk of res.body) {
+      buf += typeof chunk === "string" ? chunk : dec.decode(chunk, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        handleLine(line);
+      }
+    }
+    if (buf) handleLine(buf);
+    aiQuota.record(provider, res, usage, { kind: "mai-ai-chat", model });
+    return full.trim();
+  } finally {
+    clearTimeout(timer);
+    if (cancelSignal) cancelSignal.removeEventListener?.("abort", onCancel);
+  }
+}
+
 function register(app, db) {
   // --- セマンティック検索 ---
   // GET /api/search?q=...&k=10&source=notifications|events
@@ -579,8 +648,10 @@ function register(app, db) {
     const question = (req.body?.question || req.body?.q || "").toString().trim();
     if (!question) return res.status(400).json({ error: "question required" });
     const r18 = allowR18Only && !!req.body?.r18;
+    const wantStream = req.body?.stream === true || req.body?.stream === "true";
     try {
       const nowStr = nowJst();
+      const tRet0 = Date.now();
       const vec = await embeddings.embedQuery(question);
       const [upcoming, temporal, trResult, recentTweets, hits] = await Promise.all([
         getUpcomingEvents(db, nowStr, 5),
@@ -589,6 +660,7 @@ function register(app, db) {
         getRecentTweets(db, 6),
         vectordb.search(vec, ASK_TOPK),
       ]);
+      console.log(`[ask] retrieval=${Date.now() - tRet0}ms`);
       const hitLines = hits.map((h, i) => `${i + 1}. ${sourceLine(h)}`).join("\n");
 
       // minutes(配信要約)ヒット → parent-document(生字幕) を引用として補強
@@ -700,38 +772,78 @@ const r18Extra = r18
         },
       ];
 
-      const answer = await chat(messages, r18 && !!GROQ_CHAT_ENDPOINT && !!GROQ_CHAT_API_KEY && !!GROQ_CHAT_MODEL);
+      const useGroqFlag = r18 && !!GROQ_CHAT_ENDPOINT && !!GROQ_CHAT_API_KEY && !!GROQ_CHAT_MODEL;
 
-      // --- セッション永続化：質問と回答をDBへ保存 ---
-      let sessionTitle = null;
-      if (sessionId && req.adminUser) {
-        const srcJson = JSON.stringify(
-          hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, section: h.payload?.section, url: h.payload?.url })).slice(0, 5)
-        );
-        await dbRun(db,
-          "INSERT INTO chat_messages (session_id, role, content, sources_json) VALUES (?,?,?,?)",
-          [sessionId, "user", question.slice(0, 3000), null]
-        );
-        await dbRun(db,
-          "INSERT INTO chat_messages (session_id, role, content, sources_json) VALUES (?,?,?,?)",
-          [sessionId, "assistant", answer.slice(0, 6000), srcJson]
-        );
-        // 初回ターンなら最初の質問からタイトルを自動生成
-        const sess = await dbGet(db, "SELECT title, updated_at FROM chat_sessions WHERE id = ?", [sessionId]);
-        if (sess && !sess.title) {
-          sessionTitle = question.slice(0, 30);
-          await dbRun(db, "UPDATE chat_sessions SET title = ? WHERE id = ?", [sessionTitle, sessionId]);
+      // --- セッション永続化：質問と回答をDBへ保存（ストリーム/通常の両経路で共有） ---
+      const persistTurn = async (answer) => {
+        let sessionTitle = null;
+        if (sessionId && req.adminUser) {
+          const srcJson = JSON.stringify(
+            hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, section: h.payload?.section, url: h.payload?.url })).slice(0, 5)
+          );
+          await dbRun(db,
+            "INSERT INTO chat_messages (session_id, role, content, sources_json) VALUES (?,?,?,?)",
+            [sessionId, "user", question.slice(0, 3000), null]
+          );
+          await dbRun(db,
+            "INSERT INTO chat_messages (session_id, role, content, sources_json) VALUES (?,?,?,?)",
+            [sessionId, "assistant", answer.slice(0, 6000), srcJson]
+          );
+          // 初回ターンなら最初の質問からタイトルを自動生成
+          const sess = await dbGet(db, "SELECT title, updated_at FROM chat_sessions WHERE id = ?", [sessionId]);
+          if (sess && !sess.title) {
+            sessionTitle = question.slice(0, 30);
+            await dbRun(db, "UPDATE chat_sessions SET title = ? WHERE id = ?", [sessionTitle, sessionId]);
+          }
         }
-      }
+        return sessionTitle;
+      };
 
-      res.json({
+      const metaPayload = () => ({
         question,
-        answer,
-        sessionTitle,
         upcoming: upcoming.map(e => ({ title: e.title, start_time: e.start_time, time_period: e.time_period, url: e.url })),
         sources: hits.map(h => ({ score: h.score, source: h.payload?.source, title: h.payload?.title, section: h.payload?.section, url: h.payload?.url })),
         transcripts: transcriptHits.map(h => ({ title: h.title, stream_date_jst: h.stream_date_jst, start: h.start, url: h.url, text: (h.text || "").slice(0, 200) })),
         minutes: parents.map(p => ({ title: p.title, stream_date_jst: p.stream_date_jst, section: p.section, start_ms: p.start_ms, url: p.url, text: p.text })),
+      });
+
+      if (wantStream) {
+        const cancel = new AbortController();
+        res.on("close", () => { if (!res.writableEnded) cancel.abort(); });
+        res.status(200);
+        res.set("Content-Type", "text/event-stream; charset=utf-8");
+        res.set("Cache-Control", "no-cache");
+        res.set("X-Accel-Buffering", "no");
+        res.flushHeaders?.();
+        const send = (ev, obj) => {
+          if (res.writableEnded || res.destroyed) return;
+          res.write(`event: ${ev}\ndata: ${JSON.stringify(obj)}\n\n`);
+        };
+        send("meta", metaPayload());
+        let answer = "";
+        try {
+          const tGen0 = Date.now();
+          answer = await chatStream(messages, useGroqFlag, (text) => send("delta", { text }), cancel.signal);
+          console.log(`[ask] generation(stream)=${Date.now() - tGen0}ms`);
+          const sessionTitle = await persistTurn(answer);
+          send("done", { answer, sessionTitle });
+        } catch (e) {
+          console.error("[/api/ask] stream error:", e?.message);
+          send("error", { error: e.message });
+        }
+        if (!res.writableEnded && !res.destroyed) res.end();
+        return;
+      }
+
+      const tGen0 = Date.now();
+      const answer = await chat(messages, useGroqFlag);
+      console.log(`[ask] generation=${Date.now() - tGen0}ms`);
+      const sessionTitle = await persistTurn(answer);
+
+      res.json({
+        ...metaPayload(),
+        answer,
+        sessionTitle,
       });
     } catch (e) {
       console.error("[/api/ask] error:", e?.message);
