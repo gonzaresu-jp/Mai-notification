@@ -756,9 +756,13 @@ const r18Extra = r18
       if (!Number.isInteger(numSteps)) numSteps = Number.parseInt(process.env.CHAT_TTS_NUM_STEPS || "", 10);
       if (Number.isInteger(numSteps)) numSteps = Math.min(4, Math.max(1, numSteps));
       else numSteps = null;
+      const ttsKey = process.env.CHAT_TTS_API_KEY;
       const r = await fetch(ttsUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(ttsKey ? { Authorization: `Bearer ${ttsKey}` } : {}),
+        },
         body: JSON.stringify({
           model: "irodori-tts",
           input: text,
