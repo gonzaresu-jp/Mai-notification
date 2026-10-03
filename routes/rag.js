@@ -743,6 +743,41 @@ const r18Extra = r18
   const adminAuth = require("../lib/admin");
   app.post("/api/admin/ask", adminAuth.requireAuth, (req, res) => handleAsk(req, res, true));
 
+  // --- チャット自動読み上げ（TTSプロキシ） ---
+  // 127.0.0.1:8088 の Irodori-TTS（CPU・mai声）への中継。
+  // ブラウザ mixed-content回避のため必ずサーバー側プロキシ経由で渡す。
+  app.post("/api/admin/chat/speak", adminAuth.requireAuth, async (req, res) => {
+    try {
+      const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 1200);
+      if (!text) return res.status(400).json({ error: "text required" });
+      const ttsUrl = process.env.CHAT_TTS_URL || "http://127.0.0.1:8088/v1/audio/speech";
+      const r = await fetch(ttsUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "irodori-tts",
+          input: text,
+          voice: process.env.CHAT_TTS_VOICE || "mai",
+          response_format: "wav",
+        }),
+        timeout: 180000,
+      });
+      if (!r.ok) {
+        const detail = await r.text().catch(() => "");
+        console.error(`[/api/admin/chat/speak] tts ${r.status}: ${detail.slice(0, 300)}`);
+        return res.status(502).json({ error: "tts failed" });
+      }
+      const buf = await r.buffer();
+      res.set("Content-Type", "audio/wav");
+      res.set("Content-Length", String(buf.length));
+      res.set("Cache-Control", "no-store");
+      return res.send(buf);
+    } catch (e) {
+      console.error("[/api/admin/chat/speak] error:", e?.message);
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   // --- セッション管理API（管理者専用・ChatGPT風セッション機能） ---
   // POST /api/admin/chat/sessions  → 新規セッション作成 {r18?} → {id}
   // GET  /api/admin/chat/sessions  → セッション一覧（新しい順、各履歴プレビュー付き）

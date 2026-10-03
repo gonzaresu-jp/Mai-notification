@@ -16,6 +16,7 @@
   const prefsPanel = document.getElementById("prefsPanel");
   const prefsSave = document.getElementById("prefsSave");
   const prefsStatus = document.getElementById("prefsStatus");
+  const speakToggle = document.getElementById("speakToggle");
   let busy = false;
   let currentSessionId = null;   // 現在のセッションID（null=未作成）
   let r18 = false;
@@ -271,6 +272,96 @@
   }
   if (prefsSave) prefsSave.addEventListener("click", saveSessionPrefs);
 
+  // ===== 自動読み上げ（まいの声・/api/admin/chat/speak 経由） =====
+  const SPEAK_KEY = "mai_chat_speak";
+  let speakOn = false;
+  let speakAbort = null;   // 進行中のfetch（新しい応答やOFFで打ち切り）
+  let speakAudio = null;   // 再生中のAudio
+  let speaking = false;    // 生成中〜再生中
+
+  function syncSpeak() {
+    if (!speakToggle) return;
+    speakToggle.classList.toggle("on", speakOn);
+    speakToggle.classList.toggle("speaking", speaking);
+    speakToggle.setAttribute("aria-pressed", String(speakOn));
+    speakToggle.title = !speakOn
+      ? "自動読み上げ: OFF（まいの声を再生）"
+      : speaking ? "まいが読んでるよ…（クリックでOFF）" : "自動読み上げ: ON";
+  }
+  function initSpeak() {
+    try { speakOn = localStorage.getItem(SPEAK_KEY) === "1"; } catch { speakOn = false; }
+    syncSpeak();
+  }
+  function stopSpeak() {
+    if (speakAbort) { try { speakAbort.abort(); } catch {} speakAbort = null; }
+    if (speakAudio) { try { speakAudio.pause(); } catch {} speakAudio = null; }
+    speaking = false;
+    syncSpeak();
+  }
+  if (speakToggle) {
+    speakToggle.addEventListener("click", () => {
+      speakOn = !speakOn;
+      try { localStorage.setItem(SPEAK_KEY, speakOn ? "1" : "0"); } catch {}
+      if (!speakOn) stopSpeak(); else syncSpeak();
+    });
+  }
+
+  function cleanForSpeech(text) {
+    let s = String(text || "");
+    s = s.replace(/```[\s\S]*?```/g, " コード省略。 ");
+    s = s.replace(/`([^`]+)`/g, "$1");
+    s = s.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+    s = s.replace(/https?:\/\/\S+/g, " リンク。 ");
+    s = s.replace(/^[>#\-*\s]+/gm, "");
+    s = s.replace(/\*\*|__|[*_]/g, "");
+    s = s.replace(/[#|]/g, " ");
+    s = s.replace(/\s+/g, " ").trim();
+    return s;
+  }
+
+  async function speakAnswer(text) {
+    if (!speakOn) return;
+    const cleaned = cleanForSpeech(text).slice(0, 1000);
+    if (!cleaned) return;
+    stopSpeak(); // 前回の読み上げを打ち切ってから
+    const ac = new AbortController();
+    speakAbort = ac;
+    speaking = true;
+    syncSpeak();
+    try {
+      const r = await fetch("/api/admin/chat/speak", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: cleaned }),
+        signal: ac.signal,
+      });
+      if (speakAbort !== ac) return; // 打ち切り済み
+      if (!r.ok) {
+        console.warn("[speak] failed:", r.status);
+        speaking = false; syncSpeak();
+        return;
+      }
+      const blob = await r.blob();
+      if (speakAbort !== ac) return;
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      speakAudio = audio;
+      const done = () => {
+        URL.revokeObjectURL(url);
+        if (speakAudio === audio) { speakAudio = null; speaking = false; syncSpeak(); }
+      };
+      audio.onended = done;
+      audio.onerror = done;
+      await audio.play();
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      console.warn("[speak] error:", e);
+      speaking = false; syncSpeak();
+    } finally {
+      if (speakAbort === ac) speakAbort = null;
+    }
+  }
+
   function scrollDown(){ log.scrollTop = log.scrollHeight; }
 
   function addUser(text, fromLog){
@@ -330,6 +421,7 @@
     }
     busy = true; sendBtn.disabled = true;
     if (suggest) suggest.style.display = "none";
+    stopSpeak(); // 前回の読み上げ再生・生成を打ち切る
     addUser(question);
     saveSent(question);
     const bubble = addAI(); typing(bubble);
@@ -346,6 +438,7 @@
         showError(bubble, errMsg, question);
       } else {
         renderAnswer(bubble, j.answer, j.sources);
+        speakAnswer(j.answer); // 読み上げOFF時は即return（awaitしない）
         await loadSessions(currentSessionId);
       }
     } catch (e) {
@@ -428,6 +521,7 @@
   // ===== 初期化 =====
   loadSent();
   initR18();
+  initSpeak();
   loadSessions().then(() => migrateLegacyLog());
   showWelcome();
   input.focus();

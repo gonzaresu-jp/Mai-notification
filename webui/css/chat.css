@@ -49,6 +49,15 @@
   .r18-toggle:hover { background: rgba(255,255,255,.28); transform: translateY(-1px); }
   .r18-toggle.on { background: #d63b97; border-color: #ffd1ea; box-shadow: 0 0 0 3px rgba(255,255,255,.25); }
   .r18-toggle.on::after { content: " ON"; font-size: .68rem; font-weight: 800; letter-spacing: .05em; }
+  .speak-toggle {
+    flex: 0 0 auto; border: 2px solid rgba(255,255,255,.65); background: rgba(255,255,255,.15);
+    color: #fff; font-size: 1rem; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+    transition: .2s; line-height: 1; margin-left: 6px;
+  }
+  .speak-toggle:hover { background: rgba(255,255,255,.28); transform: translateY(-1px); }
+  .speak-toggle.on { background: #1f9d6b; border-color: #baf3dc; box-shadow: 0 0 0 3px rgba(255,255,255,.25); }
+  .speak-toggle.speaking i { animation: speakPulse 1s ease-in-out infinite; }
+  @keyframes speakPulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: .6; } }
   .prefs-toggle {
     flex: 0 0 auto; border: 2px solid rgba(255,255,255,.65); background: rgba(255,255,255,.15);
     color: #fff; font-size: 1rem; padding: 5px 11px; border-radius: 999px; cursor: pointer;
