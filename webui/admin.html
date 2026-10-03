@@ -115,6 +115,12 @@
                     <div class="helper-text">1200文字以内（長いほど生成に時間がかかります）</div>
                 </div>
                 <div class="inline-actions">
+                    <label for="tts-steps" style="font-size:.85rem; color:#666;">品質:</label>
+                    <select id="tts-steps" style="padding:7px 8px; border:1px solid #ccc; border-radius:8px; font-size:.85rem;">
+                        <option value="4" selected>高品質（4・約10秒）</option>
+                        <option value="2">標準（2・約8秒）</option>
+                        <option value="1">高速（1・約6秒）</option>
+                    </select>
                     <button type="button" class="btn-primary" id="btn-tts-gen"><i class="fa-solid fa-volume-high"></i> まいの声で生成</button>
                     <a id="tts-dl" class="btn-secondary" style="display:none; text-decoration:none; padding:8px 14px;" download="mai-tts.wav" href="#"><i class="fa-solid fa-download"></i> ダウンロード</a>
                     <span id="tts-status" style="font-size:.85rem; color:#666;"></span>
@@ -311,6 +317,6 @@
     <script src="./js/admin-archive.js?v=20260927"></script>
     <script src="./js/admin-ai.js?v=20260923c"></script>
     <script src="./js/admin-mai-state.js?v=20260924a"></script>
-    <script src="./js/admin-tts.js?v=20261003a"></script>
+    <script src="./js/admin-tts.js?v=20261003b"></script>
 </body>
 </html>

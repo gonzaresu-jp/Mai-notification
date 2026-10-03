@@ -5,6 +5,7 @@
   const statusEl = document.getElementById("tts-status");
   const audioEl = document.getElementById("tts-audio");
   const dlEl = document.getElementById("tts-dl");
+  const stepsEl = document.getElementById("tts-steps");
   if (!btn || !textEl) return;
 
   const MAX_LEN = 1200;
@@ -34,7 +35,7 @@
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, num_steps: stepsEl ? Number(stepsEl.value) : undefined }),
       });
       if (r.status === 401) { location.href = "/admin/login.html"; return; }
       if (!r.ok) {

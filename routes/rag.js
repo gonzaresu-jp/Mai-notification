@@ -751,6 +751,10 @@ const r18Extra = r18
       const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 1200);
       if (!text) return res.status(400).json({ error: "text required" });
       const ttsUrl = process.env.CHAT_TTS_URL || "http://127.0.0.1:8088/v1/audio/speech";
+      let numSteps = Number.parseInt(req.body?.num_steps, 10);
+      if (!Number.isInteger(numSteps)) numSteps = Number.parseInt(process.env.CHAT_TTS_NUM_STEPS || "", 10);
+      if (Number.isInteger(numSteps)) numSteps = Math.min(4, Math.max(1, numSteps));
+      else numSteps = null;
       const r = await fetch(ttsUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -759,6 +763,7 @@ const r18Extra = r18
           input: text,
           voice: process.env.CHAT_TTS_VOICE || "mai",
           response_format: "wav",
+          ...(numSteps ? { num_steps: numSteps } : {}),
         }),
         timeout: 180000,
       });

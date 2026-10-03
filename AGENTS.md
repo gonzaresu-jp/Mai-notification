@@ -154,5 +154,7 @@ dirty になる事故（2026-09-26、main.js を含む8ファイル）を防止�
   503。回答生成は Gemini（クラウド）で問題なし。候補は CF Workers AI の `@cf/baai/bge-m3`（同一モデル・
   再埋め込み不要の可能性、日次10k neurons枠で他用途と競合）または Gemini embedding（次元変更で全件再投入要）。
   ローカルLLM運用は**不可**（ユーザー指示）。
+- **TTS速度調整**: `/api/admin/chat/speak` の `num_steps`(1〜4、body優先) / env `CHAT_TTS_NUM_STEPS`。
+  1=最速（6.3秒音声で約3秒短縮・要音質確認）、4=既定。admin まいAIタブの「品質」セレクタで A/B 可。
 
 最終更新: 2026-10-03（チャット読み上げ追加 / TTS systemd化・int8＋ONNX高速化 / AGENTS.md §9 追加）
