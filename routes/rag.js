@@ -855,6 +855,25 @@ const r18Extra = r18
   const adminAuth = require("../lib/admin");
   app.post("/api/admin/ask", adminAuth.requireAuth, (req, res) => handleAsk(req, res, true));
 
+  // TTSコンテナの先行ウォームアップ（管理画面の読込時に呼ぶ）。
+  // Modalのコールドスタート（コンテナ起動＋モデルロード 約37秒）を生成前に終わらせておく。
+  app.get("/api/admin/chat/tts-warm", adminAuth.requireAuth, async (_req, res) => {
+    try {
+      const origin = new URL(process.env.CHAT_TTS_URL || "http://127.0.0.1:8088/v1/audio/speech").origin;
+      const t0 = Date.now();
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 90000);
+      try {
+        const r = await fetch(`${origin}/health`, { signal: ctl.signal });
+        res.json({ ok: r.ok, ms: Date.now() - t0 });
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (e) {
+      res.json({ ok: false, error: e.message });
+    }
+  });
+
   // --- チャット自動読み上げ（TTSプロキシ） ---
   // 127.0.0.1:8088 の Irodori-TTS（CPU・mai声）への中継。
   // ブラウザ mixed-content回避のため必ずサーバー側プロキシ経由で渡す。

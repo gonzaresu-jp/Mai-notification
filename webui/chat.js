@@ -712,6 +712,8 @@
   loadSent();
   initR18();
   initSpeak();
+  // TTSコンテナの先行ウォームアップ（コールドスタート吸収・失敗は無視）
+  fetch("/api/admin/chat/tts-warm", { credentials: "include" }).catch(() => {});
   loadSessions().then(() => migrateLegacyLog());
   showWelcome();
   input.focus();

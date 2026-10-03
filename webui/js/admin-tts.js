@@ -12,6 +12,9 @@
   let busy = false;
   let lastUrl = null;
 
+  // ページ読込時にTTSコンテナを先に起こしておく（コールドスタート約37秒の吸収）
+  fetch("/api/admin/chat/tts-warm", { credentials: "include" }).catch(() => {});
+
   function setStatus(msg, isErr) {
     if (!statusEl) return;
     statusEl.textContent = msg || "";
@@ -29,7 +32,7 @@
     busy = true;
     btn.disabled = true;
     const t0 = performance.now();
-    setStatus("まいが生成中…（CPUなので10〜30秒ほどかかることがあります）");
+    setStatus("まいが生成中…（コンテナ起動中は40秒ほど、それ以降は10秒前後かかります）");
     try {
       const r = await fetch("/api/admin/chat/speak", {
         method: "POST",
