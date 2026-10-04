@@ -915,6 +915,7 @@ const r18Extra = r18
       if ((process.env.CHAT_TTS_PROVIDER || "modal").toLowerCase() === "aivis") {
         const baseUrl = (process.env.CHAT_TTS_AIVIS_URL || "http://127.0.0.1:10101").replace(/\/+$/, "");
         const speaker = String(process.env.CHAT_TTS_AIVIS_SPEAKER || "888753760");
+        const intonation = Number.parseFloat(process.env.CHAT_TTS_AIVIS_INTONATION || "1.0");
         const t0 = Date.now();
         const ctlQ = new AbortController();
         const timerQ = setTimeout(() => ctlQ.abort(), 15000);
@@ -926,6 +927,14 @@ const r18Extra = r18
           );
           if (!qr.ok) throw new Error(`audio_query ${qr.status}`);
           query = await qr.text();
+          // 抑揚スケール（棒読み対策）: 既定1.0=無変更。CHAT_TTS_AIVIS_INTONATION でA/B
+          if (Number.isFinite(intonation) && intonation !== 1.0) {
+            try {
+              const q = JSON.parse(query);
+              q.intonationScale = intonation;
+              query = JSON.stringify(q);
+            } catch (e) { /* JSONでなければそのまま通す */ }
+          }
         } finally {
           clearTimeout(timerQ);
         }
@@ -947,7 +956,7 @@ const r18Extra = r18
         } finally {
           clearTimeout(timerS);
         }
-        console.log(`[/api/admin/chat/speak] aivis ${Date.now() - t0}ms bytes=${wav.length} chars=${text.length}`);
+        console.log(`[/api/admin/chat/speak] aivis ${Date.now() - t0}ms bytes=${wav.length} chars=${text.length} intonation=${Number.isFinite(intonation) ? intonation : 1.0}`);
         res.set("Content-Type", "audio/wav");
         res.set("Content-Length", String(wav.length));
         res.set("Cache-Control", "no-store");
