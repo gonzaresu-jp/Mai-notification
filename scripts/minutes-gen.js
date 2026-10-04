@@ -33,6 +33,29 @@ const CONCURRENCY = 1; // API 呼び出しの並列数（レート制限対策�
 const MAX_RETRY = 3;
 const NO_TRANSCRIPT_RECHECK_DAYS = parseInt(process.env.MINUTES_NO_TRANSCRIPT_RECHECK_DAYS || "3", 10);
 const PACE_MS = parseInt(process.env.MINUTES_PACE_MS || "60000", 10); // 成功後のインターバル（Groq無料枠のOTPM 1000/分を踏まえた既定値）
+const MAX_TOKENS = parseInt(process.env.MINUTES_MAX_TOKENS || "900", 10); // 1回の出力が毎分枠(OTPM 1000)を超えない既定値
+// レート制限ヘッダ(retry-after / x-ratelimit-reset-*)を待機msへ変換する
+function parseRetryAfterMs(headers) {
+  const raw =
+    headers.get("retry-after") ||
+    headers.get("x-ratelimit-reset-tokens") ||
+    headers.get("x-ratelimit-reset-requests");
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.min(Math.round(parseFloat(s) * 1000), 120000);
+  // Groq形式 "2h8m9.599s" / "3.179s"
+  let ms = 0;
+  let matched = false;
+  const re = /(\d+(?:\.\d+)?)(h|m|s)/g;
+  let m;
+  while ((m = re.exec(s))) {
+    matched = true;
+    const v = parseFloat(m[1]);
+    ms += m[2] === "h" ? v * 3600000 : m[2] === "m" ? v * 60000 : v * 1000;
+  }
+  if (!matched) return null;
+  return Math.min(Math.round(ms), 120000);
+}
 
 // --- Cloudflare Workers AI 日次無料枠(Neurons)管理 ----------------------------------
 // Workers AI は USD $0.011 / 1,000 neurons、無料枠は 10,000 neurons/日 (UTC 00:00 リセット)。
@@ -156,12 +179,24 @@ async function summarize(chunk) {
       res = await fetch(cfg.url, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.key}` },
-        body: JSON.stringify({ model: cfg.model, messages, temperature: 0.2, max_tokens: 2048 }),
+        body: JSON.stringify({ model: cfg.model, messages, temperature: 0.2, max_tokens: MAX_TOKENS }),
         timeout: 90000,
       });
       if (!res.ok) {
+        const bodyTxt = await res.text();
         aiQuota.record(cfg.name, res, null, { kind: "minutes", model: cfg.model, error: `api ${res.status}` });
-        throw new Error(`api ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        const err = new Error(`api ${res.status}: ${bodyTxt.slice(0, 300)}`);
+        if (res.status === 429) {
+          // Cloudflare の日次 neurons 枯渇は即察知して状態へ反映（ensureNeurons が即 Groq へ切替できるように）
+          if (/daily free allocation|used up your daily/i.test(bodyTxt)) {
+            err.cfDailyExhausted = true;
+            neuronState = { day: NEURON_STATE_DAY(), used: NEURON_BUDGET };
+            saveNeuronState();
+            console.error("[neurons] CF APIが日次枯渇を返しました → 状態を満杯に更新 (以降 Groq へ切替)");
+          }
+          err.retryAfterMs = parseRetryAfterMs(res.headers);
+        }
+        throw err;
       }
       const data = await res.json();
       aiQuota.record(cfg.name, res, data, { kind: "minutes", model: cfg.model });
@@ -177,10 +212,23 @@ async function summarize(chunk) {
     } catch (e) {
       lastErr = e;
       if (!res) aiQuota.record(cfg.name, null, null, { kind: "minutes", model: cfg.model, error: e.message });
-      await sleepMs(2000 * (i + 1));
+      if (e.cfDailyExhausted) break; // リトライせず即終了 → 呼び出し側が経路を切り替える
+      const is429 = /api 429|rate.?limit/i.test(e.message);
+      if (is429) {
+        // 毎分レート制限はヘッダの指示を尊重、無ければ指数バックオフ（20/40/80秒＋ジッター）
+        const wait = e.retryAfterMs || Math.min(20000 * Math.pow(2, i), 80000);
+        await sleepMs(wait + Math.floor(Math.random() * 3000));
+      } else {
+        await sleepMs(2000 * (i + 1));
+      }
     }
   }
-  throw new Error(`summarize failed: ${lastErr?.message || lastErr}`);
+  const finalErr = new Error(`summarize failed: ${lastErr?.message || lastErr}`);
+  if (lastErr) {
+    finalErr.retryAfterMs = lastErr.retryAfterMs;
+    finalErr.cfDailyExhausted = lastErr.cfDailyExhausted;
+  }
+  throw finalErr;
 }
 
 // モデルが出した ts（"HH:MM:SS" / 秒数 / ms）をチャンク内 ms へ。不正・範囲外は寄せる。
@@ -435,14 +483,20 @@ async function main() {
             break;
           } catch (e) {
             console.error(`  chunk ${ci} attempt ${attempt + 1} fail:`, e.message);
-            // 429（レート制限）は間隔を空けてリトライ
+            // 429（レート制限）はヘッダ指示／指数バックオフで間隔を空けてリトライ
             const is429 = /429|quota|rate.?limit/i.test(e.message);
             if (/tokens per day|TPD/i.test(e.message)) {
               // Groq 日次TPD枯渇は翌UTC 00:15（≒JST 09:15）まで待機してから続行。
               // 枯渇中に進めると全チャンクをドロップするだけなので待つ。
               await waitUntilNextUtcDay();
+            } else if (e.cfDailyExhausted || /daily free allocation|used up your daily/i.test(e.message)) {
+              // CF 日次枯渇: summarize 側で状態を満杯にしてあるため ensureNeurons が即 Groq へ切り替える
+              await ensureNeurons();
+              await sleepMs(5000);
+            } else if (is429) {
+              await sleepMs(e.retryAfterMs || 30000 + Math.floor(Math.random() * 8000));
             } else {
-              await sleepMs(is429 ? 15000 : 3000);
+              await sleepMs(3000);
             }
             if (attempt === 0) continue;
             await ensureNeurons();
