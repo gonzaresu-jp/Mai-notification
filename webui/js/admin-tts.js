@@ -1,5 +1,6 @@
 // admin「まいAI」タブ 声テスト（テキスト → maiの声: /api/admin/chat/speak 経由）
-// 文単位ストリーム再生: 最初の文の合成完了と同時に再生を開始し、再生中に次の文を合成する
+// 文単位ストリーム再生: 最初の文の合成完了と同時に再生を開始し、再生中に次の文を合成する。
+// 継ぎ目は Web Audio でギャップレス＋10msクロスフェード、端部は無音トリムしてノイズ段差を消す。
 (function () {
   const btn = document.getElementById("btn-tts-gen");
   const textEl = document.getElementById("tts-test-text");
@@ -8,13 +9,16 @@
   const dlEl = document.getElementById("tts-dl");
   const stepsEl = document.getElementById("tts-steps");
   if (!btn || !textEl) return;
+  const dl = dlEl;
 
   const MAX_LEN = 1200;
   const SEG_MAX = 80; // 1リクエストの最大文字数（長すぎる文は分割）
+  const FADE = 0.010; // 継ぎ目のクロスフェード（秒）
+  const TRIM_TH = 0.01; // 端無音トリム閾値（正規化振幅）
+  const TRIM_KEEP = 0.02; // トリム時に残すマージン（秒）
   let busy = false;
   let lastUrl = null;
-  let runId = 0; // 生成の打ち切り判定用
-  let activeAc = null; // 進行中のfetch
+  let runId = 0;
 
   function setStatus(msg, isErr) {
     if (!statusEl) return;
@@ -59,8 +63,8 @@
     return out;
   }
 
+  // WAVバイナリから Int16 PCM とサンプルレートを取り出す
   function splitWav(view) {
-    // 最小WAVデコード: Int16 mono PCM 部分だけ取り出す
     const dv = new DataView(view);
     let pos = 12;
     let sr = 44100;
@@ -76,16 +80,48 @@
     return { sr, pcm: data };
   }
 
+  // 先頭・末尾の微小ノイズを削ってから連結し、継ぎ目にクロスフェードを入れる
   function concatWavs(buffers) {
     if (!buffers.length) return null;
-    const parts = buffers.map((b) => splitWav(b));
+    const parts = buffers.map((b) => {
+      const { sr, pcm } = splitWav(b);
+      // 端トリム（振幅しきい値で最初と最後のノイズ帯を落とす）
+      let a = 0;
+      let z = pcm.length - 1;
+      const th = 32767 * TRIM_TH;
+      while (a < z && Math.abs(pcm[a]) < th) a++;
+      while (z > a && Math.abs(pcm[z]) < th) z--;
+      const keep = Math.round(sr * TRIM_KEEP);
+      a = Math.max(0, a - keep);
+      z = Math.min(pcm.length - 1, z + keep);
+      return { sr, pcm: pcm.subarray(a, z + 1) };
+    });
     const sr = parts[0].sr;
+    const fadeN = Math.round(sr * FADE);
     let total = 0;
     for (const p of parts) total += p.pcm.length;
+    if (parts.length > 1) total -= fadeN * (parts.length - 1); // 重なり分
     const pcm = new Int16Array(total);
     let off = 0;
-    for (const p of parts) { pcm.set(p.pcm, off); off += p.pcm.length; }
-    const dataLen = pcm.byteLength;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (i === 0) {
+        pcm.set(p.pcm, 0);
+        off = p.pcm.length;
+        continue;
+      }
+      const prev = parts[i - 1];
+      // 直前の末尾 fadeN サンプルをこのセグメントの先頭とクロスフェード
+      const start = off - fadeN;
+      for (let k = 0; k < fadeN; k++) {
+        const t = (k + 1) / (fadeN + 1);
+        const pv = pcm[start + k] !== undefined ? pcm[start + k] : prev.pcm[prev.pcm.length - fadeN + k];
+        pcm[start + k] = Math.round(pv * (1 - t) + p.pcm[k] * t);
+      }
+      pcm.set(p.pcm.subarray(fadeN), off);
+      off += p.pcm.length - fadeN;
+    }
+    const dataLen = off * 2;
     const buf = new ArrayBuffer(44 + dataLen);
     const dv = new DataView(buf);
     const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
@@ -93,7 +129,7 @@
     w(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
     dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
     w(36, "data"); dv.setUint32(40, dataLen, true);
-    new Int16Array(buf, 44, pcm.length).set(pcm);
+    new Int16Array(buf, 44, off).set(pcm.subarray(0, off));
     return new Blob([buf], { type: "audio/wav" });
   }
 
@@ -111,32 +147,65 @@
     const myRun = ++runId;
     const t0 = performance.now();
     let firstAudioAt = null;
-    let playIdx = 0;
     const buffers = [];
-    const urls = [];
-    let player = null;
 
-    const playQueue = () => {
+    // Web Audio: ギャップレス再生用スケジューラ
+    const actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume().catch(() => {});
+    let boundary = null; // 次のセグメント開始境界（actx時刻）
+    let prevGain = null;
+
+    const schedule = (abuf) => {
       if (myRun !== runId) return;
-      if (playIdx >= urls.length) return;
-      const url = urls[playIdx];
-      player = new Audio(url);
-      const next = () => {
-        if (myRun !== runId || player === null) return;
-        player = null;
-        playIdx++;
-        playQueue();
-      };
-      player.onended = next;
-      player.onerror = next;
-      player.play().catch(next);
+      const ch = abuf.getChannelData(0);
+      // 端トリム（正規化振幅しきい値）
+      let a = 0;
+      let z = ch.length - 1;
+      while (a < z && Math.abs(ch[a]) < TRIM_TH) a++;
+      while (z > a && Math.abs(ch[z]) < TRIM_TH) z--;
+      const keep = Math.round(abuf.sampleRate * TRIM_KEEP);
+      a = Math.max(0, a - keep);
+      z = Math.min(ch.length - 1, z + keep);
+      const offset = a / abuf.sampleRate;
+      const dur = (z - a + 1) / abuf.sampleRate;
+      if (dur <= 0.01) return;
+
+      const src = actx.createBufferSource();
+      src.buffer = abuf;
+      const gain = actx.createGain();
+      src.connect(gain).connect(actx.destination);
+
+      let startAt;
+      if (boundary === null) {
+        startAt = actx.currentTime + 0.08;
+        gain.gain.setValueAtTime(1, startAt);
+        src.start(startAt, offset, dur);
+      } else if (boundary - actx.currentTime > FADE * 2) {
+        // 前セグメントの末尾と10ms重ねてクロスフェード
+        startAt = boundary - FADE;
+        if (prevGain) {
+          try {
+            prevGain.gain.setValueAtTime(1, boundary - FADE);
+            prevGain.gain.linearRampToValueAtTime(0.0001, boundary);
+          } catch (e) { /* 時刻済み等は無視 */ }
+        }
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.linearRampToValueAtTime(1, startAt + FADE);
+        src.start(startAt, offset, dur);
+      } else {
+        // 追いついてしまった場合は直後にハード接続（フェードなし）
+        startAt = Math.max(actx.currentTime + 0.01, boundary);
+        gain.gain.setValueAtTime(1, startAt);
+        src.start(startAt, offset, dur);
+      }
+      boundary = startAt + dur;
+      prevGain = gain;
     };
 
     setStatus(segs.length > 1 ? `1/${segs.length} 文を生成中…（最初の音声まで数秒）` : "生成中…（数秒かかります）");
     try {
       for (let i = 0; i < segs.length; i++) {
         if (myRun !== runId) return;
-        activeAc = new AbortController();
         const r = await fetch("/api/admin/chat/speak", {
           method: "POST",
           credentials: "include",
@@ -145,7 +214,6 @@
             text: segs[i],
             num_steps: stepsEl ? Number(stepsEl.value) : undefined,
           }),
-          signal: activeAc.signal,
         });
         if (r.status === 401) { location.href = "/admin/login.html"; return; }
         if (!r.ok) {
@@ -156,17 +224,16 @@
         const buf = await r.arrayBuffer();
         if (myRun !== runId) return;
         buffers.push(buf);
-        const url = URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
-        urls.push(url);
+        const abuf = await actx.decodeAudioData(buf.slice(0));
+        if (myRun !== runId) return;
+        schedule(abuf);
         if (firstAudioAt === null) {
           firstAudioAt = performance.now() - t0;
-          playQueue(); // 最初の文だけで再生開始（残りは生成しながら追随）
           setStatus(`再生開始 ${ (firstAudioAt / 1000).toFixed(1) } 秒目！（${i + 1}/${segs.length} 文）`);
-        } else if (playIdx >= urls.length - 1 && i < segs.length - 1) {
+        } else {
           setStatus(`${i + 1}/${segs.length} 文を生成中…`);
         }
       }
-      // 全文完了を待ってから終了表示（再生は並行中）
       const total = ((performance.now() - t0) / 1000).toFixed(1);
       let sizeKB = 0;
       try {
@@ -175,20 +242,11 @@
           sizeKB = (combined.size / 1024).toFixed(0);
           if (lastUrl) URL.revokeObjectURL(lastUrl);
           lastUrl = URL.createObjectURL(combined);
-          if (dlEl) { dlEl.href = lastUrl; dlEl.style.display = ""; }
-          // 再生後に鳴り終わった頃、要素の再生元を結合版に差し替え（巻き戻し再生用）
-          if (audioEl) {
-            const swap = () => {
-              if (myRun !== runId) return;
-              if (player !== null) { setTimeout(swap, 500); return; }
-              audioEl.src = lastUrl;
-              audioEl.style.display = "";
-            };
-            setTimeout(swap, 300);
-          }
+          if (dl) { dl.href = lastUrl; dl.style.display = ""; }
+          if (audioEl) { audioEl.src = lastUrl; audioEl.style.display = ""; }
         }
       } catch (e) { /* 結合に失敗しても再生は済んでいる */ }
-      setStatus(`完成！ 再生開始 ${ (firstAudioAt !== null ? (firstAudioAt / 1000).toFixed(1) : "-") } 秒／全 ${ total } 秒（${ sizeKB } KB・${ segs.length } 文）`);
+      setStatus(`完成！ 再生開始 ${ firstAudioAt !== null ? (firstAudioAt / 1000).toFixed(1) : "-" } 秒／全 ${ total } 秒（${ sizeKB } KB・${ segs.length } 文）`);
     } catch (e) {
       if (e && e.name === "AbortError") return;
       setStatus("通信エラー: " + e.message, true);
@@ -196,7 +254,6 @@
       if (myRun === runId) {
         busy = false;
         btn.disabled = false;
-        activeAc = null;
       }
     }
   });
