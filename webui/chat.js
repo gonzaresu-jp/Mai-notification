@@ -392,8 +392,8 @@
     );
     if (m >= 0) {
       const head = s.slice(0, m + 1);
-      // 初回は短文だとTTFB固定費が倒掛するので12文字以上を待つ。2回目以降は文境界で即送る。
-      if (ttsStarted || head.length >= 12) {
+      // 初回は短文だとTTFB固定費が倒掛するので8文字以上を待つ。2回目以降は文境界で即送る。
+      if (ttsStarted || head.length >= 8) {
         ttsPending = s.slice(m + 1);
         const c = cleanForSpeech(head);
         if (c) { ttsStarted = true; return c; }

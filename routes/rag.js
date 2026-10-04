@@ -874,6 +874,33 @@ const r18Extra = r18
     }
   });
 
+  // AivisSpeech採用時は起動時に1回合成してモデルをロードしておく。
+  // PC再起動後の初回リクエスト約3.7秒のペナルティを無効化する（エンジン起動待ちは10秒×12回までリトライ）。
+  if ((process.env.CHAT_TTS_PROVIDER || "").toLowerCase() === "aivis") {
+    const warmAivis = async (attempt) => {
+      const baseUrl = (process.env.CHAT_TTS_AIVIS_URL || "http://127.0.0.1:10101").replace(/\/+$/, "");
+      const speaker = String(process.env.CHAT_TTS_AIVIS_SPEAKER || "888753760");
+      try {
+        const t0 = Date.now();
+        const qr = await fetch(`${baseUrl}/audio_query?text=${encodeURIComponent("こんにちは")}&speaker=${speaker}`, { method: "POST" });
+        if (!qr.ok) throw new Error(`audio_query ${qr.status}`);
+        const query = await qr.text();
+        const sr = await fetch(`${baseUrl}/synthesis?speaker=${speaker}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: query,
+        });
+        if (!sr.ok) throw new Error(`synthesis ${sr.status}`);
+        await sr.buffer();
+        console.log(`[speak] aivis warmup ok ${Date.now() - t0}ms (attempt ${attempt})`);
+      } catch (e) {
+        if (attempt < 12) setTimeout(() => warmAivis(attempt + 1), 10000);
+        else console.log(`[speak] aivis warmup gave up: ${e.message}`);
+      }
+    };
+    setTimeout(() => warmAivis(1), 3000);
+  }
+
   // --- チャット自動読み上げ（TTSプロキシ） ---
   // 127.0.0.1:8088 の Irodori-TTS（CPU・mai声）への中継。
   // ブラウザ mixed-content回避のため必ずサーバー側プロキシ経由で渡す。
