@@ -17,7 +17,7 @@ include __DIR__ . '/head.php';
         <h1 class="wk-title">恋乃夜まい <span>wiki</span></h1>
 
         <p class="wk-lead">
-            <strong>恋乃夜まい</strong>（こいのやまい）は、<strong>ぶいカノ（Vkano）</strong>所属のバーチャルYouTuber。
+            <strong>恋乃夜まい</strong>（こいのやまい）は、<strong>ぶいカノ（Vkano）</strong>の<strong>0期生 兼 コンテンツプロデューサー</strong>であるバーチャルYouTuber。
             2021年3月21日に初配信を行い、ASMRを中心に雑談・歌枠・ゲームなど幅広い配信を行う。
             「恋の魔女として生まれた異世界の元お姫様」という設定を持ち、リスナー（ファン）は「だーりん」と呼ばれる。
         </p>
@@ -34,6 +34,7 @@ include __DIR__ . '/head.php';
                     <li><a href="#profile">プロフィール</a></li>
                     <li><a href="#debut">自己紹介動画</a></li>
                     <li><a href="#overview">概要</a></li>
+                    <li><a href="#history">経歴</a></li>
                     <li><a href="#person">人物</a></li>
                     <li><a href="#links">外部リンク</a></li>
                     <li><a href="#sources">出典</a></li>
@@ -51,7 +52,7 @@ include __DIR__ . '/head.php';
                             <tr><th>身長</th><td>162cm</td></tr>
                             <tr><th>年齢</th><td>240,000歳（建前では200,000歳）<span class="wk-ref">※</span></td></tr>
                             <tr><th>初配信</th><td>2021年3月21日</td></tr>
-                            <tr><th>所属</th><td>ぶいカノ（Vkano）Gen 0<br><small>旧・プロプロプロダクション2期生 → めるれっとを経て2025年7月に現所属へ</small></td></tr>
+                            <tr><th>所属</th><td>ぶいカノ（Vkano）0期生 兼 コンテンツプロデューサー<br><small>2025年7月17日設立の事務所。旧・プロプロプロダクション2期生 → めるれっとを経て現所属</small></td></tr>
                             <tr><th>ファンネーム</th><td>恋びと同盟</td></tr>
                             <tr><th>推しマーク</th><td>💗🥄</td></tr>
                             <tr><th>リスナーの呼称</th><td>だーりん</td></tr>
@@ -97,7 +98,22 @@ include __DIR__ . '/head.php';
 
                     <p>経歴をたどると、2021年3月19日に自己紹介動画を公開し、3月21日に初配信を行った。登録者は初配信後1か月足らずで10万人に達し、デビュー1か月後の5月には中国語の勉強枠を経てbilibiliへ進出、中国人ファンの獲得にも成功している。2022年にはVTuber Fes Japan 2022のアンバサダーに就任し、同年5月に始動した「恋乃夜まい3D化支援プロジェクト！」は目標300万円に対し約800万円を集め、2023年6月に3Dモデルが披露された。新衣装の公開時はトレンド入りするなど、話題性も高い。</p>
 
-                    <p>所属は、デビュー時のプロプロプロダクション2期生から、2023年3月のグループ再編でめるれっとへ、2025年7月の事務所リブランドを経て現在はぶいカノ（Vkano）のGen 0として活動している。2026年10月時点で登録者は約29.8万人で、収録されたアーカイブは約730本・総配信時間は2,000時間以上に及ぶ。</p>
+                    <p>所属は、デビュー時のプロプロプロダクション2期生から、2023年3月のグループ再編でめるれっとへ。2025年7月17日、恋乃夜まいを<strong>0期生 兼 コンテンツプロデューサー</strong>としてVTuber事務所「<strong>ぶいカノ（Vkano）</strong>」が設立され、移籍した。現在は同社の0期生として配信活動を続けると同時に、コンテンツプロデューサーとして後輩タレントの育成・プロデュースも担っている。2026年10月時点で登録者は約29.8万人で、収録されたアーカイブは約730本・総配信時間は2,000時間以上に及ぶ。</p>
+                </section>
+
+                <section class="wk-section" id="history">
+                    <h2>経歴</h2>
+                    <ul class="wk-history">
+                        <li><b>2021年3月</b> — 19日に自己紹介動画を公開し、21日に初配信。28日に初のASMR配信を行う。</li>
+                        <li><b>2021年4月</b> — 21日に登録者10万人を達成（デビューから約1か月）。</li>
+                        <li><b>2021年5月</b> — 中国語の勉強枠を経て13日にbilibiliへ進出、中国人ファンの獲得に成功。</li>
+                        <li><b>2021年9月</b> — ASMR機材を3DioからKU100へ切り替え、高音質配信の基盤を整える。</li>
+                        <li><b>2022年</b> — VTuber Fes Japan 2022のアンバサダーに就任。5月22日に「恋乃夜まい3D化支援プロジェクト！」が始動し、目標300万円に対し約800万円を調達。8月20日には新衣装をお披露目し、トレンド入りを果たした。</li>
+                        <li><b>2023年3月</b> — プロプロプロダクションのグループ再編によりめるれっとへ移籍。6月18日に3Dモデルをお披露目。12月からは縦長配信が実装され、雑談・ASMR配信に組み込まれる。</li>
+                        <li><b>2024年3月</b> — めるれっととしてタイトーオンラインクレーン（タイクレ）とのコラボプライズ展開。</li>
+                        <li><b>2025年7月17日</b> — 恋乃夜まいを0期生兼コンテンツプロデューサーとしてVTuber事務所「ぶいカノ（Vkano）」が設立され、移籍。</li>
+                        <li><b>2026年10月</b> — 登録者約29.8万人、収録アーカイブ約730本に到達。</li>
+                    </ul>
                 </section>
 
                 <section class="wk-section" id="person">
@@ -114,11 +130,11 @@ include __DIR__ . '/head.php';
                     <h2>外部リンク</h2>
                     <div class="wk-card">
                         <ul>
-                            <li><a href="https://vkano.jp/talent/koinoyamai" target="_blank" rel="noopener">ぶいカノ 公式プロフィール</a></li>
+                            <li><a href="https://vkano.jp/" target="_blank" rel="noopener">ぶいカノ 公式サイト</a> ／ <a href="https://vkano.jp/talent/koinoyamai" target="_blank" rel="noopener">公式プロフィール</a></li>
                             <li><a href="https://www.youtube.com/@koinoyamaich" target="_blank" rel="noopener">YouTube @koinoyamaich</a></li>
                             <li><a href="https://twitter.com/koinoya_mai" target="_blank" rel="noopener">X（旧Twitter）@koinoya_mai</a></li>
                             <li><a href="https://www.twitch.tv/koinoya_mai" target="_blank" rel="noopener">Twitch</a> ／ <a href="https://twitcasting.tv/c:koinoya_mai" target="_blank" rel="noopener">TwitCasting</a></li>
-                            <li><a href="https://www.fanbox.cc/@koinoya-mai" target="_blank" rel="noopener">Pixiv Fanbox</a></li>
+                            <li><a href="https://koinoya-mai.fanbox.cc/" target="_blank" rel="noopener">Pixiv Fanbox</a></li>
                             <li><a href="https://space.bilibili.com/1900434152" target="_blank" rel="noopener">bilibili</a></li>
                             <li><a href="/archive/" target="_blank" rel="noopener">配信アーカイブ検索</a>（本サイト・字幕・コメントの全文検索）</li>
                         </ul>
@@ -129,8 +145,9 @@ include __DIR__ . '/head.php';
                     <h2>出典</h2>
                     <div class="wk-card">
                         <ul>
-                            <li><a href="https://dic.pixiv.net/a/%E6%81%8B%E4%B9%83%E5%A4%9C%E3%81%BE%E3%81%84" target="_blank" rel="noopener">ピクシブ百科事典「恋乃夜まい」</a>（CC BY-SA 3.0）— プロフィール属性・経歴の事実関係を参考</li>
-                            <li><a href="https://vkano.jp/talent/koinoyamai" target="_blank" rel="noopener">ぶいカノ公式プロフィール</a> — 誕生日・身長・設定・決め台詞</li>
+                            <li><a href="https://dic.pixiv.net/a/%E6%81%8B%E4%B9%83%E5%A4%9C%E3%81%BE%E3%81%84" target="_blank" rel="noopener">ピクシブ百科事典「恋乃夜まい」</a>（CC BY-SA 3.0）— プロフィール属性・経歴（VTuber Fes・3D化支援・新衣装・bilibili進出など）の事実関係を参考</li>
+                            <li><a href="https://vkano.jp/" target="_blank" rel="noopener">ぶいカノ公式サイト</a> — 所属（0期生兼コンテンツプロデューサー）・設立日・プロフィール</li>
+                            <li><a href="https://bacharu.io/vtuber/koinoya-mai" target="_blank" rel="noopener">Bācharu</a> ／ <a href="https://panora.tokyo/archives/82842" target="_blank" rel="noopener">PANORA</a> — 所属沿革（めるれっと再編）・タイクレコラボの報道</li>
                             <li>本サイトの配信アーカイブ（動画カタログ・登録者数の日次記録・字幕統計）— 初配信日・収録本数・コラボ回数・登録者数</li>
                         </ul>
                         <p class="wk-src-note">

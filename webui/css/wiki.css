@@ -276,6 +276,41 @@ html {
     color: var(--wk-muted);
 }
 
+/* ---------- 経歴 ---------- */
+.wk-history {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-left: 3px solid var(--wk-soft);
+    margin-left: 6px;
+    padding-left: 18px;
+}
+
+.wk-history li {
+    position: relative;
+    margin: 9px 0;
+    font-size: 0.96rem;
+}
+
+.wk-history li::before {
+    content: "";
+    position: absolute;
+    left: -24.5px;
+    top: 0.62em;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--wk-primary);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1.5px var(--wk-soft);
+}
+
+.wk-history b {
+    color: var(--wk-secondary);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 /* ---------- レスポンシブ ---------- */
 @media (max-width: 860px) {
     .wk-layout {
