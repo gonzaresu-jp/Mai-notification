@@ -1,6 +1,6 @@
 <?php
 $siteName = "まいちゃん通知 | 恋乃夜まい 配信・活動通知サービス";
-$defaultDesc = "Koinoya Mai（恋乃夜まい）の配信・活動をリアルタイムで通知する非公式ファンサービス。YouTube・TwitCasting・Twitch・Twitter・Pixiv Fanboxなど複数プラットフォームに対応。";
+$defaultDesc = "Koinoya Mai（恋乃夜まい）の配信・活動をリアルタイムで通知する非公式ファンサービス。YouTube・TwitCasting・Twitch・Twitter・Pixiv Fanboxなど複数プラットフォームに対応。配信アーカイブの全文検索・まいAIチャット・非公式wikiなど、推し活を深める機能も揃えています。";
 $defaultImage = "https://mai.honna-yuzuki.com/social.jpg";
 $domain = "https://mai.honna-yuzuki.com";
 $currentUrl = $domain . $_SERVER['REQUEST_URI'];
@@ -45,7 +45,7 @@ $image = isset($pageImage) ? $pageImage : $defaultImage;
 <title><?= htmlspecialchars($title) ?></title>
 <meta name="description" content="<?= htmlspecialchars($description) ?>" />
 <meta name="keywords"
-  content="恋乃夜まい,koinoyamai,まいちゃん,まいちゃん通知,配信通知,ライブ通知,YouTube通知,TwitCasting,Twitch,Vtuber,バーチャルYouTuber,ファンサイト" />
+  content="恋乃夜まい,koinoyamai,まいちゃん,まいちゃん通知,配信通知,ライブ通知,YouTube通知,TwitCasting,Twitch,Vtuber,バーチャルYouTuber,ファンサイト,配信アーカイブ,文字起こし検索,まいAI,wiki" />
 
 <!-- canonical：重複URLペナルティ防止 -->
 <link rel="canonical" href="<?= htmlspecialchars($currentUrl) ?>" />
