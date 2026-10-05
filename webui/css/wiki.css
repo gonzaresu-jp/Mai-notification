@@ -175,6 +175,54 @@ html {
     color: var(--wk-primary);
 }
 
+/* ---------- 本文中のリンク（青）・脚注 ---------- */
+.wk-lead a,
+.wk-content a {
+    color: #3366cc;
+}
+
+.wk-lead a:hover,
+.wk-content a:hover {
+    color: #1a4fa0;
+}
+
+.wk-cite {
+    color: #3366cc;
+    font-weight: 700;
+    font-size: 0.72em;
+    vertical-align: super;
+    line-height: 0;
+    text-decoration: none;
+    margin-left: 1px;
+}
+
+.wk-cite:hover {
+    text-decoration: underline;
+}
+
+.wk-toc-list a.is-active,
+.wk-note .wk-cite {
+    color: inherit;
+}
+
+/* ---------- 出典リスト（脚注番号） ---------- */
+.wk-sources {
+    margin: 0;
+    padding-left: 1.7em;
+    font-size: 0.9rem;
+    line-height: 1.75;
+}
+
+.wk-sources li {
+    margin: 8px 0;
+    scroll-margin-top: 76px;
+}
+
+.wk-sources li::marker {
+    color: var(--wk-muted);
+    font-weight: 700;
+}
+
 /* ---------- プロフィール表（インフォボックス） ---------- */
 .wk-infobox {
     width: 100%;
