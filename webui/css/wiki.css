@@ -1,4 +1,4 @@
-/* まいちゃんwiki（仮公開）— 目次＋スクロール型 */
+/* まいちゃんwiki（仮公開）— 目次＋スクロール型・百科事典形式 */
 :root {
     --wk-primary: #B11E7C;
     --wk-secondary: #7F2534;
@@ -15,11 +15,11 @@ html {
 }
 
 .wk-main {
-    max-width: 1060px;
+    max-width: 1000px;
     margin: 0 auto;
     padding: 24px 16px 64px;
     color: var(--wk-text);
-    line-height: 1.8;
+    line-height: 1.9;
 }
 
 .wk-title {
@@ -33,12 +33,26 @@ html {
     font-weight: 700;
 }
 
+.wk-lead {
+    font-size: 1.02rem;
+    margin: 10px 0;
+    background: #fff;
+    border: 1px solid var(--wk-border);
+    border-radius: 14px;
+    padding: 14px 18px;
+    box-shadow: 0 2px 10px rgba(177, 30, 124, 0.05);
+}
+
+.wk-lead strong {
+    color: var(--wk-secondary);
+}
+
 .wk-note {
     background: var(--wk-soft-2);
     border: 1px solid var(--wk-border);
     border-radius: 12px;
     padding: 10px 14px;
-    font-size: 0.9rem;
+    font-size: 0.86rem;
     color: var(--wk-muted);
 }
 
@@ -49,6 +63,15 @@ html {
     gap: 32px;
     margin-top: 20px;
     align-items: start;
+}
+
+.wk-content {
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid var(--wk-border);
+    border-radius: 16px;
+    padding: 26px 30px;
+    box-shadow: 0 2px 10px rgba(177, 30, 124, 0.05);
+    min-width: 0;
 }
 
 /* ---------- 目次 ---------- */
@@ -109,9 +132,9 @@ html {
     font-weight: 700;
 }
 
-/* ---------- セクション ---------- */
+/* ---------- セクション・本文 ---------- */
 .wk-section {
-    margin-bottom: 36px;
+    margin-bottom: 34px;
     scroll-margin-top: 76px;
 }
 
@@ -124,18 +147,9 @@ html {
     line-height: 1.4;
 }
 
-.wk-loading {
-    color: var(--wk-muted);
-    padding: 32px 0;
-    text-align: center;
-}
-
-.wk-error {
-    color: var(--wk-secondary);
-    background: #fff4f4;
-    border: 1px solid #f0c8c8;
-    border-radius: 12px;
-    padding: 12px 16px;
+.wk-article p {
+    margin: 0 0 1.1em;
+    text-align: justify;
 }
 
 .wk-card {
@@ -147,181 +161,79 @@ html {
     box-shadow: 0 2px 10px rgba(177, 30, 124, 0.05);
 }
 
-.wk-card h3 {
-    font-size: 1rem;
-    color: var(--wk-primary);
-    margin: 0 0 8px;
-    border-bottom: 2px dashed var(--wk-soft);
-    padding-bottom: 6px;
-}
-
-.wk-card p {
-    margin: 0;
-    font-size: 0.95rem;
-}
-
-.wk-card ul,
-.wk-card ol {
+.wk-card ul {
     margin: 0;
     padding-left: 1.4em;
-    font-size: 0.93rem;
+    font-size: 0.94rem;
 }
 
 .wk-card li {
-    margin: 4px 0;
+    margin: 5px 0;
 }
 
 .wk-card a {
     color: var(--wk-primary);
 }
 
-/* ---------- 統計チップ ---------- */
-.wk-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 14px;
-}
-
-.wk-stat {
+/* ---------- プロフィール表（インフォボックス） ---------- */
+.wk-infobox {
+    width: 100%;
+    border-collapse: collapse;
     background: #fff;
     border: 1px solid var(--wk-border);
-    border-radius: 12px;
-    padding: 8px 14px;
-    text-align: center;
-    min-width: 116px;
-}
-
-.wk-stat b {
-    display: block;
-    font-size: 1.25rem;
-    color: var(--wk-primary);
-    line-height: 1.3;
-}
-
-.wk-stat span {
-    font-size: 0.76rem;
-    color: var(--wk-muted);
-}
-
-/* ---------- 活動内容: カテゴリバー ---------- */
-.wk-cat {
-    display: grid;
-    grid-template-columns: 7.5em 1fr 5.5em;
-    align-items: center;
-    gap: 10px;
-    margin: 7px 0;
-    font-size: 0.9rem;
-}
-
-.wk-cat-name {
-    font-weight: 700;
-    color: var(--wk-secondary);
-}
-
-.wk-cat-bar {
-    background: var(--wk-soft-2);
-    border-radius: 999px;
-    height: 14px;
+    border-radius: 14px;
     overflow: hidden;
+    box-shadow: 0 2px 10px rgba(177, 30, 124, 0.05);
+    font-size: 0.93rem;
+    margin-bottom: 8px;
 }
 
-.wk-cat-bar i {
-    display: block;
-    height: 100%;
-    background: linear-gradient(90deg, #d63b97, var(--wk-primary));
-    border-radius: 999px;
-}
-
-.wk-cat-n {
-    color: var(--wk-muted);
-    font-size: 0.82rem;
-    text-align: right;
-}
-
-.wk-platforms {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 10px;
-}
-
-.wk-chip {
-    background: #fff;
-    border: 1.5px solid var(--wk-border);
-    border-radius: 999px;
-    padding: 5px 13px;
-    font-size: 0.85rem;
-    color: var(--wk-secondary);
-}
-
-.wk-chip b {
-    color: var(--wk-primary);
-    margin-left: 4px;
-}
-
-/* ---------- ゲーム・コラボ ---------- */
-.wk-rank {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 8px;
-}
-
-.wk-rank li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 8px;
-    padding: 8px 12px;
+.wk-infobox th {
     background: var(--wk-soft-2);
-    border-radius: 10px;
-    font-size: 0.92rem;
-    margin: 0;
-}
-
-.wk-rank .wk-rank-n {
-    color: var(--wk-muted);
-    font-size: 0.8rem;
-    min-width: 1.6em;
-}
-
-.wk-rank .wk-rank-name {
-    font-weight: 700;
     color: var(--wk-secondary);
-}
-
-.wk-rank .wk-rank-cnt {
-    color: var(--wk-primary);
     font-weight: 700;
-    font-size: 0.85rem;
+    text-align: left;
+    padding: 9px 14px;
+    width: 11em;
+    border-bottom: 1px solid var(--wk-border);
+    vertical-align: top;
+    white-space: nowrap;
 }
 
-.wk-rank .wk-rank-sample {
+.wk-infobox td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--wk-border);
+    line-height: 1.7;
+}
+
+.wk-infobox tr:last-child th,
+.wk-infobox tr:last-child td {
+    border-bottom: none;
+}
+
+.wk-infobox small {
     color: var(--wk-muted);
     font-size: 0.8rem;
-    width: 100%;
-    padding-left: calc(1.6em + 8px);
 }
 
-.wk-rank-sample a {
-    color: var(--wk-muted);
-    text-decoration: none;
-}
-
-.wk-rank-sample a:hover {
+.wk-ref {
     color: var(--wk-primary);
-    text-decoration: underline;
+    font-weight: 700;
 }
 
-/* ---------- 代表作 ---------- */
-.wk-works {
+.wk-src-note {
+    font-size: 0.8rem;
+    color: var(--wk-muted);
+    margin: 6px 0 0;
+}
+
+/* ---------- 動画カード ---------- */
+.wk-video-list {
     display: grid;
-    gap: 12px;
+    gap: 10px;
 }
 
-.wk-work {
+.wk-video-card {
     display: flex;
     gap: 12px;
     background: #fff;
@@ -329,168 +241,37 @@ html {
     border-radius: 14px;
     padding: 10px 12px;
     align-items: center;
+    text-decoration: none;
+    color: var(--wk-text);
+    transition: border-color 0.12s;
 }
 
-.wk-work img {
-    width: 128px;
-    height: 72px;
+.wk-video-card:hover {
+    border-color: var(--wk-primary);
+}
+
+.wk-video-card img {
+    width: 160px;
+    height: 90px;
     object-fit: cover;
     border-radius: 8px;
     background: var(--wk-soft);
     flex: none;
 }
 
-.wk-work-body {
+.wk-video-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     min-width: 0;
 }
 
-.wk-work-rank {
-    color: var(--wk-primary);
-    font-weight: 700;
-    font-size: 0.82rem;
-}
-
-.wk-work-title {
-    display: block;
-    color: var(--wk-text);
-    text-decoration: none;
-    font-size: 0.92rem;
-    font-weight: 700;
+.wk-video-body b {
+    font-size: 0.95rem;
     line-height: 1.5;
 }
 
-.wk-work-title:hover {
-    color: var(--wk-primary);
-}
-
-.wk-work-meta {
-    color: var(--wk-muted);
-    font-size: 0.8rem;
-}
-
-/* ---------- 年表 ---------- */
-.wk-year {
-    background: #fff;
-    border: 1px solid var(--wk-border);
-    border-radius: 16px;
-    padding: 14px 18px;
-    margin-bottom: 12px;
-}
-
-.wk-year-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 10px;
-}
-
-.wk-year-head h3 {
-    font-size: 1.2rem;
-    color: var(--wk-secondary);
-    margin: 0;
-    border: none;
-    padding: 0;
-}
-
-.wk-year-meta {
-    font-size: 0.85rem;
-    color: var(--wk-muted);
-}
-
-.wk-badge {
-    display: inline-block;
-    background: var(--wk-soft);
-    color: var(--wk-secondary);
-    font-size: 0.72rem;
-    font-weight: 700;
-    border-radius: 999px;
-    padding: 2px 9px;
-    vertical-align: middle;
-}
-
-.wk-tops {
-    list-style: none;
-    margin: 10px 0 0;
-    padding: 0;
-    display: grid;
-    gap: 8px;
-}
-
-.wk-tops li {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    font-size: 0.9rem;
-    margin: 0;
-}
-
-.wk-tops img {
-    width: 72px;
-    height: 40px;
-    object-fit: cover;
-    border-radius: 6px;
-    background: var(--wk-soft);
-    flex: none;
-}
-
-.wk-tops a {
-    color: var(--wk-text);
-    text-decoration: none;
-}
-
-.wk-tops a:hover {
-    color: var(--wk-primary);
-    text-decoration: underline;
-}
-
-.wk-views {
-    color: var(--wk-muted);
-    font-size: 0.78rem;
-    flex: none;
-}
-
-/* ---------- 最近の配信 ---------- */
-.wk-video-meta {
-    font-size: 0.82rem;
-    color: var(--wk-muted);
-    margin-bottom: 6px;
-}
-
-.wk-facts {
-    font-size: 0.88rem;
-    padding-left: 1.2em;
-}
-
-.wk-facts li::marker {
-    content: "・";
-}
-
-/* ---------- 語録 ---------- */
-.wk-quotes {
-    list-style: none;
-    margin: 0;
-    padding: 0 !important;
-}
-
-.wk-quotes li {
-    position: relative;
-    padding: 8px 12px 8px 30px;
-    margin: 6px 0;
-    background: var(--wk-soft-2);
-    border-radius: 10px;
-}
-
-.wk-quotes li::before {
-    content: "“";
-    position: absolute;
-    left: 10px;
-    top: 4px;
-    font-size: 1.4rem;
-    color: var(--wk-primary);
-}
-
-.wk-src-note {
-    margin-top: 10px;
+.wk-video-body span {
     font-size: 0.8rem;
     color: var(--wk-muted);
 }
@@ -507,9 +288,8 @@ html {
         min-width: 0;
     }
 
-    .wk-stat {
-        min-width: calc(50% - 5px);
-        flex: 1 1 calc(50% - 5px);
+    .wk-content {
+        padding: 18px 16px;
     }
 
     .wk-toc {
@@ -529,16 +309,22 @@ html {
         font-size: 0.82rem;
     }
 
-    .wk-work img {
-        width: 96px;
-        height: 54px;
+    .wk-infobox th {
+        width: auto;
+        white-space: normal;
+        padding: 8px 10px;
     }
 
-    .wk-tops li {
+    .wk-infobox td {
+        padding: 8px 10px;
+    }
+
+    .wk-video-card {
         flex-wrap: wrap;
     }
 
-    .wk-cat {
-        grid-template-columns: 6.5em 1fr 5em;
+    .wk-video-card img {
+        width: 120px;
+        height: 68px;
     }
 }

@@ -241,7 +241,6 @@ require("./routes/notify").register(app, db);
 require("./routes/twitter-media").register(app, db);
 require("./routes/rag").register(app, db);
 require("./routes/archive").register(app);
-require("./routes/wiki").register(app, db);
 // --- テスト環境フラグ（staging: NODE_ENV=development で定期タスク等を停止） ---
 const isTestInstance = process.env.NODE_ENV === "development";
 
