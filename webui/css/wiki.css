@@ -298,6 +298,12 @@ html {
     border-color: var(--wk-primary);
 }
 
+.wk-video-thumb {
+    display: block;
+    flex: none;
+    line-height: 0;
+}
+
 .wk-video-card img {
     width: 160px;
     height: 90px;
@@ -312,6 +318,16 @@ html {
     flex-direction: column;
     gap: 4px;
     min-width: 0;
+}
+
+.wk-video-card .wk-video-title {
+    text-decoration: none;
+    color: var(--wk-text);
+}
+
+.wk-video-card .wk-video-title:hover {
+    color: var(--wk-primary);
+    text-decoration: underline;
 }
 
 .wk-video-body b {

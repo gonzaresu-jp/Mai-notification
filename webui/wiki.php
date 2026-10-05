@@ -71,20 +71,24 @@ include __DIR__ . '/head.php';
                 <section class="wk-section" id="debut">
                     <h2>自己紹介動画</h2>
                     <div class="wk-video-list">
-                        <a class="wk-video-card" href="https://www.youtube.com/watch?v=IJ4rZr5XCto" target="_blank" rel="noopener">
-                            <img src="https://i.ytimg.com/vi/IJ4rZr5XCto/mqdefault.jpg" alt="" width="160" height="90" loading="lazy" decoding="async" />
+                        <div class="wk-video-card">
+                            <a class="wk-video-thumb" href="https://www.youtube.com/watch?v=IJ4rZr5XCto" target="_blank" rel="noopener" aria-label="自己紹介動画をYouTubeで開く">
+                                <img src="https://i.ytimg.com/vi/IJ4rZr5XCto/mqdefault.jpg" alt="" width="160" height="90" loading="lazy" decoding="async" />
+                            </a>
                             <div class="wk-video-body">
-                                <b>【自己紹介】はじめまして！恋乃夜まいです♡【新人Vtuber】</b>
+                                <a class="wk-video-title" href="https://www.youtube.com/watch?v=IJ4rZr5XCto" target="_blank" rel="noopener"><b>【自己紹介】はじめまして！恋乃夜まいです♡【新人Vtuber】</b></a>
                                 <span>2021年3月19日公開・デビュー前の自己紹介動画<a class="wk-cite" href="#src-6">[6]</a></span>
                             </div>
-                        </a>
-                        <a class="wk-video-card" href="https://www.youtube.com/watch?v=9_NKkfrQODc" target="_blank" rel="noopener">
-                            <img src="https://i.ytimg.com/vi/9_NKkfrQODc/mqdefault.jpg" alt="" width="160" height="90" loading="lazy" decoding="async" />
+                        </div>
+                        <div class="wk-video-card">
+                            <a class="wk-video-thumb" href="https://www.youtube.com/watch?v=9_NKkfrQODc" target="_blank" rel="noopener" aria-label="初配信アーカイブをYouTubeで開く">
+                                <img src="https://i.ytimg.com/vi/9_NKkfrQODc/mqdefault.jpg" alt="" width="160" height="90" loading="lazy" decoding="async" />
+                            </a>
                             <div class="wk-video-body">
-                                <b>【初配信】はじめまして！恋乃夜まいです♡【新人Vtuber】</b>
+                                <a class="wk-video-title" href="https://www.youtube.com/watch?v=9_NKkfrQODc" target="_blank" rel="noopener"><b>【初配信】はじめまして！恋乃夜まいです♡【新人Vtuber】</b></a>
                                 <span>2021年3月21日・初配信アーカイブ<a class="wk-cite" href="#src-6">[6]</a></span>
                             </div>
-                        </a>
+                        </div>
                     </div>
                 </section>
 
@@ -93,7 +97,7 @@ include __DIR__ . '/head.php';
 
                     <p>恋乃夜まいは、「恋の魔女として生まれた異世界の元お姫様」という設定のバーチャルYouTuberである。魔力の暴走から逃れて魔法の存在しない地球へやってきたが、その身体は「ドキドキ」を食べないと生きていけないという設定で、決め台詞は「君のドキドキ…食べさせてくれない？」<a class="wk-cite" href="#src-2">[2]</a>。異世界の元お姫様という出自に似合わず、口調はやわらかく甘えたものになっている。</p>
 
-                    <p>容姿は黒のロングヘアーにパープルのツートンメッシュ、左目近くに泣きぼくろ、右耳に大きめのピアスが特徴<a class="wk-cite" href="#src-1">[1]</a>。メタ的な存在でもあり、自らを「人の手で創られた存在」と認識しており、キャラクターデザインを手がけたMAIRO氏を「ママ」、モーションデザイン担当のはちゃち氏を「パパ」と呼ぶ<a class="wk-cite" href="#src-1">[1]</a>。ファンアートは「#まいのアトリエ」タグで投稿されており、pixivでのイラスト文化も盛んだ<a class="wk-cite" href="#src-4">[4]</a>。</p>
+                    <p>容姿は黒のロングヘアーにパープルのツートンメッシュ、左目近くに泣きぼくろ、右耳に大きめのピアスが特徴<a class="wk-cite" href="#src-1">[1]</a>。メタ的な存在でもあり、自らを「人の手で創られた存在」と認識しており、キャラクターデザインを手がけたMAIRO氏を「ママ」、モーションデザイン担当のはちゃち氏を「パパ」と呼ぶ<a class="wk-cite" href="#src-1">[1]</a>。ファンアートは「#koinoyart」タグで投稿されており<a class="wk-cite" href="#src-12">[12]</a>、pixivでのイラスト文化も盛んだ<a class="wk-cite" href="#src-3">[3]</a>。</p>
 
                     <p>配信の中心はASMRである。初配信から1週間ほどでASMR枠を開始し、初期は3Dio、2021年9月にはKU100を導入して高音質な囁き配信を続けている<a class="wk-cite" href="#src-1">[1]</a><a class="wk-cite" href="#src-6">[6]</a>。アーカイブの収録本数ではASMRが全カテゴリ中最多で、全体の約4割を占める<a class="wk-cite" href="#src-6">[6]</a>。ほかに雑談・歌枠・ゲーム（ホラー系や『ゼルダの伝説』シリーズなど）をこなし、晩酌しながらの雑談や午後の時間帯の「ごごまい」など、番組性のある枠も定期的に行っている<a class="wk-cite" href="#src-6">[6]</a>。</p>
 
@@ -167,7 +171,7 @@ include __DIR__ . '/head.php';
                             <li id="src-1"><a href="https://dic.pixiv.net/a/%E6%81%8B%E4%B9%83%E5%A4%9C%E3%81%BE%E3%81%84" target="_blank" rel="noopener">ピクシブ百科事典「恋乃夜まい」</a>（CC BY-SA 3.0）— 年齢設定・容姿・キャラデザ/モーション・ファンネーム・KU100導入・新衣装・bilibili進出・マルチバイリンガル・人物像・ユニット・縦長配信</li>
                             <li id="src-2"><a href="https://vkano.jp/talent/koinoyamai" target="_blank" rel="noopener">ぶいカノ 公式プロフィール</a>（<a href="https://vkano.jp/" target="_blank" rel="noopener">vkano.jp</a>）— 所属・0期生兼コンテンツプロデューサー・設立日・誕生日・身長・設定・決め台詞・だーりん・Fanboxリンク</li>
                             <li id="src-3"><a href="https://web.archive.org/web/20250219093404/https://ja.wikipedia.org/wiki/%E6%81%8B%E4%B9%83%E5%A4%9C%E3%81%BE%E3%81%84" target="_blank" rel="noopener">Wikipedia「恋乃夜まい」最終版（2025年1月26日・Wayback Machineアーカイブ・CC BY-SA 4.0）</a> — 志望動機・経歴の日付（10万人/20万人/bilibili/VTuber Fes/3D/単独ライブ）・タイアップ・趣味や特技・挨拶・ディスコグラフィ</li>
-                            <li id="src-4"><a href="https://bacharu.io/vtuber/koinoya-mai" target="_blank" rel="noopener">Bācharu「Koinoya Mai」</a> — 所属沿革（プロプロ2期生→2023年めるれっと再編→2025年ぶいカノ）・推しマーク・ファンアートタグ</li>
+                            <li id="src-4"><a href="https://bacharu.io/vtuber/koinoya-mai" target="_blank" rel="noopener">Bācharu「Koinoya Mai」</a> — 所属沿革（プロプロ2期生→2023年めるれっと再編→2025年ぶいカノ）・推しマーク</li>
                             <li id="src-5"><a href="https://panora.tokyo/archives/82842" target="_blank" rel="noopener">PANORA（2024年3月22日）「プロプロ所属VTuber…タイクレとコラボ」</a> — 2024年3月のタイクレコラボ</li>
                             <li id="src-6">本サイトの配信アーカイブ（<a href="/archive/" target="_blank" rel="noopener">配信アーカイブ検索</a>・動画カタログ・登録者数の日次記録・カテゴリ/コラボ統計・字幕・コメント・配信要約）— 初配信日・初ASMR・登録者数推移・収録本数・カテゴリ比率・コラボ回数・24万歳発言・8月17日の記念日に関する発言・「おつゆゆ」の由来と「おつ魚」</li>
                             <li id="src-7"><a href="https://web.archive.org/web/20240316073448/https://koinoya-mai.fanbox.cc/" target="_blank" rel="noopener">Wayback Machine</a>（koinoya-mai.fanbox.cc 最初の記録 2024年3月16日／fanicon.net/fancommunities/4401 は2022年から記録）— ファンクラブのFanicon「舞踏会」からPixiv Fanboxへの移行時期</li>
