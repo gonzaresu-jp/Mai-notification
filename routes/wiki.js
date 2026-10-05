@@ -92,7 +92,7 @@ function buildYears(videos) {
       url: v.url || `https://www.youtube.com/watch?v=${v.video_id}`,
       stream_date_jst: String(v.stream_date_jst || ""),
       view_count: Number(v.view_count) || 0,
-      thumbnail: String(v.thumbnail || ""),
+      thumbnail: thumbUrl(v),
     });
   }
   const years = [...map.values()].sort((a, b) => b.year - a.year);
@@ -115,6 +115,95 @@ function buildCategories(videos) {
     }
   }
   return Object.fromEntries(Object.entries(cat).sort((a, b) => b[1] - a[1]));
+}
+
+// サムネは YouTube CDN 優先（archive.js と同じ方針）。upstream の /api/thumbnail は Express に無いので使わない。
+function thumbUrl(v) {
+  return v.video_id ? `https://i.ytimg.com/vi/${v.video_id}/mqdefault.jpg` : String(v.thumbnail || "");
+}
+
+function bestSample(map, key, v) {
+  const views = Number(v.view_count) || 0;
+  const cur = map.get(key);
+  const sample = {
+    video_id: v.video_id,
+    title: String(v.title || ""),
+    url: v.url || `https://www.youtube.com/watch?v=${v.video_id}`,
+    view_count: views,
+    thumbnail: thumbUrl(v),
+    stream_date_jst: String(v.stream_date_jst || ""),
+  };
+  if (!cur.sample || views > cur.sample.view_count) cur.sample = sample;
+}
+
+function buildGames(videos) {
+  const map = new Map();
+  for (const v of videos) {
+    if (v.availability && v.availability !== "public") continue;
+    const g = v.game_title ? String(v.game_title).trim() : "";
+    if (!g) continue;
+    let e = map.get(g);
+    if (!e) {
+      e = { name: g, count: 0, views: 0, sample: null };
+      map.set(g, e);
+    }
+    e.count += 1;
+    e.views += Number(v.view_count) || 0;
+    bestSample(map, g, v);
+  }
+  return [...map.values()]
+    .sort((a, b) => b.count - a.count || b.views - a.views)
+    .slice(0, 20);
+}
+
+function buildCollaborators(videos) {
+  const map = new Map();
+  for (const v of videos) {
+    if (v.availability && v.availability !== "public") continue;
+    for (const cRaw of Array.isArray(v.collaborators) ? v.collaborators : []) {
+      const c = String(cRaw || "").trim();
+      if (!c) continue;
+      let e = map.get(c);
+      if (!e) {
+        e = { name: c, count: 0, sample: null };
+        map.set(c, e);
+      }
+      e.count += 1;
+      bestSample(map, c, v);
+    }
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count).slice(0, 12);
+}
+
+function buildTopVideos(videos) {
+  return videos
+    .filter((v) => (!v.availability || v.availability === "public") && (Number(v.view_count) || 0) > 0)
+    .sort((a, b) => (Number(b.view_count) || 0) - (Number(a.view_count) || 0))
+    .slice(0, 10)
+    .map((v) => ({
+      video_id: v.video_id,
+      title: String(v.title || ""),
+      url: v.url || `https://www.youtube.com/watch?v=${v.video_id}`,
+      stream_date_jst: String(v.stream_date_jst || ""),
+      view_count: Number(v.view_count) || 0,
+      thumbnail: thumbUrl(v),
+      duration_min: Math.round((Number(v.duration_sec) || 0) / 60),
+    }));
+}
+
+function loadSubscribers() {
+  // webui/data/koinoyamaich.txt: "YYYY/MM/DD:万人" を1行ずつ追記している日次ログ
+  try {
+    const file = path.join(__dirname, "..", "webui", "data", "koinoyamaich.txt");
+    const lines = fs.readFileSync(file, "utf8").split("\n").filter((l) => l.trim());
+    const parse = (l) => {
+      const m = l.match(/^(\d{4}\/\d{2}\/\d{2}):([\d.]+)$/);
+      return m ? { date: m[1].replace(/\//g, "-"), wan: Number(m[2]) } : null;
+    };
+    return { first: parse(lines[0] || ""), last: parse(lines[lines.length - 1] || "") };
+  } catch {
+    return { first: null, last: null };
+  }
 }
 
 function buildRecentMinutes(rows) {
@@ -153,7 +242,7 @@ function buildRecentMinutes(rows) {
 }
 
 async function buildOverview(db) {
-  const [catalog, minCount, minYear, recent] = await Promise.all([
+  const [catalog, minCount, minYear, recent, platforms] = await Promise.all([
     fetchCatalog(),
     dbAll(db, "SELECT COUNT(DISTINCT video_id) AS videos, COUNT(*) AS chunks FROM video_minutes"),
     dbAll(
@@ -167,14 +256,27 @@ async function buildOverview(db) {
        FROM video_minutes WHERE stream_date_jst IS NOT NULL
        ORDER BY stream_date_jst DESC, start_ms ASC LIMIT 150`
     ),
+    dbAll(
+      db,
+      `SELECT platform, COUNT(*) AS n FROM notifications
+       WHERE platform IN ('twitterMain','twitterSub','youtube','youtubeCommunity','twitcasting','twitch','fanbox','bilibili')
+       GROUP BY platform ORDER BY n DESC`
+    ),
   ]);
   const mc = minCount[0] || {};
   const years = buildYears(catalog.videos);
+  const subs = loadSubscribers();
   return {
     generatedAt: new Date().toISOString(),
     catalogTotal: years.reduce((n, y) => n + y.videos, 0),
+    firstStreamDate: catalog.videos.length ? String(catalog.videos[0].stream_date_jst || "") : "",
     years,
     categories: buildCategories(catalog.videos),
+    games: buildGames(catalog.videos),
+    collaborators: buildCollaborators(catalog.videos),
+    topVideos: buildTopVideos(catalog.videos),
+    platforms: platforms.map((p) => ({ key: String(p.platform), n: Number(p.n) || 0 })),
+    subscribers: subs,
     minutes: {
       videos: Number(mc.videos) || 0,
       chunks: Number(mc.chunks) || 0,
