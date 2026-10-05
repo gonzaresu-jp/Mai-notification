@@ -110,32 +110,34 @@ include __DIR__ . '/head.php';
                     <h2>経歴</h2>
                     <ul class="wk-history">
                         <li><b>2021年3月</b> — プロプロプロダクションのオーディションに選ばれ活動を開始<a class="wk-cite" href="#src-3">[3]</a>。19日に初動画を公開し、21日に初配信、28日に初のASMR配信を行う<a class="wk-cite" href="#src-6">[6]</a>。</li>
-                        <li><b>2021年4月</b> — 21日、デビュー1か月でチャンネル登録者10万人を突破<a class="wk-cite" href="#src-6">[6]</a><a class="wk-cite" href="#src-3">[3]</a>。</li>
-                        <li><b>2021年5月</b> — 13日に<a href="https://space.bilibili.com/1900434152" target="_blank" rel="noopener">bilibili</a>チャンネルを開設し、翌14日に登録10万人を突破<a class="wk-cite" href="#src-3">[3]</a>。</li>
-                        <li><b>2021年9月</b> — ASMR機材を3DioからKU100へ切り替え、高音質配信の基盤を整える<a class="wk-cite" href="#src-1">[1]</a>。</li>
-                        <li><b>2021年10月</b> — 13日、<a href="https://manasisrefrain.com/" target="_blank" rel="noopener">『マナシスリフレイン』</a>正式サービス開始に伴うタイアップ企画に参加<a class="wk-cite" href="#src-3">[3]</a>。</li>
-                        <li><b>2021年12月</b> — 27日、チャンネル登録者20万人を突破<a class="wk-cite" href="#src-3">[3]</a>。</li>
+                        <li><b>4月</b> — 21日、デビュー1か月でチャンネル登録者10万人を突破<a class="wk-cite" href="#src-6">[6]</a><a class="wk-cite" href="#src-3">[3]</a>。</li>
+                        <li><b>5月</b> — 13日に<a href="https://space.bilibili.com/1900434152" target="_blank" rel="noopener">bilibili</a>チャンネルを開設し、翌14日に登録10万人を突破<a class="wk-cite" href="#src-3">[3]</a>。</li>
+                        <li><b>9月</b> — ASMR機材を3DioからKU100へ切り替え、高音質配信の基盤を整える<a class="wk-cite" href="#src-1">[1]</a>。</li>
+                        <li><b>10月</b> — 13日、<a href="https://manasisrefrain.com/" target="_blank" rel="noopener">『マナシスリフレイン』</a>正式サービス開始に伴うタイアップ企画に参加<a class="wk-cite" href="#src-3">[3]</a>。</li>
+                        <li><b>12月</b> — 27日、チャンネル登録者20万人を突破<a class="wk-cite" href="#src-3">[3]</a>。</li>
                         <li><b>2022年3月</b> — 12日、<a href="https://vtuberfesjapan.jp/" target="_blank" rel="noopener">VTuber Fes Japan 2022</a>のアンバサダーに就任<a class="wk-cite" href="#src-3">[3]</a>。</li>
-                        <li><b>2022年4月</b> — ファンクラブ「舞踏会」（Fanicon）を開設<a class="wk-cite" href="#src-3">[3]</a>。15日に渋谷モディでポップアップストアを開催<a class="wk-cite" href="#src-3">[3]</a>。29日・30日、VTuber Fes Japan 2022が幕張メッセで開催<a class="wk-cite" href="#src-3">[3]</a>。</li>
-                        <li><b>2022年5月</b> — 16日、カプとれ×プロプロプロダクション2期生コラボが決定<a class="wk-cite" href="#src-3">[3]</a>。22日、<a href="https://camp-fire.jp/projects/view/512162" target="_blank" rel="noopener">CAMPFIRE</a>で「恋乃夜まい3D化支援プロジェクト！」を開始し、開始1時間で300万円の目標を達成<a class="wk-cite" href="#src-3">[3]</a><a class="wk-cite" href="#src-8">[8]</a>。</li>
-                        <li><b>2022年6月</b> — 21日、3D化支援プロジェクトを終了し、最終調達額809万円<a class="wk-cite" href="#src-8">[8]</a>。</li>
-                        <li><b>2022年7月</b> — チャンネルの総再生回数が累計1000万回を突破<a class="wk-cite" href="#src-3">[3]</a>。</li>
-                        <li><b>2022年8月</b> — 20日、新衣装をお披露目。「#恋乃夜まい新衣装」がトレンド入りした<a class="wk-cite" href="#src-1">[1]</a>。</li>
-                        <li><b>2022年11月</b> — 12日から20日までパセラリゾーツ×プロプロプロダクション「プロプロカフェ」に参加<a class="wk-cite" href="#src-3">[3]</a>。16日に1stアルバム『PROPRISM』（収録曲「喜劇」）をリリース<a class="wk-cite" href="#src-3">[3]</a>。</li>
-                        <li><b>2022年12月</b> — 17日、録り下ろしASMRボイス搭載イヤフォンの予約販売が開始<a class="wk-cite" href="#src-11">[11]</a>。</li>
+                        <li><b>4月</b> — ファンクラブ「舞踏会」（Fanicon）を開設<a class="wk-cite" href="#src-3">[3]</a>。15日に渋谷モディでポップアップストアを開催<a class="wk-cite" href="#src-3">[3]</a>。29日・30日、VTuber Fes Japan 2022が幕張メッセで開催<a class="wk-cite" href="#src-3">[3]</a>。</li>
+                        <li><b>5月</b> — 16日、カプとれ×プロプロプロダクション2期生コラボが決定<a class="wk-cite" href="#src-3">[3]</a>。22日、<a href="https://camp-fire.jp/projects/view/512162" target="_blank" rel="noopener">CAMPFIRE</a>で「恋乃夜まい3D化支援プロジェクト！」を開始し、開始1時間で300万円の目標を達成<a class="wk-cite" href="#src-3">[3]</a><a class="wk-cite" href="#src-8">[8]</a>。</li>
+                        <li><b>6月</b> — 21日、3D化支援プロジェクトを終了し、最終調達額809万円<a class="wk-cite" href="#src-8">[8]</a>。</li>
+                        <li><b>7月</b> — チャンネルの総再生回数が累計1000万回を突破<a class="wk-cite" href="#src-3">[3]</a>。</li>
+                        <li><b>8月</b> — 20日、新衣装をお披露目。「#恋乃夜まい新衣装」がトレンド入りした<a class="wk-cite" href="#src-1">[1]</a>。</li>
+                        <li><b>11月</b> — 12日から20日までパセラリゾーツ×プロプロプロダクション「プロプロカフェ」に参加<a class="wk-cite" href="#src-3">[3]</a>。16日に1stアルバム『PROPRISM』（収録曲「喜劇」）をリリース<a class="wk-cite" href="#src-3">[3]</a>。</li>
+                        <li><b>12月</b> — 17日、録り下ろしASMRボイス搭載イヤフォンの予約販売が開始<a class="wk-cite" href="#src-11">[11]</a>。</li>
                         <li><b>2023年2月</b> — 18日、プロプロプロダクションとして『ひぐらしのなく頃に』同時視聴番組に出演（咲夜あずさ・白瀬あおい・猟奇ちゃきと）<a class="wk-cite" href="#src-3">[3]</a>。</li>
-                        <li><b>2023年3月</b> — 1日、プロプロプロダクションのグループ再編によりめるれっとへ移籍<a class="wk-cite" href="#src-4">[4]</a>。</li>
-                        <li><b>2023年6月</b> — 18日、3Dモデルが完成し、単独初ライブを実施<a class="wk-cite" href="#src-3">[3]</a>。</li>
-                        <li><b>2023年9月</b> — 21日、2年半記念配信で「まい母」が初登場し、母とのコラボを実施<a class="wk-cite" href="#src-6">[6]</a>（<a href="https://www.youtube.com/live/H8WDVT1VOcU" target="_blank" rel="noopener">配信アーカイブ</a>）。</li>
-                        <li><b>2023年12月</b> — 縦長配信が実装され、雑談・ASMR配信に組み込まれる<a class="wk-cite" href="#src-1">[1]</a>。</li>
+                        <li><b>3月</b> — 1日、プロプロプロダクションのグループ再編によりめるれっとへ移籍<a class="wk-cite" href="#src-4">[4]</a>。</li>
+                        <li><b>6月</b> — 18日、3Dモデルが完成し、単独初ライブを実施<a class="wk-cite" href="#src-3">[3]</a>。</li>
+                        <li><b>9月</b> — 21日、2年半記念配信で「まい母」が初登場し、母とのコラボを実施<a class="wk-cite" href="#src-6">[6]</a>（<a href="https://www.youtube.com/live/H8WDVT1VOcU" target="_blank" rel="noopener">配信アーカイブ</a>）。</li>
+                        <li><b>12月</b> — 縦長配信が実装され、雑談・ASMR配信に組み込まれる<a class="wk-cite" href="#src-1">[1]</a>。</li>
                         <li><b>2024年3月</b> — ファンクラブをFaniconの「舞踏会」からPixiv Fanboxへ移行（3月にFanboxの稼働記録）<a class="wk-cite" href="#src-7">[7]</a>。29日、めるれっととしてタイトーオンラインクレーン（タイクレ）とのコラボプライズ展開<a class="wk-cite" href="#src-5">[5]</a>。</li>
-                        <li><b>2025年7月</b> — 17日、恋乃夜まいを0期生兼コンテンツプロデューサーとしてVTuber事務所「<a href="https://vkano.jp/" target="_blank" rel="noopener">ぶいカノ（Vkano）</a>」が設立され、移籍<a class="wk-cite" href="#src-2">[2]</a>。</li>
-                        <li><b>2026年2月4日</b> — 5年越しにファンネームを正式に変更。旧「恋びと同盟」から新「<strong>だーりん（まいのだーりん）</strong>」へ<a class="wk-cite" href="#src-14">[14]</a>。</li>
-                        <li><b>2026年2月</b> — 14日、<a href="https://www.dlsite.com/maniax-touch/work/=/product_id/RJ01566347.html" target="_blank" rel="noopener">DLsite</a>でバレンタイン限定シチュエーションボイス「【ドMボイス】押しに弱い彼女をいじめたい。CV.恋乃夜まい」を発売（R18・サークルは「ぶいカノ」名義・自らがシナリオを書き下ろし）<a class="wk-cite" href="#src-9">[9]</a>。</li>
-                        <li><b>2026年3月13日</b> — ぶいカノのオーディション期間中に、音声配信アプリ「<a href="https://www.spooncast.net/jp/channel/317680759/tab/home" target="_blank" rel="noopener">Spoon</a>」で一度だけ配信を行う（チャンネルは現在も残存）<a class="wk-cite" href="#src-13">[13]</a>。</li>
-                        <li><b>2026年8月17日</b> — 「<strong>思い出いっぱいな日</strong>」。本人が「マイとダーリンの付き合った記念日」と位置づける日であり、「8月を記念日にしよう」と決めたと語った。同年9月7日の<a href="https://www.youtube.com/live/LuPA2fN2PJY" target="_blank" rel="noopener">配信</a>では「8月17日に戻ると」の約束と「1年後だよ」との言葉も残している<a class="wk-cite" href="#src-6">[6]</a>。</li>
-                        <li><b>2026年9月</b> — 17日、<strong>初のR18音声作品</strong>「高嶺の花と社内SEXで連続絶頂…！」（三原実莉／サークル名義「恋乃夜まい」）を<a href="https://www.dlsite.com/maniax/work/=/product_id/RJ01720281.html" target="_blank" rel="noopener">DLsite</a>で発売<a class="wk-cite" href="#src-10">[10]</a>。</li>
-                        <li><b>2026年10月</b> — 10月時点で登録者約29.8万人、収録アーカイブ約730本に到達<a class="wk-cite" href="#src-6">[6]</a>。</li>
+                        <li><b>2025年1月</b> — 11日、配信でプロフィールに関するクイズ企画を実施<a class="wk-cite" href="#src-6">[6]</a>。17日、誕生日配信「#まい誕生祭」を開催（回線工事の都合で本来の1月7日から延期）<a class="wk-cite" href="#src-6">[6]</a>。23日、新衣装をお披露目<a class="wk-cite" href="#src-6">[6]</a>。</li>
+                        <li><b>3月</b> — 20日から23日にかけて、4周年記念配信「だーりんのお名前書き」を3日間開催<a class="wk-cite" href="#src-6">[6]</a>。</li>
+                        <li><b>7月</b> — 17日、恋乃夜まいを0期生兼コンテンツプロデューサーとしてVTuber事務所「<a href="https://vkano.jp/" target="_blank" rel="noopener">ぶいカノ（Vkano）</a>」が設立され、移籍<a class="wk-cite" href="#src-2">[2]</a>。19日、ぶいカノのタレント「澄白レイ」がデビュー<a class="wk-cite" href="#src-2">[2]</a>。</li>
+                        <li><b>9月</b> — 6日、ぶいカノのタレント「休癒ゆい」がデビュー<a class="wk-cite" href="#src-2">[2]</a>。</li>
+                        <li><b>2026年2月</b> — 4日、5年越しにファンネームを正式に変更。旧「恋びと同盟」から新「<strong>だーりん（まいのだーりん）</strong>」へ<a class="wk-cite" href="#src-14">[14]</a>。14日、<a href="https://www.dlsite.com/maniax-touch/work/=/product_id/RJ01566347.html" target="_blank" rel="noopener">DLsite</a>でバレンタイン限定シチュエーションボイス「【ドMボイス】押しに弱い彼女をいじめたい。CV.恋乃夜まい」を発売（R18・サークルは「ぶいカノ」名義・自らがシナリオを書き下ろし）<a class="wk-cite" href="#src-9">[9]</a>。</li>
+                        <li><b>3月</b> — 13日、ぶいカノのオーディション期間中に、音声配信アプリ「<a href="https://www.spooncast.net/jp/channel/317680759/tab/home" target="_blank" rel="noopener">Spoon</a>」で一度だけ配信を行う（チャンネルは現在も残存）<a class="wk-cite" href="#src-13">[13]</a>。</li>
+                        <li><b>8月</b> — 17日、「<strong>思い出いっぱいな日</strong>」。本人が「マイとダーリンの付き合った記念日」と位置づける日であり、「8月を記念日にしよう」と決めたと語った。同年9月7日の<a href="https://www.youtube.com/live/LuPA2fN2PJY" target="_blank" rel="noopener">配信</a>では「8月17日に戻ると」の約束と「1年後だよ」との言葉も残している<a class="wk-cite" href="#src-6">[6]</a>。</li>
+                        <li><b>9月</b> — 17日、<strong>初のR18音声作品</strong>「高嶺の花と社内SEXで連続絶頂…！」（三原実莉／サークル名義「恋乃夜まい」）を<a href="https://www.dlsite.com/maniax/work/=/product_id/RJ01720281.html" target="_blank" rel="noopener">DLsite</a>で発売<a class="wk-cite" href="#src-10">[10]</a>。</li>
+                        <li><b>10月</b> — 登録者約29.8万人、収録アーカイブ約730本に到達（10月時点）<a class="wk-cite" href="#src-6">[6]</a>。</li>
                     </ul>
                 </section>
 
@@ -171,7 +173,7 @@ include __DIR__ . '/head.php';
                     <div class="wk-card">
                         <ol class="wk-sources">
                             <li id="src-1"><a href="https://dic.pixiv.net/a/%E6%81%8B%E4%B9%83%E5%A4%9C%E3%81%BE%E3%81%84" target="_blank" rel="noopener">ピクシブ百科事典「恋乃夜まい」</a>（CC BY-SA 3.0）— 年齢設定（旧・約20万歳の建前含む）・容姿・キャラデザ/モーション・旧ファンネーム「恋びと同盟」・KU100導入・新衣装・bilibili進出・マルチバイリンガル・人物像・ユニット・縦長配信</li>
-                            <li id="src-2"><a href="https://vkano.jp/talent/koinoyamai" target="_blank" rel="noopener">ぶいカノ 公式プロフィール</a>（<a href="https://vkano.jp/" target="_blank" rel="noopener">vkano.jp</a>）— 所属・0期生兼コンテンツプロデューサー・設立日・誕生日・身長・設定・決め台詞・だーりん・Fanboxリンク</li>
+                            <li id="src-2"><a href="https://vkano.jp/talent/koinoyamai" target="_blank" rel="noopener">ぶいカノ 公式プロフィール</a>（<a href="https://vkano.jp/" target="_blank" rel="noopener">vkano.jp</a>）・<a href="https://vkano.jp/news" target="_blank" rel="noopener">公式ニュース</a> — 所属・0期生兼コンテンツプロデューサー・設立日（2025年7月17日）・後輩タレントのデビュー（澄白レイ2025年7月19日・休癒ゆい2025年9月6日）・誕生日・身長・設定・決め台詞・だーりん・Fanboxリンク</li>
                             <li id="src-3"><a href="https://web.archive.org/web/20250219093404/https://ja.wikipedia.org/wiki/%E6%81%8B%E4%B9%83%E5%A4%9C%E3%81%BE%E3%81%84" target="_blank" rel="noopener">Wikipedia「恋乃夜まい」最終版（2025年1月26日・Wayback Machineアーカイブ・CC BY-SA 4.0）</a> — 志望動機・経歴の日付（10万人/20万人/bilibili/VTuber Fes/3D/単独ライブ）・タイアップ・趣味や特技・挨拶・ディスコグラフィ</li>
                             <li id="src-4"><a href="https://bacharu.io/vtuber/koinoya-mai" target="_blank" rel="noopener">Bācharu「Koinoya Mai」</a> — 所属沿革（プロプロ2期生→2023年めるれっと再編→2025年ぶいカノ）・推しマーク</li>
                             <li id="src-5"><a href="https://panora.tokyo/archives/82842" target="_blank" rel="noopener">PANORA（2024年3月22日）「プロプロ所属VTuber…タイクレとコラボ」</a> — 2024年3月のタイクレコラボ</li>
