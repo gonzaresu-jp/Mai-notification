@@ -46,7 +46,13 @@ include __DIR__ . '/head.php';
 
                 <section class="wk-section" id="profile">
                     <h2>プロフィール</h2>
-                    <table class="wk-infobox">
+                    <div class="wk-profile-grid">
+                        <figure class="wk-profile-photo">
+                            <img src="https://vkano.jp/talent/koinoyamai/illust.png" alt="恋乃夜まいの公式イラスト" width="918" height="1280" loading="lazy" decoding="async" />
+                            <figcaption>画像: <a href="https://vkano.jp/talent/koinoyamai" target="_blank" rel="noopener">ぶいカノ公式プロフィール</a>より</figcaption>
+                        </figure>
+                        <div class="wk-profile-main">
+                            <table class="wk-infobox">
                         <tbody>
                             <tr><th>名前</th><td>恋乃夜まい（こいのやまい）</td></tr>
                             <tr><th>誕生日</th><td>1月7日<a class="wk-cite" href="#src-2">[2]</a></td></tr>
@@ -60,6 +66,7 @@ include __DIR__ . '/head.php';
                             <tr><th>リスナーの呼称</th><td>だーりん<a class="wk-cite" href="#src-2">[2]</a></td></tr>
                             <tr><th>一人称</th><td>まい<a class="wk-cite" href="#src-6">[6]</a></td></tr>
                             <tr><th>MBTI</th><td>INFP-A</td></tr>
+                            <tr><th>血液型</th><td>O型<a class="wk-cite" href="#src-6">[6]</a></td></tr>
                             <tr><th>キャラクターデザイン</th><td>MAIRO<a class="wk-cite" href="#src-1">[1]</a></td></tr>
                             <tr><th>モーションデザイン</th><td>はちゃち<a class="wk-cite" href="#src-1">[1]</a></td></tr>
                             <tr><th>配信タグ</th><td>#dear_mai（ラブレター）<br>#koinoyart（ファンアート）<br>#濃いのやまい（R18）<a class="wk-cite" href="#src-12">[12]</a></td></tr>
@@ -68,7 +75,8 @@ include __DIR__ . '/head.php';
                         </tbody>
                     </table>
                     <p class="wk-src-note"><span class="wk-ref">※</span> 設定上の年齢。本人の配信でも「24万歳の恋の魔女」と語っている<a class="wk-cite" href="#src-6">[6]</a>。</p>
-                </section>
+                                        </div>
+                    </div>
 
                 <section class="wk-section" id="debut">
                     <h2>自己紹介動画</h2>
