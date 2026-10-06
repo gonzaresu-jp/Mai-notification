@@ -4,7 +4,8 @@
 $pageTitle = "恋乃夜まい wiki";
 // SNSシェア時にこの画像とリード文が出るように（wk-leadと同一）
 $pageDesc = "恋乃夜まい（こいのやまい）は、ぶいカノ（Vkano）の0期生 兼 コンテンツプロデューサーであるバーチャルYouTuber。2021年3月21日に初配信を行い、ASMRを中心に雑談・歌枠・ゲームなど幅広い配信を行う。「恋の魔女として生まれた異世界の元お姫様」という設定を持ち、リスナー（ファン）は「だーりん」と呼ばれる。";
-$pageImage = "https://mai.honna-yuzuki.com/profile.webp";
+require_once __DIR__ . '/_domain.php'; // ドメイン単一ソース（リクエスト導出）
+$pageImage = $domain . "/profile.webp";
 $pageImageAlt = "恋乃夜まい";
 $robotsNoindex = true;
 $extraHead = '<link rel="stylesheet" href="/css/wiki.css?v=' . @filemtime(__DIR__ . '/css/wiki.css') . '" />';

@@ -26,7 +26,7 @@
 
         <div id="animation-container-other">
             <picture>
-                <source srcset="https://mai.honna-yuzuki.com/mai.avif" type="image/avif">
+                <source srcset="/mai.avif" type="image/avif">
                 <source srcset="mai.png" type="image/png">
                 <img src="mai.gif" alt="透過アニメーション">
             </picture>

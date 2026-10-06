@@ -4,13 +4,13 @@
 // ============================================
 
 const USM_THUMBNAILS = [
-  'https://mai.honna-yuzuki.com/user-thumb/1.webp',
-  'https://mai.honna-yuzuki.com/user-thumb/2.webp',
-  'https://mai.honna-yuzuki.com/user-thumb/3.webp',
-  'https://mai.honna-yuzuki.com/user-thumb/4.webp',
-  'https://mai.honna-yuzuki.com/user-thumb/5.webp',
-  'https://mai.honna-yuzuki.com/user-thumb/6.webp',
-  'https://mai.honna-yuzuki.com/user-thumb/7.webp',
+  '/user-thumb/1.webp',
+  '/user-thumb/2.webp',
+  '/user-thumb/3.webp',
+  '/user-thumb/4.webp',
+  '/user-thumb/5.webp',
+  '/user-thumb/6.webp',
+  '/user-thumb/7.webp',
 ];
 
 // 時間帯（time_period）→ 日本語ラベル。具体時刻が無い配信予告で使う。

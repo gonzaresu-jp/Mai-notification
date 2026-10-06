@@ -202,7 +202,7 @@
 
             const video = document.createElement('video');
             video.id = 'video-source';
-            video.src = 'https://mai.honna-yuzuki.com/showmai.mp4';
+            video.src = '/showmai.mp4';
             video.loop = true;
             video.muted = true;
             video.playsInline = true;

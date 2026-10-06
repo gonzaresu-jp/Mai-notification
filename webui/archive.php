@@ -3,6 +3,7 @@
 
 <head>
     <?php
+    require_once __DIR__ . '/_domain.php';
     $pageTitle = "配信アーカイブ検索";
     $pageDesc = "恋乃夜まいの配信アーカイブを横断検索できるページ。タイトル・文字起こし・コメント・ライブチャットを全文検索し、該当箇所のタイムスタンプ付きURLからYouTubeへ直接ジャンプできます。";
 
@@ -17,7 +18,7 @@
 
     function mai_archive_fetch($path, $timeoutSec = 6)
     {
-        $url = 'https://mai.honna-yuzuki.com' . $path;
+        $url = $domain . $path;
         $ctx = stream_context_create(array(
             'http' => array('timeout' => $timeoutSec, 'ignore_errors' => true),
             'ssl'  => array('verify_peer' => false, 'verify_peer_name' => false),
@@ -50,7 +51,7 @@
                 '@type' => 'VideoObject',
                 'name' => isset($row['title']) ? $row['title'] : '',
                 'url' => isset($row['url']) ? $row['url'] : '',
-                'thumbnailUrl' => 'https://mai.honna-yuzuki.com' . (isset($row['thumbnail']) ? $row['thumbnail'] : ''),
+                'thumbnailUrl' => $domain . (isset($row['thumbnail']) ? $row['thumbnail'] : ''),
                 'uploadDate' => $uploadDate,
             );
         }
@@ -59,7 +60,7 @@
             '@type' => 'CollectionPage',
             'name' => '恋乃夜まい 配信アーカイブ一覧',
             'description' => '恋乃夜まい（まいちゃん）の配信アーカイブ。YouTubeで公開されたアーカイブを一覧掲載。タイトル・文字起こし・コメント検索にも対応。',
-            'url' => 'https://mai.honna-yuzuki.com/archive',
+            'url' => $domain . '/archive',
             'mainEntity' => array(
                 '@type' => 'ItemList',
                 'itemListElement' => $itemList,

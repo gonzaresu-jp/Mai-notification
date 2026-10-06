@@ -310,11 +310,11 @@
         loadWeeklyMessageByDate();
 
         const EV_THUMBNAILS = [
-            'https://mai.honna-yuzuki.com/thumb/th-yt-main.webp',
-            'https://mai.honna-yuzuki.com/thumb/twitch.webp',
-            'https://mai.honna-yuzuki.com/thumb/bilibili.webp',
-            'https://mai.honna-yuzuki.com/thumb/twitcasting.webp',
-            'https://mai.honna-yuzuki.com/thumb/1on1.webp',
+            '/thumb/th-yt-main.webp',
+            '/thumb/twitch.webp',
+            '/thumb/bilibili.webp',
+            '/thumb/twitcasting.webp',
+            '/thumb/1on1.webp',
         ];
         const EV_PLATFORM_URL_TEMPLATES = {
             youtube: 'https://www.youtube.com/@koinoyamaich',

@@ -22,13 +22,14 @@
          構造化データ（JSON-LD）
          WebSite スキーマ：サイト名・URL・検索アクション
          ===================================================== -->
+    <?php require_once __DIR__ . '/_domain.php'; ?>
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebSite",
       "name": "まいちゃん通知",
       "alternateName": "恋乃夜まい 通知ダッシュボード",
-      "url": "https://mai.honna-yuzuki.com/",
+      "url": "<?= htmlspecialchars($domain) ?>/",
       "description": "恋乃夜まい（koinoyamai）の配信・活動をリアルタイムで通知する非公式ファンサービス。",
       "inLanguage": "ja",
       "author": {
