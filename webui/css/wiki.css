@@ -414,58 +414,91 @@ html {
     text-align: center;
 }
 
-/* ---------- 衣装画像のライトボックス（クリックで拡大・新規タブは開かない） ---------- */
-.wk-lightbox {
+/* ---------- 衣装画像のライトボックス（メディアアーカイブ／通知履歴と共通仕様） ---------- */
+.media-lightbox {
     position: fixed;
-    inset: 0;
-    z-index: 1000;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 99999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.media-lightbox.is-open {
+    display: flex;
+}
+
+/* Android WebViewはbackdrop-filterのGPU合成が不安定で画像が隠れることがあるため無効化 */
+.media-lightbox.no-blur {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(0, 0, 0, 0.95);
+}
+
+body.lightbox-open {
+    overflow: hidden !important;
+}
+
+.lightbox-error {
+    color: #fff;
+    text-align: center;
+    padding: 40px 24px;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.lightbox-error a {
+    color: #ffb3d9;
+    text-decoration: underline;
+}
+
+.media-lightbox-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
-    background: rgba(24, 12, 20, 0.88);
-    cursor: zoom-out;
+    z-index: 10;
 }
 
-.wk-lightbox img {
-    max-width: min(1100px, 94vw);
-    max-height: 88vh;
-    width: auto;
-    height: auto;
+.media-lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.media-lightbox-content {
+    max-width: 90vw;
+    max-height: 85vh;
+    position: relative;
+}
+
+.media-lightbox-content img {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
     border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 10px 48px rgba(0, 0, 0, 0.55);
 }
 
-.wk-lightbox .wk-lb-cap {
+.media-lightbox-info {
     position: absolute;
+    bottom: -40px;
     left: 0;
     right: 0;
-    bottom: 14px;
-    padding: 0 64px;
-    font-size: 0.8rem;
-    color: #fff;
     text-align: center;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-    pointer-events: none;
-}
-
-.wk-lightbox .wk-lb-close {
-    position: absolute;
-    top: 8px;
-    right: 16px;
-    padding: 4px 12px;
-    font-size: 1.9rem;
-    line-height: 1;
-    color: #fff;
-    background: none;
-    border: 0;
-    cursor: pointer;
-}
-
-.wk-lightbox .wk-lb-close:focus-visible {
-    outline: 2px solid #fff;
-    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.75rem;
 }
 
 /* ---------- 経歴 ---------- */

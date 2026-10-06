@@ -298,6 +298,12 @@ include __DIR__ . '/head.php';
         <?php include __DIR__ . '/footer.php'; ?>
     </div>
 
+    <!-- 画像ポップアップ（メディアアーカイブ／通知履歴と共通の #media-lightbox） -->
+    <div class="media-lightbox" id="media-lightbox">
+        <button class="media-lightbox-close" id="lightbox-close" aria-label="閉じる">&times;</button>
+        <div class="media-lightbox-content" id="lightbox-content"></div>
+    </div>
+
     <script src="/js/wiki.js?v=<?= @filemtime(__DIR__ . '/js/wiki.js') ?: time(); ?>" defer></script>
 </body>
 
