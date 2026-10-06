@@ -5,7 +5,7 @@ $pageTitle = "恋乃夜まい wiki";
 // SNSシェア時にこの画像とリード文が出るように（wk-leadと同一）
 $pageDesc = "恋乃夜まい（こいのやまい）は、ぶいカノ（Vkano）の0期生 兼 コンテンツプロデューサーであるバーチャルYouTuber。2021年3月21日に初配信を行い、ASMRを中心に雑談・歌枠・ゲームなど幅広い配信を行う。「恋の魔女として生まれた異世界の元お姫様」という設定を持ち、リスナー（ファン）は「だーりん」と呼ばれる。";
 require_once __DIR__ . '/_domain.php'; // ドメイン単一ソース（リクエスト導出）
-$pageImage = $domain . "/profile.webp";
+$pageImage = $domain . "/profile.webp?v=" . @filemtime(__DIR__ . "/profile.webp"); // ?v= でCFのimmutableキャッシュを回避
 $pageImageAlt = "恋乃夜まい";
 $robotsNoindex = true;
 $extraHead = '<link rel="stylesheet" href="/css/wiki.css?v=' . @filemtime(__DIR__ . '/css/wiki.css') . '" />';
@@ -21,7 +21,7 @@ include __DIR__ . '/head.php';
         <h1 class="wk-title">恋乃夜まい <span>wiki</span></h1>
 
         <div class="wk-lead">
-            <img class="wk-lead-img" src="/profile.webp" alt="恋乃夜まい" width="367" height="367" fetchpriority="high" decoding="async" />
+            <img class="wk-lead-img" src="/profile.webp?v=<?= @filemtime(__DIR__ . '/profile.webp') ?>" alt="恋乃夜まい" width="367" height="367" fetchpriority="high" decoding="async" />
             <p class="wk-lead-text">
                 <strong>恋乃夜まい</strong>（こいのやまい）は、<strong><a href="https://vkano.jp/" target="_blank" rel="noopener">ぶいカノ（Vkano）</a></strong>の<strong>0期生 兼 コンテンツプロデューサー</strong>であるバーチャルYouTuber<a class="wk-cite" href="#src-2">[2]</a>。
             2021年3月21日に初配信を行い<a class="wk-cite" href="#src-6">[6]</a>、ASMRを中心に雑談・歌枠・ゲームなど幅広い配信を行う。
