@@ -62,7 +62,7 @@ $image = isset($pageImage) ? $pageImage : $defaultImage;
 <meta property="og:description" content="<?= htmlspecialchars($description) ?>" />
 <meta property="og:site_name" content="まいちゃん通知" />
 <meta property="og:image" content="<?= htmlspecialchars($image) ?>" />
-<meta property="og:image:alt" content="まいちゃん通知 ロゴ" />
+<meta property="og:image:alt" content="<?= htmlspecialchars(isset($pageImageAlt) ? $pageImageAlt : "まいちゃん通知 ロゴ") ?>" />
 <meta property="og:locale" content="ja_JP" />
 
 <!-- =====================================================
@@ -73,7 +73,7 @@ $image = isset($pageImage) ? $pageImage : $defaultImage;
 <meta name="twitter:title" content="<?= htmlspecialchars($title) ?>" />
 <meta name="twitter:description" content="<?= htmlspecialchars($description) ?>" />
 <meta name="twitter:image" content="<?= htmlspecialchars($image) ?>" />
-<meta name="twitter:image:alt" content="まいちゃん通知 ロゴ" />
+<meta name="twitter:image:alt" content="<?= htmlspecialchars(isset($pageImageAlt) ? $pageImageAlt : "まいちゃん通知 ロゴ") ?>" />
 
 <!-- =====================================================
      iOS / PWA 対応

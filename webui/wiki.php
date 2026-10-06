@@ -2,7 +2,10 @@
 // まいちゃんwiki（仮公開）— 検索エンジンに表示されないよう常に noindex
 // ピクシブ百科事典形式の記事（本文は手書き・出典準拠・脚注方式）。レイアウト: 目次＋スクロール
 $pageTitle = "恋乃夜まい wiki";
-$pageDesc = "恋乃夜まい（こいのやまい）とは — プロフィール・概要・経歴・人物を出典付きで解説する非公式wiki（仮公開）。ぶいカノ所属のバーチャルYouTuber。";
+// SNSシェア時にこの画像とリード文が出るように（wk-leadと同一）
+$pageDesc = "恋乃夜まい（こいのやまい）は、ぶいカノ（Vkano）の0期生 兼 コンテンツプロデューサーであるバーチャルYouTuber。2021年3月21日に初配信を行い、ASMRを中心に雑談・歌枠・ゲームなど幅広い配信を行う。「恋の魔女として生まれた異世界の元お姫様」という設定を持ち、リスナー（ファン）は「だーりん」と呼ばれる。";
+$pageImage = "https://mai.honna-yuzuki.com/profile.webp";
+$pageImageAlt = "恋乃夜まい";
 $robotsNoindex = true;
 $extraHead = '<link rel="stylesheet" href="/css/wiki.css?v=' . @filemtime(__DIR__ . '/css/wiki.css') . '" />';
 include __DIR__ . '/head.php';
@@ -16,11 +19,14 @@ include __DIR__ . '/head.php';
     <main class="wk-main">
         <h1 class="wk-title">恋乃夜まい <span>wiki</span></h1>
 
-        <p class="wk-lead">
-            <strong>恋乃夜まい</strong>（こいのやまい）は、<strong><a href="https://vkano.jp/" target="_blank" rel="noopener">ぶいカノ（Vkano）</a></strong>の<strong>0期生 兼 コンテンツプロデューサー</strong>であるバーチャルYouTuber<a class="wk-cite" href="#src-2">[2]</a>。
+        <div class="wk-lead">
+            <img class="wk-lead-img" src="/profile.webp" alt="恋乃夜まい" width="367" height="367" fetchpriority="high" decoding="async" />
+            <p class="wk-lead-text">
+                <strong>恋乃夜まい</strong>（こいのやまい）は、<strong><a href="https://vkano.jp/" target="_blank" rel="noopener">ぶいカノ（Vkano）</a></strong>の<strong>0期生 兼 コンテンツプロデューサー</strong>であるバーチャルYouTuber<a class="wk-cite" href="#src-2">[2]</a>。
             2021年3月21日に初配信を行い<a class="wk-cite" href="#src-6">[6]</a>、ASMRを中心に雑談・歌枠・ゲームなど幅広い配信を行う。
             「恋の魔女として生まれた異世界の元お姫様」という設定を持ち、リスナー（ファン）は「だーりん」と呼ばれる<a class="wk-cite" href="#src-2">[2]</a>。
-        </p>
+            </p>
+        </div>
 
         <p class="wk-note">
             このページは<strong>仮公開</strong>です。検索エンジンには表示されず、URLを知っている人だけが閲覧できます。
@@ -46,13 +52,7 @@ include __DIR__ . '/head.php';
 
                 <section class="wk-section" id="profile">
                     <h2>プロフィール</h2>
-                    <div class="wk-profile-grid">
-                        <figure class="wk-profile-photo">
-                            <img src="https://vkano.jp/talent/koinoyamai/illust.png" alt="恋乃夜まいの公式イラスト" width="918" height="1280" loading="lazy" decoding="async" />
-                            <figcaption>画像: <a href="https://vkano.jp/talent/koinoyamai" target="_blank" rel="noopener">ぶいカノ公式プロフィール</a>より</figcaption>
-                        </figure>
-                        <div class="wk-profile-main">
-                            <table class="wk-infobox">
+                    <table class="wk-infobox">
                         <tbody>
                             <tr><th>名前</th><td>恋乃夜まい（こいのやまい）</td></tr>
                             <tr><th>誕生日</th><td>1月7日<a class="wk-cite" href="#src-2">[2]</a></td></tr>
@@ -75,8 +75,7 @@ include __DIR__ . '/head.php';
                         </tbody>
                     </table>
                     <p class="wk-src-note"><span class="wk-ref">※</span> 設定上の年齢。本人の配信でも「24万歳の恋の魔女」と語っている<a class="wk-cite" href="#src-6">[6]</a>。</p>
-                                        </div>
-                    </div>
+                </section>
 
                 <section class="wk-section" id="debut">
                     <h2>自己紹介動画</h2>
