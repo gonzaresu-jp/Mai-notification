@@ -36,8 +36,17 @@
       ids.map((p) => `<span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${PCOLOR[p]};margin-right:4px;"></i>${PLABEL[p] || p}</span>`).join("") + `</div>`;
   }
 
+  // ---- 気圧の低下リスク（大阪・Open-Meteo予測。管理画面専用で通知には接続しない）
+  function pressureCard(p) {
+    if (!p) return "";
+    const color = p.level === "high" ? "#d9534f" : p.level === "warn" ? "#c98a00" : "#2e9e6b";
+    const minAt = p.min_at ? esc(String(p.min_at).slice(5, 16).replace("T", " ").replace(":", "時") + "ごろ") : "-";
+    return card(`気圧の低下リスク（${esc(p.location)}）`, "fa-cloud-arrow-down", esc(p.label),
+      `今後24時間で ${p.drop_hpa} hPa低下の見込み（現在 ${p.current_hpa} → 最低 ${p.min_hpa} hPa・${minAt}）`, color);
+  }
+
   // ---- 状態カード
-  function stateCards(st) {
+  function stateCards(st, pressure) {
     const m = st.motivation;
     const mColor = m >= 70 ? PRIMARY : m >= 45 ? "#c98a00" : "#667eea";
     const mLabel = m >= 70 ? "高め" : m >= 45 ? "ふだん並み" : "低め";
@@ -49,6 +58,7 @@
         `${mLabel}・配信頻度 ${ratio(st.streamRatio)}・ツイート量 ${ratio(st.tweetRatio)}（直近2週 ÷ ふだん）`, mColor) +
       card("体調サイン", "fa-heart-pulse", esc(st.condition),
         st.signals.length ? st.signals.map(esc).join("<br>") : "体調関連の言葉・深夜投稿・感情・配信頻度に目立った変化はありません", cColor) +
+      pressureCard(pressure) +
       card("ツイートの感情", "fa-face-smile", senti,
         `直近2週（ふだん ${st.sentimentBase == null ? "-" : (st.sentimentBase >= 0 ? "+" : "") + st.sentimentBase}）・+1 が全部ポジティブ`) +
       card("深夜の投稿", "fa-moon", pctTxt(st.lateNightRecent), `1〜5時の投稿の割合（ふだん ${pctTxt(st.lateNightBase)}）`) +
@@ -169,7 +179,7 @@
     root.innerHTML =
       `<div style="color:#888; font-size:.74rem;">${esc(d.note)}・更新 ${esc(new Date(d.generated_at).toLocaleString("ja-JP"))}
         <button type="button" id="mai-state-refresh" style="margin-left:8px; border:1px solid #ddd; background:#fff; border-radius:999px; padding:1px 10px; font-size:.72rem; cursor:pointer;"><i class="fa-solid fa-arrows-rotate"></i> 再計算</button></div>` +
-      stateCards(st) +
+      stateCards(st, d.pressure) +
       block("これから7日間の配信見込み", forecastSvg(d.forecast) + legend(plats.concat(["twitter"])),
         "直近12週の曜日ごとの配信実績 × いまの活動量（配信頻度）から算出。配信予定が登録されている日は 95% 表示") +
       block("曜日ごとの配信プラットフォーム", wdToggle() + weekdaySvg(wp, wpPlats) + legend(wpPlats),
