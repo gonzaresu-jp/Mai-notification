@@ -181,7 +181,10 @@ include __DIR__ . '/head.php';
                         <h3>初期衣装（2021年3月〜）</h3>
                         <p>デビュー時からの衣装。黒のロングヘアーにパープルのツートンメッシュ、左目近くに泣きぼくろ、右耳に大きめのピアスという容姿はこの初期アバターの特徴として知られる<a class="wk-cite" href="#src-1">[1]</a>。</p>
                         <div class="wk-costume-gallery">
-                            <a href="/wiki/初期衣装/3面図.webp" target="_blank" rel="noopener"><img src="/wiki/初期衣装/3面図.webp" alt="初期衣装 3面図" loading="lazy" decoding="async" /></a>
+                            <figure class="wk-costume-item">
+                                <a href="/wiki/初期衣装/3面図.webp"><img src="/wiki/初期衣装/3面図.webp" alt="初期衣装の設定資料・3面図" loading="lazy" decoding="async" /></a>
+                                <figcaption>初期衣装の設定資料・3面図（正面・側面・背面）</figcaption>
+                            </figure>
                         </div>
                     </div>
 
@@ -190,8 +193,14 @@ include __DIR__ . '/head.php';
                         <p>長い髪をポニーテールで一纏めにした、ナイトガウン風のデザイン。リボンとバラの装飾が施され、黒・白・グレーの3種のバリエーションがあり、初期の髪型とも互換とされる<a class="wk-cite" href="#src-4">[4]</a>。「#恋乃夜まい新衣装」がトレンド入りするなど話題を集めた<a class="wk-cite" href="#src-1">[1]</a>。お披露目はASMRでの「お披露目パーティー」で行っている（<a href="https://www.youtube.com/live/F2QbliQEkLA" target="_blank" rel="noopener">配信アーカイブ</a>）<a class="wk-cite" href="#src-6">[6]</a>。</p>
                         <p>配信中の字幕でもディテールが次々と語られており、リボンの多いスカート（<a href="https://www.youtube.com/watch?v=F2QbliQEkLA&t=2191s" target="_blank" rel="noopener">36:31</a>）、サイドから透けて見える紐（<a href="https://www.youtube.com/watch?v=F2QbliQEkLA&t=2406s" target="_blank" rel="noopener">40:06</a>）、ハイヒール（<a href="https://www.youtube.com/watch?v=F2QbliQEkLA&t=3625s" target="_blank" rel="noopener">60:25</a>）、ガーター（<a href="https://www.youtube.com/watch?v=F2QbliQEkLA&t=5494s" target="_blank" rel="noopener">91:34</a>）といったパーツを本人が紹介している<a class="wk-cite" href="#src-6">[6]</a>。誕生日配信（1月7日）ではシルバーの王冠が追加アクセサリーとして登場した<a class="wk-cite" href="#src-4">[4]</a>。</p>
                         <div class="wk-costume-gallery">
-                            <a href="/wiki/新衣装1/FbUYOhGaAAExoVV.webp" target="_blank" rel="noopener"><img src="/wiki/新衣装1/FbUYOhGaAAExoVV.webp" alt="1st新衣装のイメージ1" loading="lazy" decoding="async" /></a>
-                            <a href="/wiki/新衣装1/FbUYOhIagAARyQO.webp" target="_blank" rel="noopener"><img src="/wiki/新衣装1/FbUYOhIagAARyQO.webp" alt="1st新衣装のイメージ2" loading="lazy" decoding="async" /></a>
+                            <figure class="wk-costume-item">
+                                <a href="/wiki/新衣装1/FbUYOhGaAAExoVV.webp"><img src="/wiki/新衣装1/FbUYOhGaAAExoVV.webp" alt="1st新衣装の3色バリエーション" loading="lazy" decoding="async" /></a>
+                                <figcaption>1st新衣装の3色バリエーション（黒・白・グレー）</figcaption>
+                            </figure>
+                            <figure class="wk-costume-item">
+                                <a href="/wiki/新衣装1/FbUYOhIagAARyQO.webp"><img src="/wiki/新衣装1/FbUYOhIagAARyQO.webp" alt="1st新衣装のディテール" loading="lazy" decoding="async" /></a>
+                                <figcaption>1st新衣装のディテール（ブラウスとレース飾りのクローズアップ）</figcaption>
+                            </figure>
                         </div>
                     </div>
 
@@ -200,10 +209,22 @@ include __DIR__ . '/head.php';
                         <p>お披露目もASMR配信で実施され（<a href="https://www.youtube.com/live/dre1nHDH148" target="_blank" rel="noopener">配信アーカイブ</a>）、2日後の17日には「新衣装で初めての昼雑談」を行った<a class="wk-cite" href="#src-6">[6]</a>。お披露目配信ではファンによる衣装予想コーナーが実施され、カーディガンにコートを描いた予想は「大正解」とされた（<a href="https://www.youtube.com/watch?v=dre1nHDH148&t=1098s" target="_blank" rel="noopener">18:18</a>）<a class="wk-cite" href="#src-6">[6]</a>。昼雑談では「インナーカラーが際立つ衣装」という視聴者の評を読み上げて喜んでいる（<a href="https://www.youtube.com/watch?v=Vb9rE7toZ-8&t=1287s" target="_blank" rel="noopener">21:27</a>）<a class="wk-cite" href="#src-6">[6]</a>。</p>
                         <p>さらにこの配信では、新衣装の髪型を「今までの衣装」と組み合わせられる仕様（初期衣装や「ベビードール」との組み合わせ）も発表されている（<a href="https://www.youtube.com/watch?v=dre1nHDH148&t=3971s" target="_blank" rel="noopener">66:11</a>）<a class="wk-cite" href="#src-6">[6]</a>。</p>
                         <div class="wk-costume-gallery">
-                            <a href="/wiki/新衣装2/上着着る.webp" target="_blank" rel="noopener"><img src="/wiki/新衣装2/上着着る.webp" alt="2nd新衣装 上着着る" loading="lazy" decoding="async" /></a>
-                            <a href="/wiki/新衣装2/上着羽織る.webp" target="_blank" rel="noopener"><img src="/wiki/新衣装2/上着羽織る.webp" alt="2nd新衣装 上着羽織る" loading="lazy" decoding="async" /></a>
-                            <a href="/wiki/新衣装2/上着なし.webp" target="_blank" rel="noopener"><img src="/wiki/新衣装2/上着なし.webp" alt="2nd新衣装 上着なし" loading="lazy" decoding="async" /></a>
-                            <a href="/wiki/新衣装2/初期衣装との組合合わせ.webp" target="_blank" rel="noopener"><img src="/wiki/新衣装2/初期衣装との組合合わせ.webp" alt="2nd新衣装 初期衣装との組み合わせ" loading="lazy" decoding="async" /></a>
+                            <figure class="wk-costume-item">
+                                <a href="/wiki/新衣装2/上着着る.webp"><img src="/wiki/新衣装2/上着着る.webp" alt="2nd新衣装・コートを着た姿" loading="lazy" decoding="async" /></a>
+                                <figcaption>2nd新衣装・コートを着た姿</figcaption>
+                            </figure>
+                            <figure class="wk-costume-item">
+                                <a href="/wiki/新衣装2/上着羽織る.webp"><img src="/wiki/新衣装2/上着羽織る.webp" alt="2nd新衣装・コートを羽織った姿" loading="lazy" decoding="async" /></a>
+                                <figcaption>2nd新衣装・コートを羽織った姿</figcaption>
+                            </figure>
+                            <figure class="wk-costume-item">
+                                <a href="/wiki/新衣装2/上着なし.webp"><img src="/wiki/新衣装2/上着なし.webp" alt="2nd新衣装・コートを脱いだ姿" loading="lazy" decoding="async" /></a>
+                                <figcaption>2nd新衣装・コートを脱いだ姿（タートルネック＋ロングスカート）</figcaption>
+                            </figure>
+                            <figure class="wk-costume-item">
+                                <a href="/wiki/新衣装2/初期衣装との組合合わせ.webp"><img src="/wiki/新衣装2/初期衣装との組合合わせ.webp" alt="2nd新衣装と初期衣装の組み合わせ" loading="lazy" decoding="async" /></a>
+                                <figcaption>2nd新衣装と初期衣装の組み合わせ（初期の髪型・スカート）</figcaption>
+                            </figure>
                         </div>
                     </div>
 
@@ -212,8 +233,14 @@ include __DIR__ . '/head.php';
                         <p>「ドキドキ可愛いよ…」をキャッチコピーにしたお披露目配信で公開（<a href="https://www.youtube.com/live/H57owTotDiQ" target="_blank" rel="noopener">配信アーカイブ</a>）<a class="wk-cite" href="#src-6">[6]</a>。誕生日直後の配信日程で登場した<a class="wk-cite" href="#src-6">[6]</a>。</p>
                         <p>本人説明では、<strong>ホットパンツ仕様でスカートではなく「下から覗けない」絶対領域ガード付き</strong>（<a href="https://www.youtube.com/watch?v=H57owTotDiQ&t=4624s" target="_blank" rel="noopener">77:04</a>）、前髪のピンを外せる設計（<a href="https://www.youtube.com/watch?v=H57owTotDiQ&t=3185s" target="_blank" rel="noopener">53:05</a>）、腕にリードを持たせるパーツ（モデラーが頼みもしないのに追加し「正解」と喜んだ）、イヤリング着用、クロマキー素材づくり用のグリーンバッグ同梱（<a href="https://www.youtube.com/watch?v=H57owTotDiQ&t=3845s" target="_blank" rel="noopener">64:05</a>）などが明かされている<a class="wk-cite" href="#src-6">[6]</a>。予想コーナーでは透け感・露出度の高さも「めっちゃ露出度高め」と同意されている（<a href="https://www.youtube.com/watch?v=H57owTotDiQ&t=1136s" target="_blank" rel="noopener">18:56</a>）<a class="wk-cite" href="#src-6">[6]</a>。髪型は複数（おさげなど）に切り替え可能<a class="wk-cite" href="#src-6">[6]</a>。</p>
                         <div class="wk-costume-gallery">
-                            <a href="/wiki/新衣装3/標準.webp" target="_blank" rel="noopener"><img src="/wiki/新衣装3/標準.webp" alt="3rd新衣装 標準" loading="lazy" decoding="async" /></a>
-                            <a href="/wiki/新衣装3/胸出し.webp" target="_blank" rel="noopener"><img src="/wiki/新衣装3/胸出し.webp" alt="3rd新衣装 胸出し" loading="lazy" decoding="async" /></a>
+                            <figure class="wk-costume-item">
+                                <a href="/wiki/新衣装3/標準.webp"><img src="/wiki/新衣装3/標準.webp" alt="3rd新衣装・標準スタイル" loading="lazy" decoding="async" /></a>
+                                <figcaption>3rd新衣装・標準スタイル</figcaption>
+                            </figure>
+                            <figure class="wk-costume-item">
+                                <a href="/wiki/新衣装3/胸出し.webp"><img src="/wiki/新衣装3/胸出し.webp" alt="3rd新衣装・胸出しスタイル" loading="lazy" decoding="async" /></a>
+                                <figcaption>3rd新衣装・胸出しスタイル</figcaption>
+                            </figure>
                         </div>
                     </div>
                 </section>

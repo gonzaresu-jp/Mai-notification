@@ -374,19 +374,25 @@ html {
 .wk-costume-gallery {
     display: flex;
     flex-wrap: wrap;
+    align-items: flex-start;
     gap: 10px;
     margin-top: 12px;
 }
 
-.wk-costume-gallery a {
+.wk-costume-item {
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+.wk-costume-item a {
     display: block;
     line-height: 0;
+    cursor: zoom-in;
 }
 
 .wk-costume-gallery img {
+    height: 240px;
     width: auto;
-    max-width: 200px;
-    max-height: 400px;
     border-radius: 10px;
     border: 1px solid var(--wk-border);
     background: #fff;
@@ -394,9 +400,72 @@ html {
     transition: transform 0.12s, border-color 0.12s;
 }
 
-.wk-costume-gallery a:hover img {
+.wk-costume-item a:hover img {
     transform: translateY(-2px);
     border-color: var(--wk-primary);
+}
+
+.wk-costume-item figcaption {
+    margin-top: 5px;
+    max-width: 240px;
+    font-size: 0.72rem;
+    line-height: 1.45;
+    color: #666;
+    text-align: center;
+}
+
+/* ---------- 衣装画像のライトボックス（クリックで拡大・新規タブは開かない） ---------- */
+.wk-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(24, 12, 20, 0.88);
+    cursor: zoom-out;
+}
+
+.wk-lightbox img {
+    max-width: min(1100px, 94vw);
+    max-height: 88vh;
+    width: auto;
+    height: auto;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 10px 48px rgba(0, 0, 0, 0.55);
+}
+
+.wk-lightbox .wk-lb-cap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 14px;
+    padding: 0 64px;
+    font-size: 0.8rem;
+    color: #fff;
+    text-align: center;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+}
+
+.wk-lightbox .wk-lb-close {
+    position: absolute;
+    top: 8px;
+    right: 16px;
+    padding: 4px 12px;
+    font-size: 1.9rem;
+    line-height: 1;
+    color: #fff;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.wk-lightbox .wk-lb-close:focus-visible {
+    outline: 2px solid #fff;
+    border-radius: 6px;
 }
 
 /* ---------- 経歴 ---------- */
@@ -462,7 +531,11 @@ html {
     }
 
     .wk-costume-gallery img {
-        max-width: 160px;
+        height: 170px;
+    }
+
+    .wk-costume-item figcaption {
+        max-width: 170px;
     }
 
     .wk-toc {

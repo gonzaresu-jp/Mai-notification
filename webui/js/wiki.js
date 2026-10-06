@@ -30,5 +30,51 @@
     links[0]?.classList.add("is-active");
   }
 
+  // ---- 衣装画像のライトボックス（新規タブではなくポップアップで拡大表示）
+  function setupLightbox() {
+    const gallery = document.querySelector(".wk-costume-gallery");
+    if (!gallery) return;
+    let lastFocus = null;
+
+    function close() {
+      const lb = document.querySelector(".wk-lightbox");
+      if (lb) lb.remove();
+      document.removeEventListener("keydown", onKey);
+      if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus();
+    }
+
+    function onKey(e) {
+      if (e.key === "Escape") close();
+    }
+
+    gallery.addEventListener("click", (e) => {
+      const a = e.target.closest(".wk-costume-gallery a");
+      if (!a) return;
+      e.preventDefault();
+      const img = a.querySelector("img");
+      const fig = a.closest("figure");
+      const capEl = fig && fig.querySelector("figcaption");
+      const src = a.getAttribute("href");
+      const cap = (capEl && capEl.textContent) || (img && img.getAttribute("alt")) || "";
+
+      lastFocus = document.activeElement;
+      const lb = document.createElement("div");
+      lb.className = "wk-lightbox";
+      lb.setAttribute("role", "dialog");
+      lb.setAttribute("aria-modal", "true");
+      lb.setAttribute("aria-label", cap || "画像の拡大表示");
+      lb.innerHTML =
+        `<button type="button" class="wk-lb-close" aria-label="閉じる">&times;</button>` +
+        `<img src="${src.replace(/"/g, "&quot;")}" alt="${cap.replace(/"/g, "&quot;")}" />` +
+        `<div class="wk-lb-cap"></div>`;
+      lb.querySelector(".wk-lb-cap").textContent = cap;
+      lb.addEventListener("click", close);
+      document.body.appendChild(lb);
+      document.addEventListener("keydown", onKey);
+      lb.querySelector(".wk-lb-close").focus();
+    });
+  }
+
+  setupLightbox();
   setupScrollSpy();
 })();
