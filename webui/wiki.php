@@ -104,17 +104,20 @@ include __DIR__ . '/head.php';
 
                     <div class="wk-card">
                         <h3>1st新衣装（2022年8月20日）</h3>
-                        <p>長い髪をポニーテールで一纏めにし、露出度が高めのデザインへ変更。「#恋乃夜まい新衣装」がトレンド入りするなど話題を集めた<a class="wk-cite" href="#src-1">[1]</a>。お披露目はASMRでの「お披露目パーティー」で行っている（<a href="https://www.youtube.com/live/F2QbliQEkLA" target="_blank" rel="noopener">配信アーカイブ</a>）<a class="wk-cite" href="#src-6">[6]</a>。</p>
+                        <p>長い髪をポニーテールで一纏めにした、ナイトガウン風のデザイン。リボンとバラの装飾が施され、黒・白・グレーの3種のバリエーションがあり、初期の髪型とも互換とされる<a class="wk-cite" href="#src-4">[4]</a>。「#恋乃夜まい新衣装」がトレンド入りするなど話題を集めた<a class="wk-cite" href="#src-1">[1]</a>。お披露目はASMRでの「お披露目パーティー」で行っている（<a href="https://www.youtube.com/live/F2QbliQEkLA" target="_blank" rel="noopener">配信アーカイブ</a>）<a class="wk-cite" href="#src-6">[6]</a>。</p>
+                        <p>配信中の字幕でもディテールが次々と語られており、リボンの多いスカート（<a href="https://www.youtube.com/watch?v=F2QbliQEkLA&t=2191s" target="_blank" rel="noopener">36:31</a>）、サイドから透けて見える紐（<a href="https://www.youtube.com/watch?v=F2QbliQEkLA&t=2406s" target="_blank" rel="noopener">40:06</a>）、ハイヒール（<a href="https://www.youtube.com/watch?v=F2QbliQEkLA&t=3625s" target="_blank" rel="noopener">60:25</a>）、ガーター（<a href="https://www.youtube.com/watch?v=F2QbliQEkLA&t=5494s" target="_blank" rel="noopener">91:34</a>）といったパーツを本人が紹介している<a class="wk-cite" href="#src-6">[6]</a>。誕生日配信（1月7日）ではシルバーの王冠が追加アクセサリーとして登場した<a class="wk-cite" href="#src-4">[4]</a>。</p>
                     </div>
 
                     <div class="wk-card">
                         <h3>2nd新衣装（2023年10月15日）</h3>
-                        <p>お披露目もASMR配信で実施され（<a href="https://www.youtube.com/live/dre1nHDH148" target="_blank" rel="noopener">配信アーカイブ</a>）、2日後の17日には「新衣装で初めての昼雑談」を行った<a class="wk-cite" href="#src-6">[6]</a>。</p>
+                        <p>お披露目もASMR配信で実施され（<a href="https://www.youtube.com/live/dre1nHDH148" target="_blank" rel="noopener">配信アーカイブ</a>）、2日後の17日には「新衣装で初めての昼雑談」を行った<a class="wk-cite" href="#src-6">[6]</a>。お披露目配信ではファンによる衣装予想コーナーが実施され、カーディガンにコートを描いた予想は「大正解」とされた（<a href="https://www.youtube.com/watch?v=dre1nHDH148&t=1098s" target="_blank" rel="noopener">18:18</a>）<a class="wk-cite" href="#src-6">[6]</a>。昼雑談では「インナーカラーが際立つ衣装」という視聴者の評を読み上げて喜んでいる（<a href="https://www.youtube.com/watch?v=Vb9rE7toZ-8&t=1287s" target="_blank" rel="noopener">21:27</a>）<a class="wk-cite" href="#src-6">[6]</a>。</p>
+                        <p>さらにこの配信では、新衣装の髪型を「今までの衣装」と組み合わせられる仕様（初期衣装や「ベビードール」との組み合わせ）も発表されている（<a href="https://www.youtube.com/watch?v=dre1nHDH148&t=3971s" target="_blank" rel="noopener">66:11</a>）<a class="wk-cite" href="#src-6">[6]</a>。</p>
                     </div>
 
                     <div class="wk-card">
                         <h3>3rd新衣装（2025年1月23日）</h3>
                         <p>「ドキドキ可愛いよ…」をキャッチコピーにしたお披露目配信で公開（<a href="https://www.youtube.com/live/H57owTotDiQ" target="_blank" rel="noopener">配信アーカイブ</a>）<a class="wk-cite" href="#src-6">[6]</a>。誕生日直後の配信日程で登場した<a class="wk-cite" href="#src-6">[6]</a>。</p>
+                        <p>本人説明では、<strong>ホットパンツ仕様でスカートではなく「下から覗けない」絶対領域ガード付き</strong>（<a href="https://www.youtube.com/watch?v=H57owTotDiQ&t=4624s" target="_blank" rel="noopener">77:04</a>）、前髪のピンを外せる設計（<a href="https://www.youtube.com/watch?v=H57owTotDiQ&t=3185s" target="_blank" rel="noopener">53:05</a>）、腕にリードを持たせるパーツ（モデラーが頼みもしないのに追加し「正解」と喜んだ）、イヤリング着用、クロマキー素材づくり用のグリーンバッグ同梱（<a href="https://www.youtube.com/watch?v=H57owTotDiQ&t=3845s" target="_blank" rel="noopener">64:05</a>）などが明かされている<a class="wk-cite" href="#src-6">[6]</a>。予想コーナーでは透け感・露出度の高さも「めっちゃ露出度高め」と同意されている（<a href="https://www.youtube.com/watch?v=H57owTotDiQ&t=1136s" target="_blank" rel="noopener">18:56</a>）<a class="wk-cite" href="#src-6">[6]</a>。髪型は複数（おさげなど）に切り替え可能<a class="wk-cite" href="#src-6">[6]</a>。</p>
                     </div>
                 </section>
 
