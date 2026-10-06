@@ -33,6 +33,7 @@ include __DIR__ . '/head.php';
                 <ol class="wk-toc-list">
                     <li><a href="#profile">プロフィール</a></li>
                     <li><a href="#debut">自己紹介動画</a></li>
+                    <li><a href="#costumes">衣装</a></li>
                     <li><a href="#overview">概要</a></li>
                     <li><a href="#history">経歴</a></li>
                     <li><a href="#person">人物</a></li>
@@ -93,6 +94,30 @@ include __DIR__ . '/head.php';
                     </div>
                 </section>
 
+                <section class="wk-section" id="costumes">
+                    <h2>衣装</h2>
+
+                    <div class="wk-card">
+                        <h3>初期衣装（2021年3月〜）</h3>
+                        <p>デビュー時からの衣装。黒のロングヘアーにパープルのツートンメッシュ、左目近くに泣きぼくろ、右耳に大きめのピアスという容姿はこの初期アバターの特徴として知られる<a class="wk-cite" href="#src-1">[1]</a>。</p>
+                    </div>
+
+                    <div class="wk-card">
+                        <h3>1st新衣装（2022年8月20日）</h3>
+                        <p>長い髪をポニーテールで一纏めにし、露出度が高めのデザインへ変更。「#恋乃夜まい新衣装」がトレンド入りするなど話題を集めた<a class="wk-cite" href="#src-1">[1]</a>。お披露目はASMRでの「お披露目パーティー」で行っている（<a href="https://www.youtube.com/live/F2QbliQEkLA" target="_blank" rel="noopener">配信アーカイブ</a>）<a class="wk-cite" href="#src-6">[6]</a>。</p>
+                    </div>
+
+                    <div class="wk-card">
+                        <h3>2nd新衣装（2023年10月15日）</h3>
+                        <p>お披露目もASMR配信で実施され（<a href="https://www.youtube.com/live/dre1nHDH148" target="_blank" rel="noopener">配信アーカイブ</a>）、2日後の17日には「新衣装で初めての昼雑談」を行った<a class="wk-cite" href="#src-6">[6]</a>。</p>
+                    </div>
+
+                    <div class="wk-card">
+                        <h3>3rd新衣装（2025年1月23日）</h3>
+                        <p>「ドキドキ可愛いよ…」をキャッチコピーにしたお披露目配信で公開（<a href="https://www.youtube.com/live/H57owTotDiQ" target="_blank" rel="noopener">配信アーカイブ</a>）<a class="wk-cite" href="#src-6">[6]</a>。誕生日直後の配信日程で登場した<a class="wk-cite" href="#src-6">[6]</a>。</p>
+                    </div>
+                </section>
+
                 <section class="wk-section" id="overview">
                     <h2>概要</h2>
 
@@ -129,7 +154,7 @@ include __DIR__ . '/head.php';
                         <li><b>5月</b> — 18日から6月7日にかけて渋谷・MAGNET by SHIBUYA109で開催されたVTuberイベント『渋谷をジャックせよ！』のアンバサダーを務め、6月3日に個人のリアルイベント回を開催<a class="wk-cite" href="#src-17">[17]</a>。</li>
                         <li><b>6月</b> — 18日、3Dモデルが完成し、単独初ライブを実施<a class="wk-cite" href="#src-3">[3]</a>。20日、ニコニコ公式番組『あつまれ！ばーちゃる！ Vol.7』に急遽代理（MC代打）として出演<a class="wk-cite" href="#src-3">[3]</a>（<a href="https://live.nicovideo.jp/watch/lv341460582" target="_blank" rel="noopener">放送アーカイブ</a>）。</li>
                         <li><b>9月</b> — 21日、2年半記念配信で「まい母」が初登場し、母とのコラボを実施<a class="wk-cite" href="#src-6">[6]</a>（<a href="https://www.youtube.com/live/H8WDVT1VOcU" target="_blank" rel="noopener">配信アーカイブ</a>）。</li>
-                        <li><b>10月</b> — 24日から30日、SHIBUYA TSUTAYA（スクランブル交差点前店舗）で開催のVTuberイベント『V-Stage SHIBUYA TSUTAYA』に咲夜あずさと並んで出演<a class="wk-cite" href="#src-16">[16]</a>。</li>
+                        <li><b>10月</b> — 15日、2nd新衣装をお披露目{C(6)}。24日から30日、SHIBUYA TSUTAYA（スクランブル交差点前店舗）で開催のVTuberイベント『V-Stage SHIBUYA TSUTAYA』に咲夜あずさと並んで出演<a class="wk-cite" href="#src-16">[16]</a>。</li>
                         <li><b>11月</b> — 18日、大阪・心斎橋の4会場で開催されたサーキットフェス『Osaka VTuberCircuit FES vol.2』に第一弾出演者として参加（めるれっと枠）<a class="wk-cite" href="#src-5">[5]</a>。</li>
                         <li><b>12月</b> — 縦長配信が実装され、雑談・ASMR配信に組み込まれる<a class="wk-cite" href="#src-1">[1]</a>。</li>
                         <li><b>2024年1月</b> — 6日、誕生日記念の3D配信「#恋乃夜まい誕生日デート」を開催（3D抱っこ・膝枕・カウントダウン）<a class="wk-cite" href="#src-6">[6]</a>。7日、お誕生日のスパチャ読みを実施<a class="wk-cite" href="#src-6">[6]</a>。8日、チャンネル登録者27万人を突破<a class="wk-cite" href="#src-6">[6]</a>。</li>
