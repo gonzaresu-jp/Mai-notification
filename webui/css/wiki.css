@@ -14,11 +14,34 @@ html {
     scroll-behavior: smooth;
 }
 
+/* このページだけ背景を白に（百科事典らしいフラットな地色） */
+body#app-body {
+    background-color: #fff;
+}
+
 /* このページだけ背景画像なし（百科事典はフラットな地色で読みやすく）。
    style.min.css の共通背景 body:before(全面) / main:before(ぼかし) を無効化 */
 main.wk-main::before,
 body#app-body::before {
     background-image: none;
+}
+
+/* 白背景でも文字・ロゴが消えないよう、ヘッダーとメニューは不透明のブランドカラーに。
+   共通の #B11E7CBF（透過75%）は白地で薄れて白文字が読めなくなるため */
+#header-slot > header,
+#nav-menu {
+    background-color: #B11E7C;
+}
+
+/* フッターは共通の白文字のままでは白地に溶けるので反転（薄い地・ピンクのリンク） */
+footer {
+    color: var(--wk-muted);
+    border-top: 1px solid var(--wk-border);
+}
+
+footer a,
+footer p a {
+    color: var(--wk-primary);
 }
 
 .wk-main {
@@ -304,6 +327,11 @@ body#app-body::before {
 .wk-video-list {
     display: grid;
     gap: 10px;
+}
+
+/* カード内の動画リスト（画像→文章→動画の並び） */
+.wk-card .wk-video-list {
+    margin-top: 10px;
 }
 
 .wk-video-card {
