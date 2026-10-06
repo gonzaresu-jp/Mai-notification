@@ -18,7 +18,7 @@ const PLATFORMS = ["youtube", "twitcasting", "twitch"];
 const PLATFORM_LABEL = { youtube: "YouTube", twitcasting: "ツイキャス", twitch: "Twitch" };
 const WEEKDAYS_JA = ["日", "月", "火", "水", "木", "金", "土"];
 // 体調に関係しそうな言葉（本人ツイート内）。「おやすみ」と区別するため「お休み」は告知の言い回しに限定
-const HEALTH_RE = /体調|風邪|発熱|熱が|喉|のど(が|の調子)|咳|病院|頭痛|腹痛|しんどい|休養|寝込|声が出な|声枯|お休み(します|させて|いただ|になります)|延期|中止/;
+const HEALTH_RE = /体調|風邪|発熱|熱が|喉|のど(が|の調子)|咳|病院|頭痛|頭(が|は)痛い?|腹痛|しんどい|休養|寝込|声が出な|声枯|お休み(します|させて|いただ|になります)|延期|中止|気圧|めまい|クラクラ|吐き気|だる(い|くて|いです)|倦怠|体(が|は)重|調子.{0,2}悪|ぐったり|ふらふら|偏頭痛/;
 
 const CACHE_MS = 30 * 60 * 1000;
 let cache = null;
@@ -167,7 +167,7 @@ function weeklySeries(streams, tweets, nowMs, nWeeks) {
 }
 
 /** 直近2週と、その前の12週（ふだん）を比べて指標にする */
-function currentState(series, tweets, nowMs) {
+function currentState(series, tweets, nowMs, streamHealth = null) {
   const recent = series.slice(-2), base = series.slice(-14, -2);
   const avg = (arr, k) => { const v = arr.map((w) => w[k]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
   const ratio = (k) => {
@@ -192,10 +192,13 @@ function currentState(series, tweets, nowMs) {
 
   // 体調サイン: 体調関連ワード・深夜投稿の増加・ネガティブ化の3つを数える
   const since = nowMs - 14 * DAY;
-  const healthTweets = tweets.filter((t) => t.platform === "twitterMain" && t.ms >= since && HEALTH_RE.test(t.body || ""));
+  // 本体＋サブ両アカウントを対象に（体調メモはサブへ書くこともある）
+  const healthTweets = tweets.filter((t) => (t.platform === "twitterMain" || t.platform === "twitterSub") && t.ms >= since && HEALTH_RE.test(t.body || ""));
   const healthBase = median(base.map((w) => w.health)) * 2;
   const signals = [];
-  if (healthTweets.length >= Math.max(2, healthBase + 2)) signals.push(`体調に関する言葉が増えています（直近2週 ${healthTweets.length}件 / ふだん ${round(healthBase, 1)}件）`);
+  // ふだん0〜1件なら「1件で反応」に緩和（体調不良を14日以上見逃さないため）
+  if (healthTweets.length >= Math.max(1, healthBase + 1)) signals.push(`体調に関する言葉が増えています（直近2週 ${healthTweets.length}件 / ふだん ${round(healthBase, 1)}件）`);
+  if (streamHealth != null && streamHealth >= 4) signals.push(`配信内でも体調を気にする発言が目立つ（直近2週 ${streamHealth}件）`);
   if (lateRecent != null && lateBase != null && lateRecent - lateBase >= 0.1) signals.push(`深夜(1〜5時)の投稿が増えています（${Math.round(lateRecent * 100)}% / ふだん ${Math.round(lateBase * 100)}%）`);
   if (sentiDelta != null && sentiDelta <= -0.25) signals.push(`ツイートの感情がふだんよりネガティブ寄りです（${sentiDelta >= 0 ? "+" : ""}${sentiDelta}）`);
   if (streamRatio != null && streamRatio <= 0.5) signals.push(`配信の頻度がふだんの半分以下です（×${streamRatio}）`);
@@ -207,6 +210,7 @@ function currentState(series, tweets, nowMs) {
     sentimentBase: sentiBase != null ? round(sentiBase, 2) : null, sentimentDelta: sentiDelta,
     lateNightRecent: lateRecent != null ? round(lateRecent, 2) : null, lateNightBase: lateBase != null ? round(lateBase, 2) : null,
     healthTweets: healthTweets.slice(-5).reverse().map((t) => ({ date: jst(t.ms).dateKey, text: String(t.body || "").slice(0, 80) })),
+    streamHealth,
   };
 }
 
@@ -244,16 +248,58 @@ function forecast(streams, events, state, nowMs) {
   return days;
 }
 
+// 直近14日の配信（アーカイブ）の字幕から体調ワードを検知する。
+// 「気圧で頭が痛い」等、配信内で語られる体調不良はツイートに無いのでこちらで拾う。
+async function fetchRecentStreamHealth(nowMs) {
+  try {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 8000);
+    const vr = await fetch(`${ARCHIVE_API_BASE}/api/videos?limit=25&sort=stream_at_desc&include_deleted=0`, { signal: ac.signal });
+    clearTimeout(timer);
+    if (!vr.ok) return null;
+    const vj = await vr.json();
+    const cutoff = nowMs - 14 * DAY;
+    const recent = new Set((vj.videos || [])
+      .filter((v) => {
+        const ms = Date.parse(`${v.stream_date_jst || ""}T00:00:00+09:00`);
+        return Number.isFinite(ms) && ms >= cutoff;
+      })
+      .map((v) => v.video_id));
+    if (!recent.size) return null;
+    const q = encodeURIComponent("気圧 頭痛 頭が痛 病院 喉 咳 発熱 しんど 体調 だる めまい 倦怠 調子");
+    const ac2 = new AbortController();
+    const timer2 = setTimeout(() => ac2.abort(), 10000);
+    const r = await fetch(`${ARCHIVE_API_BASE}/api/search?q=${q}&limit=100&include_deleted=0`, { signal: ac2.signal });
+    clearTimeout(timer2);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const seen = new Set();
+    let n = 0;
+    for (const seg of j.transcript || []) {
+      if (!recent.has(seg.video_id)) continue;
+      if (!HEALTH_RE.test(seg.text || "")) continue;
+      const key = `${seg.video_id}:${Math.floor((seg.start_ms || 0) / 60000)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      n += 1;
+    }
+    return n;
+  } catch {
+    return null;
+  }
+}
+
 async function compute(db) {
   const now = Date.now();
-  const [{ streams, archiveOk }, tweets, evRows] = await Promise.all([
+  const [{ streams, archiveOk }, tweets, evRows, streamHealth] = await Promise.all([
     loadStreams(db), loadTweets(db),
     dbAll(db, `SELECT title, start_time, platform FROM events WHERE status IN ('scheduled','live') AND datetime(start_time) >= datetime('now','-1 day') ORDER BY start_time`),
+    fetchRecentStreamHealth(now),
   ]);
   const events = evRows.map((e) => ({ ...e, ms: new Date(String(e.start_time).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(e.start_time) ? "" : "+09:00")).getTime() }))
     .filter((e) => Number.isFinite(e.ms) && e.ms >= jstDayStart(now));
   const series = weeklySeries(streams, tweets, now, 26);
-  const state = currentState(series, tweets, now);
+  const state = currentState(series, tweets, now, streamHealth);
   // 曜日×プラットフォーム: ツイキャス/Twitch の通知ログがそろっている期間（最初の通知以降）で集計
   const logStart = Math.min(...streams.filter((s) => s.platform !== "youtube").map((s) => s.ms), now);
   return {
