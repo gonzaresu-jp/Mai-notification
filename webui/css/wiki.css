@@ -14,6 +14,13 @@ html {
     scroll-behavior: smooth;
 }
 
+/* このページだけ背景画像なし（百科事典はフラットな地色で読みやすく）。
+   style.min.css の共通背景 body:before(全面) / main:before(ぼかし) を無効化 */
+main.wk-main::before,
+body#app-body::before {
+    background-image: none;
+}
+
 .wk-main {
     max-width: 1000px;
     margin: 0 auto;
