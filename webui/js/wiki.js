@@ -31,9 +31,8 @@
   }
 
   // ---- 衣装画像のライトボックス（新規タブではなくポップアップで拡大表示）
+  // document 委譲なので、複数あるギャラリー全部・後から増えた画像も対象
   function setupLightbox() {
-    const gallery = document.querySelector(".wk-costume-gallery");
-    if (!gallery) return;
     let lastFocus = null;
 
     function close() {
@@ -47,7 +46,8 @@
       if (e.key === "Escape") close();
     }
 
-    gallery.addEventListener("click", (e) => {
+    document.addEventListener("click", (e) => {
+      if (!e.target || typeof e.target.closest !== "function") return;
       const a = e.target.closest(".wk-costume-gallery a");
       if (!a) return;
       e.preventDefault();
