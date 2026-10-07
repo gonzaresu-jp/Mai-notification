@@ -36,7 +36,7 @@
       ids.map((p) => `<span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${PCOLOR[p]};margin-right:4px;"></i>${PLABEL[p] || p}</span>`).join("") + `</div>`;
   }
 
-  // ---- 気圧の低下リスク（大阪・Open-Meteo予測。管理画面専用で通知には接続しない）
+  // ---- 気圧の低下リスク（Open-Meteo予測。管理画面専用で通知には接続しない）
   function pressureCard(p) {
     if (!p) return "";
     const color = p.level === "high" ? "#d9534f" : p.level === "warn" ? "#c98a00" : "#2e9e6b";
