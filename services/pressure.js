@@ -1,20 +1,31 @@
 // 気圧の予測（管理画面専用の表示用データ）
-// Open-Meteo（無料・キー不要）で大阪の予測気圧を取得し、直近24時間の低下幅から
+// Open-Meteo（無料・キー不要）で指定地点の予測気圧を取得し、直近24時間の低下幅から
 // 片頭痛リスクの目安「低い / 注意 / 高い」を返す。
 // ⚠️ 通知（push / 配信予定日レコメンド等）には絶対に接続しないこと（2026-10-07 指示）。
-// 取得失敗時は呼び出し側で null が返り、管理画面はカードを非表示にする（fail-safe）。
+// 地点は .env の PRESSURE_LOCATION_NAME / PRESSURE_LATITUDE / PRESSURE_LONGITUDE で指定する。
+// 未設定時は getPressureRisk() が null を返し、管理画面はカードを非表示にする（fail-safe）。
+// 取得失敗時も呼び出し側で null が返る。
 
-const LOCATION = { name: "大阪", latitude: 34.6937, longitude: 135.5023 };
 const TTL_MS = 30 * 60 * 1000;
 const TIMEOUT_MS = 8000;
 
 let cache = { at: 0, data: null };
 
+function getLocation() {
+  const name = process.env.PRESSURE_LOCATION_NAME;
+  const latitude = parseFloat(process.env.PRESSURE_LATITUDE);
+  const longitude = parseFloat(process.env.PRESSURE_LONGITUDE);
+  if (!name || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { name, latitude, longitude };
+}
+
 async function getPressureRisk() {
+  const location = getLocation();
+  if (!location) return null;
   if (cache.data && Date.now() - cache.at < TTL_MS) return cache.data;
 
   const url = "https://api.open-meteo.com/v1/forecast"
-    + `?latitude=${LOCATION.latitude}&longitude=${LOCATION.longitude}`
+    + `?latitude=${location.latitude}&longitude=${location.longitude}`
     + "&hourly=surface_pressure&timezone=Asia%2FTokyo&forecast_days=3";
 
   const ctrl = new AbortController();
@@ -51,7 +62,7 @@ async function getPressureRisk() {
       current_hpa: Math.round(baseline * 10) / 10,
       min_hpa: Math.round(min * 10) / 10,
       min_at: minAt,
-      location: LOCATION.name,
+      location: location.name,
       checked_at: new Date().toISOString(),
     };
     cache = { at: Date.now(), data };
