@@ -20,10 +20,13 @@ body#app-body {
 }
 
 /* このページだけ背景画像なし（百科事典はフラットな地色で読みやすく）。
-   style.min.css の共通背景 body:before(全面) / main:before(ぼかし) を無効化 */
+   style.min.css の共通背景 body:before(全面画像) / body:after(黒18%の暗幕) /
+   main:before(ぼかし画像) を無効化。after の暗幕が白地に載って灰色に見えていた */
 main.wk-main::before,
-body#app-body::before {
+body#app-body::before,
+body#app-body::after {
     background-image: none;
+    background: none;
 }
 
 /* 白背景でも文字・ロゴが消えないよう、ヘッダーとメニューは不透明のブランドカラーに。
