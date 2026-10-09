@@ -41,7 +41,7 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
 
     companion object {
         private const val TAG = "MaiWidget"
-        private const val BASE = "https://mai.honna-yuzuki.com"
+        private const val BASE = "https://koinoyamai.love"
         private const val PREFS = "mai_widget"
         private const val KEY_CACHE = "schedule_cache_v2"
         private const val KEY_MODE = "schedule_mode"

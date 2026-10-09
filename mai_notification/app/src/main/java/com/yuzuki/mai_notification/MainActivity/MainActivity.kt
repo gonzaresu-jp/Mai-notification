@@ -3,7 +3,9 @@ package com.yuzuki.mai_notification
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -25,6 +27,19 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : AppCompatActivity() {
+
+    companion object {
+        // アプリ内ブラウザで開く自サイトのトップ
+        private const val HOME_URL = "https://koinoyamai.love"
+
+        // ログイン（Google / Discord OAuth）はアプリ内ブラウザのまま完結させる必要があるため、
+        // ここに載っているホストへの遷移だけは外部に出さない
+        private val AUTH_HOSTS = setOf(
+            "accounts.google.com",
+            "discord.com",
+            "login.discord.com"
+        )
+    }
 
     private lateinit var web: WebView
     private lateinit var swipe: SwipeRefreshLayout
@@ -142,24 +157,30 @@ class MainActivity : AppCompatActivity() {
 
         web.webViewClient = object : WebViewClient() {
 
-            // リンクをすべてWebView内で開く
+            // 自サイト内はWebViewのまま遷移し、外部リンクはブラウザ／専用アプリで開く
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
                 request: WebResourceRequest?
             ): Boolean {
-                val url = request?.url?.toString() ?: return false
-                return if (url.startsWith("http://") || url.startsWith("https://")) {
-                    // v1.2: loadUrl() で読み直すと遷移が二重になり遅いので、WebView にそのまま遷移させる
-                    false
-                } else {
-                    // tel: / mailto: / intent: などはOSに任せる
-                    try {
-                        startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, request.url))
-                    } catch (e: Exception) {
-                        Log.w("MaiApp", "no activity for $url", e)
-                    }
-                    true
+                val uri = request?.url ?: return false
+                val scheme = uri.scheme?.lowercase()
+
+                if (scheme == "http" || scheme == "https") {
+                    // iframe（サブフレーム）はWebView内で読む
+                    if (!request.isForMainFrame) return false
+                    // 自サイト（*.honna-yuzuki.com）とログインフローはアプリ内ブラウザのまま
+                    if (isOwnSite(uri) || isAuthHost(uri.host)) return false
+                    // 外部はOSに委譲。開けなかった時だけWebViewで読む
+                    return openExternal(uri.toString())
                 }
+
+                // data: / about: / blob: / javascript: などはWebViewに任せる
+                if (scheme == null || scheme == "data" || scheme == "about" ||
+                    scheme == "blob" || scheme == "javascript" || scheme == "file"
+                ) return false
+
+                // tel: / mailto: / intent: などはOSに任せる（開けなければWebViewに任せる）
+                return openExternal(uri.toString())
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -276,14 +297,79 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadInitialUrl() {
         val targetUrl = intent?.getStringExtra("targetUrl")
-        if (targetUrl != null && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://"))) {
-            web.loadUrl(targetUrl)
-        } else {
-            web.loadUrl("https://mai.honna-yuzuki.com")
+        val uri = targetUrl?.let { runCatching { Uri.parse(it) }.getOrNull() }
+        val scheme = uri?.scheme?.lowercase()
+
+        if (uri != null && (scheme == "http" || scheme == "https")) {
+            if (isOwnSite(uri)) {
+                web.loadUrl(uri.toString())
+                return
+            }
+            // 通知のリンク先が外部の場合はブラウザ／専用アプリで開く。
+            // 帰ってきた時に白紙にならないよう、アプリ側はホームを表示しておく
+            web.loadUrl(HOME_URL)
+            openExternal(uri.toString())
+            return
+        }
+        web.loadUrl(HOME_URL)
+    }
+
+    // アプリ内ブラウザで開いてよい自サイトかどうか
+    private fun isOwnSite(uri: Uri): Boolean {
+        val host = uri.host?.lowercase() ?: return false
+        return host == "honna-yuzuki.com" || host.endsWith(".honna-yuzuki.com") ||
+                host == "koinoyamai.love" || host.endsWith(".koinoyamai.love")
+    }
+
+    // ログイン（OAuth）に必要なホストかどうか
+    private fun isAuthHost(host: String?): Boolean {
+        val h = host?.lowercase() ?: return false
+        return h in AUTH_HOSTS
+    }
+
+    /**
+     * 外部リンクを開く。http(s) はまず専用アプリ（YouTube等）を優先し、
+     * ブラウザしか使えないURLはブラウザ（または選択ダイアログ）で開く。
+     * どちらも開けなかったら false（= 読み込みを中断せずWebViewに任せる）。
+     */
+    private fun openExternal(url: String): Boolean {
+        val isWeb = url.startsWith("http://", ignoreCase = true) ||
+                url.startsWith("https://", ignoreCase = true)
+        val intent = try {
+            if (url.startsWith("intent:", ignoreCase = true)) {
+                Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+            } else {
+                Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            }
+        } catch (e: Exception) {
+            Log.w("MaiApp", "invalid uri: $url", e)
+            return false
+        }
+
+        if (isWeb) {
+            // まず専用アプリで開く（ブラウザしか使えないURLは例外になる）
+            try {
+                startActivity(Intent(intent).apply {
+                    addCategory(Intent.CATEGORY_BROWSABLE)
+                    flags = flags or Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER
+                })
+                return true
+            } catch (_: Exception) {
+                Log.d("MaiApp", "no non-browser handler for $url")
+            }
+        }
+
+        // ブラウザ（または選択ダイアログ）で開く
+        return try {
+            startActivity(intent)
+            true
+        } catch (e: Exception) {
+            Log.w("MaiApp", "no activity for $url", e)
+            false
         }
     }
 
-    override fun onNewIntent(intent: android.content.Intent?) {
+    override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
         // 通知・ウィジェットから URL 指定で開かれた時だけ読み込む。

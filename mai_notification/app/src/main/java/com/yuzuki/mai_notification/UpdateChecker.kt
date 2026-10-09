@@ -19,7 +19,7 @@ import java.net.URL
  * アプリの更新確認とアプリ内ダウンロード（Windows 版の desktop.json と同じ方式）。
  *
  * サーバーの dl/android.json:
- *   { "versionCode": 5, "versionName": "1.4", "url": "https://.../mai-notification.apk", "notes": "..." }
+ *   { "versionCode": 6, "versionName": "1.5", "url": "https://.../mai-notification.apk", "notes": "..." }
  *
  * - 起動時に確認（6時間に1回まで）。新しい versionCode があればダイアログで案内する
  * - 「インストール」でアプリ内に APK をダウンロードし、そのまま標準インストーラを起動する
@@ -31,7 +31,7 @@ import java.net.URL
  */
 object UpdateChecker {
     private const val TAG = "MaiUpdate"
-    private const val FEED_URL = "https://mai.honna-yuzuki.com/dl/android.json"
+    private const val FEED_URL = "https://koinoyamai.love/dl/android.json"
     private const val PREFS = "mai_update"
     private const val KEY_LAST_CHECK = "last_check_ms"
     private const val MIN_INTERVAL_MS = 6 * 60 * 60 * 1000L

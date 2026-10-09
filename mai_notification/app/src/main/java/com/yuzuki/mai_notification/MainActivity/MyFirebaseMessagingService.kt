@@ -18,7 +18,7 @@ import java.net.URL
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     companion object {
-        private const val BASE_URL = "https://mai.honna-yuzuki.com"
+        private const val BASE_URL = "https://koinoyamai.love"
     }
 
     // スマホごとに割り当てられるFCMのID（トークン）が更新された時に呼ばれます
@@ -62,24 +62,6 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
-    private fun mapAndroidTargetUrl(url: String?): String? {
-        val target = normalizeUrl(url) ?: return null
-        val lower = target.lowercase()
-        val pushWebDomains = listOf(
-            "youtube.com",
-            "youtu.be",
-            "x.com",
-            "twitter.com",
-            "twitcasting.tv",
-            "fanbox.cc"
-        )
-        return if (pushWebDomains.any { lower.contains(it) }) {
-            "$BASE_URL/"
-        } else {
-            target
-        }
-    }
-
     private fun fetchImage(imageUrl: String?): Bitmap? {
         val resolved = normalizeUrl(imageUrl) ?: return null
         Log.d("FCM", "fetchImage: $resolved")
@@ -110,7 +92,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     // 実際にスマホの画面上に通知を表示する処理
     private fun sendNotification(title: String, messageBody: String, url: String?, iconUrl: String?, imageUrl: String?) {
         Log.d("FCM", "sendNotification called: title=$title")
-        val finalUrl = mapAndroidTargetUrl(url)
+        // 自サイトならアプリ内ブラウザ、外部URLならブラウザ／専用アプリで開く（MainActivity側で判定）
+        val finalUrl = normalizeUrl(url)
 
         // 通知をタップした時にMainActivityを開く設定
         val intent = Intent(this, MainActivity::class.java)

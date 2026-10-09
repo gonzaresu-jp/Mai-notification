@@ -12,9 +12,9 @@ import java.net.URL
 
 object FcmRegistrar {
     private const val TAG = "FCM"
-    private const val REGISTER_URL = "https://mai.honna-yuzuki.com/api/android/register"
-    private const val SETTINGS_URL = "https://mai.honna-yuzuki.com/api/android/settings"
-    private const val TEST_URL = "https://mai.honna-yuzuki.com/api/android/send-test"
+    private const val REGISTER_URL = "https://koinoyamai.love/api/android/register"
+    private const val SETTINGS_URL = "https://koinoyamai.love/api/android/settings"
+    private const val TEST_URL = "https://koinoyamai.love/api/android/send-test"
     private const val PREFS = "fcm_prefs"
     private const val KEY_TOKEN = "fcm_token"
     private const val KEY_ENABLED = "notifications_enabled"
