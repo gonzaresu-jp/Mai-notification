@@ -135,6 +135,7 @@
             <?php endif; ?>
         <?php endif; ?>
     </main>
+    <script src="/migration.js" defer></script>
 </body>
 
 </html>

@@ -26,5 +26,6 @@
 <div id="footer-slot">
         <?php include __DIR__ . '/footer.php'; ?>
     </div>
+    <script src="/migration.js" defer></script>
 </body>
 </html>
