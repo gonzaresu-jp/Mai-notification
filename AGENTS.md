@@ -69,10 +69,13 @@
 - pm2-logrotate 導入済み（20M・10世代・圧縮）。
 
 ## 6.7 admin は Tailnet 専用（2026-10-10 追加）
-- **管理画面の正規エントリは `https://elza.poitou-mora.ts.net/admin/login/`（tailscale serve・tailnet のみ・自動認証）**。
-  公開ドメイン（koinoyamai.love / mai）の `/admin.html`・`/admin/login/`・`/api/admin` は **403 が仕様**
-  （nginx allow-list: `192.168.0.0/16` + `100.64.0.0/10`。cloudflared 由来の loopback は拒否）。
-  **403 を障害と誤診しないこと。** elza vhost は tailscale serve の受け皿（`127.0.0.1` 許可）＋
+- **管理画面の正規エントリは `https://elza.poitou-mora.ts.net/admin.html`（tailscale serve・tailnet のみ・自動認証）**。
+  公開ドメイン（koinoyamai.love / mai）の `/admin`・`/admin.html`・`/admin/login/` は **ts.net へ 302 リダイレクトが仕様**
+  （Ctrl+K パレットのショートカット用。`/api/admin` は **403** のまま）。
+  （nginx: `allow 192.168.0.0/16` + `100.64.0.0/10` で deny 時に `error_page 403 = @to_elza_*` → 302。
+  cloudflared 由来の loopback はリダイレクト。**302/403 を障害と誤診しないこと。**）
+  LAN/Tailnet 直撃は従来通りローカル配信（tailscale 停動時の保険）。
+  elza vhost は tailscale serve の受け皿（`127.0.0.1` 許可）＋
   webui 静的配信（`/css/`・`/js/admin-`・`/migration.js`・fontawesome）付き。
 - LAN 保険: `http://192.168.1.72:1700/admin/login/`（WebAuthn は http 非対応のためパスワードのみ）。
   `/api/` の `Host` は **`$http_host`**（`$host` に戻すとポートが落ちて POST が CSRF 403 になる）。
