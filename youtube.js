@@ -6,6 +6,7 @@ const axios = require('axios');
 const querystring = require('querystring');
 const fs = require('fs');
 const path = require('path');
+const sqlite3 = require('sqlite3').verbose();
 
 const { parseStringPromise } = require('xml2js');
 const { upsertEvent } = require('./weekly');
@@ -151,10 +152,11 @@ async function sendNotifyApi(payload) {
     }
 }
 
-/** 指定の内部エンドポイントに URL を送りつける（新規動画用） */
-async function sendInternalUrl(urlToSend) {
+/** 指定の内部エンドポイントに URL を送りつける（新規動画用）。
+ *  extraPayload で { source: 'collab', title } 等を付加できる（nassy側は未知キーを無視するため後方互換）。 */
+async function sendInternalUrl(urlToSend, extraPayload = {}) {
     try {
-        await axios.post('http://192.168.1.70:1700/', { url: urlToSend }, {
+        await axios.post('http://192.168.1.70:1700/', { url: urlToSend, ...extraPayload }, {
             headers: { 'Content-Type': 'application/json' },
             timeout: 8000
         });
@@ -163,6 +165,92 @@ async function sendInternalUrl(urlToSend) {
         console.error('sendInternalUrl failed:', e.message || e);
         return false;
     }
+}
+
+// ========= コラボ相手チャンネルの配信終了ポーリング =========
+// 引用ツイートから作られたコラボ予定（events.external_id = 'gemma_*'）を監視し、
+// 相手チャンネルの配信が終了したら nassy へ DL 通知を送る（本人チャンネルは既存フローで処理済み）。
+const COLLAB_POLL_WINDOW_DAYS = 3;
+
+let _collabDb = null;
+function getCollabDb() {
+    if (!_collabDb) {
+        const dbPath = path.join(__dirname, process.env.DB_FILE_NAME || 'data.db');
+        _collabDb = new sqlite3.Database(dbPath);
+    }
+    return _collabDb;
+}
+function dbAllAsync(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        getCollabDb().all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows || [])));
+    });
+}
+
+/** YouTube URL から video_id を抽出（nassy download.py と同じ正則） */
+function extractYouTubeVideoId(u) {
+    try {
+        const parsed = new URL(u);
+        const v = parsed.searchParams.get('v');
+        if (v && /^[A-Za-z0-9_-]{11}$/.test(v)) return v;
+    } catch { /* fallthrough */ }
+    const m = String(u || '').match(/(?:v=|\/watch\/|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    return m ? m[1] : null;
+}
+
+async function pollForEndedCollabs() {
+    let rows;
+    try {
+        rows = await dbAllAsync(
+            `SELECT id, title, url, start_time, external_id FROM events
+             WHERE platform = 'youtube'
+               AND external_id LIKE 'gemma_%'
+               AND url IS NOT NULL AND url != ''
+               AND start_time >= datetime('now', ?)
+               AND status != 'cancelled'`,
+            [`-${COLLAB_POLL_WINDOW_DAYS} day`]
+        );
+    } catch (e) {
+        console.error('[CollabPoll] events query error:', e.message || e);
+        return;
+    }
+    if (!rows || rows.length === 0) return;
+
+    const records = loadSentRecords();
+    let changed = false;
+    for (const ev of rows) {
+        const videoId = extractYouTubeVideoId(ev.url);
+        if (!videoId) continue;
+        const rec = records[videoId] || {};
+        if (rec.collabSent) continue;
+
+        const item = await fetchVideoStatus(videoId);
+        if (!item) continue; // 削除・非公開。イベントは3日で窓から抜けるため無限ポーリングにはならない
+        const channelId = item.snippet && item.snippet.channelId;
+        if (channelId && CHANNEL_IDS.includes(channelId)) continue; // 本人チャンネル → 既存フローが担当
+        const live = item.liveStreamingDetails;
+        if (live && live.scheduledStartTime && !live.actualStartTime) continue; // 未開始（待機枠）
+        if (live && live.actualStartTime && !live.actualEndTime) continue; // 配信中
+
+        const url = `https://www.youtube.com/watch?v=${videoId}`;
+        const title = (item.snippet && item.snippet.title) || ev.title || 'コラボ動画';
+        console.log(`[CollabPoll] Ended collab detected: ${videoId} (${title})`);
+
+        const ok = await sendInternalUrl(url, { source: 'collab', title, event_id: ev.id });
+        if (ok) {
+            records[videoId] = {
+                ...rec,
+                collabSent: true,
+                collabAt: new Date().toISOString(),
+                collabEventId: ev.id
+            };
+            changed = true;
+            console.log(`[CollabPoll] POST sent for ${videoId}`);
+            await new Promise(r => setTimeout(r, POLL_SEND_GAP_MS));
+        } else {
+            console.error(`[CollabPoll] Failed to POST for ${videoId}`);
+        }
+    }
+    if (changed) saveSentRecords(records);
 }
 
 function init(config) {
@@ -788,6 +876,10 @@ function startPolling() {
     // 起動後初回は少し遅延して実行
     setTimeout(pollForEndedLives, 30 * 1000);
 
+    console.log(`[CollabPoll] Starting collab-end poller (interval: ${POLL_INTERVAL_MS / 1000}s)`);
+    setInterval(pollForEndedCollabs, POLL_INTERVAL_MS);
+    setTimeout(pollForEndedCollabs, 90 * 1000);
+
     console.log(`[YouTube RSS] Starting fallback scan (interval: ${RSS_POLL_INTERVAL_MS / 1000}s)`);
     setInterval(runRssFallbackScan, RSS_POLL_INTERVAL_MS);
     setTimeout(runRssFallbackScan, 60 * 1000);
@@ -796,6 +888,7 @@ function startPolling() {
 module.exports = {
     startPolling,
     pollForEndedLives,
+    pollForEndedCollabs,
     runRssFallbackScan,
     init,
     startWebhook,

@@ -384,7 +384,13 @@ async function resolveVideos(db, args) {
         if (done.has(v.video_id)) continue;
         // v_catalog には caption 有無の列が無いため、タイトルで候補を絞る。
         // 字幕が無い動画は getTranscript が 404 を返すので呼び出し側で skip される。
-        if (!/(雑談|マシュマロ|相談|晩酌|ごごまい|ASMR)/.test(v.title || "")) continue;
+        // コラボ相手チャンネルの動画はタイトルにコラボ相手の固有名詞が出てきても
+        // まい向けの語彙（雑談・晩酌等）が無いので、カテゴリ・コラボ相手・タイトルの
+        // いずれかにコラボシグナルがあれば対象にする。
+        const isCollab = (Array.isArray(v.categories) && v.categories.includes('コラボ'))
+          || (Array.isArray(v.collaborators) && v.collaborators.length > 0)
+          || /コラボ|collab/i.test(v.title || "");
+        if (!isCollab && !/(雑談|マシュマロ|相談|晩酌|ごごまい|ASMR)/.test(v.title || "")) continue;
         out.push(v);
         if (out.length >= args.recent) return out;
       }

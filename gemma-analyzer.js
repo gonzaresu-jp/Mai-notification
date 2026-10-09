@@ -340,7 +340,7 @@ function isXOnlyActivity(text) {
   return X_ONLY_ACTIVITY_RE.test(t) && !STREAM_HINT_RE.test(t);
 }
 
-function extractScheduleFromAnalysis(analysis, tweetDate, urls = [], tweetText = '') {
+function extractScheduleFromAnalysis(analysis, tweetDate, urls = [], tweetText = '', quoteInfo = null) {
   // status が配信系（LIVE_NOW/SOON/CHANGE）なら category が NEWS でもスケジュール作成
   if (analysis.status === 'NONE') return null;
   // 配信URLが無く、本文が X 上だけの活動（リプ返等）なら AI の判定に関わらず登録しない
@@ -397,15 +397,45 @@ function extractScheduleFromAnalysis(analysis, tweetDate, urls = [], tweetText =
     }
   }
 
+  // YouTube は本人チャンネルが youtube.js で個別に監視されており、ツイートから
+  // 二重登録されるのを防ぐため通常はスキップする。ただし引用（コラボ）の場合は
+  // 相手チャンネルの配信になるため youtube.js では検知できず、ここでの登録が必要。
   const isYouTube = urls.some(u => u.includes('youtube.com') || u.includes('youtu.be')) || 
                     (analysis.title && (analysis.title.toLowerCase().includes('youtube') || analysis.title.includes('待機所')));
-  if (isYouTube) return null;
+  if (isYouTube && !quoteInfo) return null;
 
-  let primaryUrl = urls.find(u => u.includes('twitch.tv')) || urls.find(u => u.includes('twitcasting.tv')) || urls[0] || null;
-  let platform = primaryUrl ? (primaryUrl.includes('twitch') ? 'twitch' : (primaryUrl.includes('twitcasting') ? 'twitcasting' : 'twitter')) : 'twitter';
+  let primaryUrl;
+  let platform;
+  if (quoteInfo) {
+    // コラボ（引用）: 相手チャンネルの配信URLを優先して選ぶ（YouTube/Twitch/ツイキャス/Bilibili）。
+    // x.com のリンクは告知文の中にしか無かった場合の最後の手段にする。
+    primaryUrl = urls.find(u => /youtu\.?be|youtube\.com/i.test(u))
+      || urls.find(u => u.includes('twitch.tv'))
+      || urls.find(u => u.includes('twitcasting.tv'))
+      || urls.find(u => u.includes('bilibili.com'))
+      || urls.find(u => !/x\.com|twitter\.com/i.test(u))
+      || urls[0] || null;
+    platform = !primaryUrl ? 'twitter'
+      : /youtu\.?be|youtube\.com/i.test(primaryUrl) ? 'youtube'
+      : primaryUrl.includes('twitch') ? 'twitch'
+      : primaryUrl.includes('twitcasting') ? 'twitcasting'
+      : primaryUrl.includes('bilibili') ? 'bilibili'
+      : 'twitter';
+  } else {
+    primaryUrl = urls.find(u => u.includes('twitch.tv')) || urls.find(u => u.includes('twitcasting.tv')) || urls[0] || null;
+    platform = primaryUrl ? (primaryUrl.includes('twitch') ? 'twitch' : (primaryUrl.includes('twitcasting') ? 'twitcasting' : 'twitter')) : 'twitter';
+  }
+
+  let title = analysis.title || (analysis.status === 'LIVE_NOW' ? 'ライブ配信中' : '配信予定');
+  // 引用（コラボ）由来の予定は相手アカウントをタイトルに明記する。
+  // コラボの明示がある場合は【コラボ】ラベルも付ける（引用＝常にコラボとは限らないため）。
+  if (quoteInfo && quoteInfo.user && !title.includes(quoteInfo.user)) {
+    const isCollabMention = /コラボ|collab|ご一緒|一緒に/i.test(tweetText || '');
+    title = `${isCollabMention ? '【コラボ】' : ''}${title}（@${quoteInfo.user}）`;
+  }
 
   return {
-    title: analysis.title || (analysis.status === 'LIVE_NOW' ? 'ライブ配信中' : '配信予定'),
+    title,
     // ナイーブJST文字列で保存（管理画面と同形式）。toISOString()のUTC保存は
     // 曜日配置・時刻表示が9時間ずれる原因になるため使わない。TZ=Asia/Tokyo前提。
     scheduled_at: formatNaiveLocal(scheduleDate),

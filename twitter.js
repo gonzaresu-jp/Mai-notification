@@ -191,7 +191,7 @@ async function sendNotify(username, tweet, settingKey, sendText) {
     type: "twitter",
     settingKey: settingKey,
     data: {
-      title: tweet.isRepost ? `リポスト (@${username})` : `新着ツイート (@${username})`,
+      title: tweet.isRepost ? `リポスト (@${username})` : (tweet.isQuote ? `引用ツイート (@${username})` : `新着ツイート (@${username})`),
       body: notificationBody,
       url: `https://x.com/${username}/status/${tweet.id}`,
       icon: ICON_URL,
@@ -310,14 +310,25 @@ async function createScheduleFromTweet(username, tweet, analysis) {
   if (!ENABLE_SCHEDULE_AUTO_CREATE) return;
   if (!analysis) return;
 
-  // URL抽出
-  const urls = extractUrlsFromTweet(tweet.text || '');
+  // 引用リツイート（コラボ告知等）はコメント＋引用元の本文を合わせて扱う。
+  // 配信URLや時刻の大半は引用元（コラボ相手）のツイート側に含まれるため。
+  const combinedText = (tweet.isQuote && tweet.quoted_text)
+    ? `${tweet.text || ''}\n${tweet.quoted_text}`
+    : (tweet.text || '');
+
+  // URL抽出（引用時は複合テキストから。x.com のリンクは後段の選別で劣後する）
+  const urls = extractUrlsFromTweet(combinedText);
+
+  // コラボ（引用）元情報
+  const quoteInfo = (tweet.isQuote && tweet.quoted_text)
+    ? { user: tweet.quoted_user || null, url: tweet.quoted_url || null, id: tweet.quoted_id || null }
+    : null;
   
   // スケジュール抽出
   // 基準日時はツイートの実投稿時刻を使う（new Date()=解析処理の実行時刻だと、
   // 取得・解析の遅延分だけ基準がずれ、日付繰り上げ判定を誤らせる原因になる）。
   const tweetPostedAt = tweet.datetime ? new Date(tweet.datetime) : new Date();
-  const scheduleInfo = extractScheduleFromAnalysis(analysis, tweetPostedAt, urls, tweet.text || '');
+  const scheduleInfo = extractScheduleFromAnalysis(analysis, tweetPostedAt, urls, combinedText, quoteInfo);
   if (!scheduleInfo) {
     console.log(`[${username}] No schedule info extracted from analysis`);
     return;
@@ -342,10 +353,11 @@ async function createScheduleFromTweet(username, tweet, analysis) {
   // 新規作成
   const agent = (new URL(SCHEDULE_ENDPOINT).protocol === 'https:') ? _httpsAgent : _httpAgent;
 
+  const quoteNote = quoteInfo ? ` 引用元: @${quoteInfo.user || '?'} ${quoteInfo.url || ''}` : '';
   const payload = {
     title: scheduleInfo.title,
     scheduled_at: scheduleInfo.scheduled_at,
-    note: `[Gemma分析${scheduleInfo.time_estimated ? '/時刻は時間帯から推定' : ''}] ツイート: ${tweet.text.substring(0, 100)}...`,
+    note: `[Gemma分析${scheduleInfo.time_estimated ? '/時刻は時間帯から推定' : ''}] ツイート: ${tweet.text.substring(0, 100)}...${quoteNote}`,
     url: scheduleInfo.url || urls[0] || `https://x.com/${username}/status/${tweet.id}`,
     thumbnail_url: scheduleInfo.thumbnail_url || null,
     platform: scheduleInfo.platform || 'twitter',
@@ -460,7 +472,35 @@ async function checkOneUser(page, username, seenState) {
 
         const isRepost = isRepostByContext || isRepostByText;
 
-        out.push({ id, text, datetime, thumbnail_url: mediaImages[0] || null, media_urls: mediaImages, hasVideo, isRepost });
+        // 引用リツイート判定: 記事内に div[lang] が複数あれば、2つ目が引用元ツイート本文
+        // （引用元がDOMに埋め込まれる）。コラボ告知は引用での投稿が多いため、
+        // 引用元の本文・URL・アカウントを取得してスケジュール生成に使う。
+        let quotedText = null, quotedUser = null, quotedUrl = null, quotedId = null;
+        const langDivs = Array.from(article.querySelectorAll('div[lang]'));
+        if (langDivs.length >= 2) {
+          quotedText = langDivs[1].innerText;
+          // 引用元ツイートへのリンク（メインツイートと異なる status ID）を探す
+          const anchors = Array.from(article.querySelectorAll('a[href*="/status/"]'));
+          for (const a of anchors) {
+            const h = a.getAttribute('href') || '';
+            const m = h.match(/\/status\/(\d+)/);
+            if (m && m[1] !== id) {
+              quotedId = m[1];
+              quotedUrl = 'https://x.com' + h.split(/[?#]/)[0];
+              const um = h.match(/^\/([A-Za-z0-9_]+)\/status\//);
+              if (um && um[1] !== 'i') quotedUser = um[1];
+              break;
+            }
+          }
+          // URLから取れない場合、引用本文中の @handle から補完
+          if (!quotedUser && quotedText) {
+            const hm = quotedText.match(/@([A-Za-z0-9_]{1,15})/);
+            if (hm) quotedUser = hm[1];
+          }
+        }
+        const isQuote = !!quotedText;
+
+        out.push({ id, text, datetime, thumbnail_url: mediaImages[0] || null, media_urls: mediaImages, hasVideo, isRepost, isQuote, quoted_text: quotedText, quoted_user: quotedUser, quoted_url: quotedUrl, quoted_id: quotedId });
       }
       return out.filter(t => !t.text.includes('固定'));
     });
@@ -601,8 +641,13 @@ async function check(username, isRetry = false) {
         const gemmaPromise = (async () => {
           if (!t.isRepost) {
             try {
-              const analysis = await analyzeTweet(t.text);
-              console.log(`[${username}] Gemma analysis: category=${analysis.category}, status=${analysis.status}, time=${analysis.start_time}`);
+              // 引用リツイート（コラボ告知等）はコメント＋引用元の両方を解析対象にする。
+              // 引用元が配信予告の場合は REPOST ではなく LIVE として拾わせるヒントを付ける。
+              const analysisInput = (t.isQuote && t.quoted_text)
+                ? `【引用リツイート】投稿者のコメント:\n${t.text || ''}\n\n【引用元ツイート】@${t.quoted_user || 'unknown'}:\n${t.quoted_text}\n\n※引用元に配信予告（コラボ等・時刻や時間帯の記載あり）が含まれる場合は category=LIVE にすること。`
+                : t.text;
+              const analysis = await analyzeTweet(analysisInput);
+              console.log(`[${username}] Gemma analysis: category=${analysis.category}, status=${analysis.status}, time=${analysis.start_time}${t.isQuote ? ' [quote]' : ''}`);
               // 💾 分析結果をnotifications.dataへ保存（ツイート統計用）
               try {
                 const analysisBody = { tweet_id: t.id, platform: settingKey, analysis };
