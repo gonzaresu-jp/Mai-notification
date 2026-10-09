@@ -1,6 +1,36 @@
 <?php
 $updateLogs = [
     [
+        "date" => "2026-10-10",
+        "details" => [
+            "add" => [
+                "ドメイン移行（koinoyamai.love 対応）— OAuth の redirect_uri を動的化し、WebAuthn の RP_ID / CORS を両ドメイン対応に。旧ドメイン訪問者には移行促進カード（migration.js）を表示し、robots.txt のサイトマップURL・Android/Windows アプリの接続先（v1.5 / versionCode 6、v1.5.0）・ダウンロード情報を新ドメインへ切り替え。ドメイン参照は単一ソース化して移行日ゼロ変更の準備を整えた",
+                "コラボ配信の対応 — 引用ツイートから作られたコラボ予定を監視し、相手チャンネルの配信が終了したら nassy へコラボ動画の DL 通知を送る CollabPoll を worker に新設（@collab/<channelId>/ に分離保存する側の仕組みとセット）。あわせて視聴分析も連携",
+                "チャットの自動読み上げ — /api/admin/chat/speak プロキシと自動読み上げトグルを追加し、Irodori-TTS（mai声）で文単位パイプライン合成（生成と並列再生）＋SSE ストリーミング化。AivisSpeech のローカル最速パス、コールドスタート対策（ウォームアップAPI＋GPUスナップショットでコールド4.6秒）、modal の warm 1200秒維持にも対応。管理画面まいAIタブには声テスト（文単位ストリーム再生・Web Audio ギャップレス＋10msクロスフェード、DL用結合WAVも同処理）と品質セレクタ（num_steps 4/2/1）を追加",
+                "要約（minutes）を章＞トピックの階層構造に刷新 — コメント用コピーと RAG 引用に章を追加し、章タイトル単位で参照できるようにした",
+                "アーカイブのタイムスタンプを2階層（大枠▶／詳細└）に再構成 — 時刻の桁揃え、記号先頭のコピー文面、全角インデントを整え、サーバー生成の章区切りを優先し無ければ従来の間隔推定にフォールバック",
+                "管理画面に気圧リスク表示（大阪・Open-Meteo・地点は環境変数）と体調サインの検知改善を追加 — 本番実証で『いつも通り』→『注意』の誤検知を現実感ある判定へ",
+                "人物wiki 頁を大幅拡充 — 衣装セクション新設（初期＋新衣装3着、字幕マイニング由来のディテール・画像ギャラリー・ライトボックス）、プロフィールに公式イラストと血液型、経歴の年別拡充、MBTI・人間関係の刷新、白背景化とタグライン方式のヘッダー",
+                "Windows アプリ v1.4.0 にタブのドラッグ入れ替えを追加",
+                "Tailnet 専用の管理画面用に WEBAUTHN_RP_ID_EXTRA / WEBAUTHN_ORIGIN_EXTRA を追加（ts.net 側は専用 RP のためパスキー新規登録が必要なこと、公開側の /admin は 403 が仕様であることを AGENTS.md に記録）",
+            ],
+            "change" => [
+                "ルート直下に散在していた markdown を docs/ へ整理 — ルートは README.md と AGENTS.md のみ残し、現行資料（SECURITY / DEVELOPMENT-WORKFLOW / SCHEDULE-FEATURES / MIGRATION-PLAN）は docs/、ローカルLLM不採用になった Ollama・Gemma 系の3本は docs/archive/ へ隔離",
+                "リポジトリを整理 — .gitignore のパス記載ミス（二重パス）を修正して Windows のビルド成果物4件（pdb/deps/runtimeconfig）の追跡を解除、参照コードのない残骸（本体欠落の孤児 WAL/SHM・回帰テスト用DB・0バイトDB・空ディレクトリ）を削除、tmp/ の旧テスト用データを約130MB削除（フォールバック参照のある puppeteer-shared は温存）、作業成果物を docs/ へ、外部参照ゼロの段階的検査スクリプトを scripts/archive/ へ退避",
+                "AGENTS.md を実態へ訂正 — §9 の「埋め込み停止中で /api/ask が 503」は失効しており、llama-embed.service（embeddinggemma-2）＋ pi-vector.service（10,857件・176MB）が稼働して両方 isEnabled=true であることを記録。「ローカルLLM運用は不可」は回答生成LLMに限る旨を明記し、pi-vector-service/ は削除禁止と",
+                "TTS の latent-slice ストリーミング導入と、torch.compile・int8 各方式・iGPU が不採用である理由の検証レコードを AGENTS.md §9 に記録",
+            ],
+            "fix" => [
+                "コラボ DL 通知が一度も送られていなかった問題を修正（CollabPoll）— クエリが platform='youtube' かつ external_id LIKE 'gemma_%' を求めていたが、引用ツイート由来の予定は platform='twitter' で external_id は空文字（既存イベントの更新時）のため、両方が一致する行が存在せず常に0件だった（sent_records の collabSent=0 と整合）。絞り込みを「YouTube URL の有無」と本人ch除外（channelId チェック）に統一。あわせて nassy の PO Token server 参照を /tmp から永続パスへ移行し、再起動で消えて DL が Errno 2 で失敗していた問題を解消（起動待機も ping 最大30秒リトライに）",
+                "要約パイプラインの取りこぼしを解消 — 完了マーカー表を導入して部分完了動画の永久除外・再処理漏れをなくし、ドロップ発生時はマーカーを書かず次回再処理で補完。Groq の日次 TPD 枯渇時は UTC 00:15 まで自動待機、CF 予算切れ時は Groq 備経路へ自動切替、max_tokens・retry-after 尊重のバックオフでレート制限対策",
+                "コピー機能の失敗対策 — clipboard の writeText 拒否時に execCommand へフォールバックし、失敗時はプレビューを選択。あわせて clipboard-sanitized-write 権限を許可（アプリ内コピーボタンが動かない原因だった）",
+                "AI 使用量ページで起動時のニューロン日次リセットが永続化されず stale 表示になる問題を修正",
+                "wiki の a タグネスト違反を修正、白背景なのに灰色に見えていた body:after の黒18%暗幕を無効化",
+            ],
+        ],
+        "lines" => "41,387",
+    ],
+    [
         "date" => "2026-09-30",
         "details" => [
             "add" => [
