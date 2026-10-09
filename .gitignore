@@ -77,4 +77,6 @@ Windows/mai-push-desktop/dist/
 Windows/**/node_modules/
 Windows/mai-push-desktop/bin/
 Windows/mai-push-desktop/obj/
+Windows/mai-push-winui/bin/
+Windows/mai-push-winui/obj/
 !AGENTS.md
