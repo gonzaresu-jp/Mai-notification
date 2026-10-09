@@ -44,33 +44,34 @@ public sealed partial class MainWindow : Window
 
     private void SetupTrayIcon()
     {
-        _trayIcon = new TaskbarIcon();
-        _trayIcon.ToolTipText = "MaiPush";
-
-        // アイコンファイルが存在すれば設定
-        var icoPath = Path.GetFullPath("Assets\\tray-icon.ico");
-        if (File.Exists(icoPath))
+        try
         {
-            // H.NotifyIcon の UpdateIcon は System.Drawing.Icon を受け取る
-            // （System.Drawing は Windows App SDK でも利用可能）
-            _trayIcon.Icon = new System.Drawing.Icon(icoPath);
+            _trayIcon = new TaskbarIcon();
+            _trayIcon.ToolTipText = "MaiPush";
+
+            var icoPath = Path.GetFullPath("Assets\\tray-icon.ico");
+            if (File.Exists(icoPath))
+                _trayIcon.Icon = new System.Drawing.Icon(icoPath);
+
+            _trayIcon.DoubleClickCommand = new SimpleCommand(BringToFront);
+
+            var menu = new MenuFlyout();
+            var openItem = new MenuFlyoutItem { Text = "開く" };
+            openItem.Click += (_, _) => BringToFront();
+            var exitItem = new MenuFlyoutItem { Text = "終了" };
+            exitItem.Click += (_, _) => ExitApp();
+            menu.Items.Add(openItem);
+            menu.Items.Add(new MenuFlyoutSeparator());
+            menu.Items.Add(exitItem);
+            _trayIcon.ContextFlyout = menu;
+
+            _trayIcon.ForceCreate(enablesEfficiencyMode: false);
         }
-
-        // ダブルクリックでウィンドウを前面に出す（ICommand 経由）
-        _trayIcon.DoubleClickCommand = new SimpleCommand(BringToFront);
-
-        // 右クリックメニュー
-        var menu = new MenuFlyout();
-        var openItem = new MenuFlyoutItem { Text = "開く" };
-        openItem.Click += (_, _) => BringToFront();
-        var exitItem = new MenuFlyoutItem { Text = "終了" };
-        exitItem.Click += (_, _) => ExitApp();
-        menu.Items.Add(openItem);
-        menu.Items.Add(new MenuFlyoutSeparator());
-        menu.Items.Add(exitItem);
-        _trayIcon.ContextFlyout = menu;
-
-        _trayIcon.ForceCreate(enablesEfficiencyMode: false);
+        catch (Exception ex)
+        {
+            // トレイアイコン失敗は非致命的
+            System.Diagnostics.Debug.WriteLine($"[TrayIcon] {ex.Message}");
+        }
     }
 
     // ---- WebView2 ----
