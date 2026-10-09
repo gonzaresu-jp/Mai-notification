@@ -7,4 +7,4 @@ Disallow: /data/
 Disallow: /js/
 Disallow: /history.json
 
-Sitemap: https://mai.honna-yuzuki.com/sitemap.xml
+Sitemap: https://koinoyamai.love/sitemap.xml
