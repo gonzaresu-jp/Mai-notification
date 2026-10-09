@@ -5,13 +5,22 @@ namespace MaiPushWinUI;
 
 public partial class App : Application
 {
+    private static Mutex? _mutex;
     private MainWindow? _window;
 
     public App()
     {
+        // シングルインスタンスガード（Electron の app.requestSingleInstanceLock() 相当）
+        _mutex = new Mutex(true, "MaiPushWinUI_v2_Instance", out bool createdNew);
+        if (!createdNew)
+        {
+            // 既に起動中 → そのまま終了（既存プロセスはトレイに残っている）
+            _mutex.Dispose();
+            Environment.Exit(0);
+        }
+
         InitializeComponent();
 
-        // アンパッケージアプリは AUMID を明示的に設定してからトースト登録
         try
         {
             AppNotificationManager.Default.NotificationInvoked += OnNotificationInvoked;
@@ -19,7 +28,7 @@ public partial class App : Application
         }
         catch
         {
-            // 通知登録失敗は非致命的（WebView2 通知自体は引き続き動く）
+            // アンパッケージアプリで AUMID 未設定の場合は非致命的
         }
     }
 
@@ -27,7 +36,7 @@ public partial class App : Application
     {
         _window = new MainWindow();
 
-        // --hidden 引数がある場合はトレイに格納したまま起動
+        // --hidden 引数があればトレイに格納したまま起動（自動起動時など）
         if (Environment.GetCommandLineArgs().Contains("--hidden"))
             _window.HideToTray();
         else
