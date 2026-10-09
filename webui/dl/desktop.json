@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
-  "url": "https://mai.honna-yuzuki.com/dl/MaiPush-Setup-1.4.0.exe",
-  "notes": "タブをドラッグで入れ替えられるようになりました。ページ内のコピーボタンが動作しない問題も修正しました（1.4.0）。"
+  "version": "1.5.0",
+  "url": "https://koinoyamai.love/MaiPush-1.5.0-win-x64.zip",
+  "notes": "接続先ドメインを koinoyamai.love に移行しました（1.5.0）。"
 }

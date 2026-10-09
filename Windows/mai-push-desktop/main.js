@@ -26,14 +26,14 @@ if (!gotSingleInstanceLock) {
   });
 }
 
-const DEFAULT_URL = 'https://mai.honna-yuzuki.com';
+const DEFAULT_URL = 'https://koinoyamai.love';
 // const DEFAULT_URL = 'data:text/html,<h1>Hello Electron</h1><script>console.log("Page JS works")</script>';
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
 const SSE_PATH = '/api/events/stream';
 const HISTORY_PATH = '/api/history?limit=5&offset=0';
 const FALLBACK_INTERVAL = 30000;
 // アプリ更新チェック用フィード（MAI_UPDATE_FEED_URL で差し替え可＝検証用）
-const UPDATE_FEED_URL = process.env.MAI_UPDATE_FEED_URL || 'https://mai.honna-yuzuki.com/dl/desktop.json';
+const UPDATE_FEED_URL = process.env.MAI_UPDATE_FEED_URL || 'https://koinoyamai.love/dl/desktop.json';
 const UPDATE_CHECK_DELAY_MS = 30 * 1000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
