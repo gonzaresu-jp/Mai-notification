@@ -68,6 +68,21 @@
 - 回帰テストは `npm test`（scripts/regression-test.js、HMAC v2＋timestamp検証含む 21 項目）に接続済み。
 - pm2-logrotate 導入済み（20M・10世代・圧縮）。
 
+## 6.7 admin は Tailnet 専用（2026-10-10 追加）
+- **管理画面の正規エントリは `https://elza.poitou-mora.ts.net/admin/login/`（tailscale serve・tailnet のみ）**。
+  公開ドメイン（koinoyamai.love / mai）の `/admin.html`・`/admin/login/`・`/api/admin` は **403 が仕様**
+  （nginx allow-list: `192.168.0.0/16` + `100.64.0.0/10`。cloudflared 由来の loopback は拒否）。
+  **403 を障害と誤診しないこと。** elza vhost は tailscale serve の受け皿（`127.0.0.1` 許可）＋
+  webui 静的配信（`/css/`・`/js/admin-`・`/migration.js`・fontawesome）付き。
+- LAN 保険: `http://192.168.1.72:1700/admin/login/`（WebAuthn は http 非対応のためパスワードのみ）。
+  `/api/` の `Host` は **`$http_host`**（`$host` に戻すとポートが落ちて POST が CSRF 403 になる）。
+- **tailscale funnel は OFF（再有効化しない）**。`funnel off` は serve config ごと消えるため、
+  消えた場合は `sudo tailscale serve --bg --yes --https=443 http://127.0.0.1:80` で tailnet only に立て直す。
+- パスキー: ts.net は専用 RP（`.env` の `WEBAUTHN_RP_ID_EXTRA` / `WEBAUTHN_ORIGIN_EXTRA`）。
+  RP が他ドメインと別なので **ts.net でのみパスキー新規登録が必要**（既存パスキーは不可）。
+- nginx へは `~/apply-admin-tailnet.sh`（アンカー文字列カウント検証付きパッチ）で反映。
+  復旧用バックアップ: `/etc/nginx/nginx.conf.bak-admin-*`。funnel/serve は tailscale CLI（要 sudo）。
+
 ## 7. 自動化スクリプト（2026-09-26 追加）— AI はこれを使う
 手動でのミスを防ぐため、以下を実装済み。**作業の対応するフェーズで必ず実行すること。**
 
