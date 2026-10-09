@@ -1,6 +1,6 @@
 {
-  "versionCode": 5,
-  "versionName": "1.4",
-  "url": "https://mai.honna-yuzuki.com/mai-notification.apk?v=5",
-  "notes": "アップデートをアプリ内でダウンロードして、そのままインストールできるようになりました（初回のみ「このアプリ」の許可設定をお願いします）。"
+  "versionCode": 6,
+  "versionName": "1.5",
+  "url": "https://koinoyamai.love/mai-notification.apk?v=6",
+  "notes": "接続先ドメインを koinoyamai.love に移行しました（1.5）。"
 }
