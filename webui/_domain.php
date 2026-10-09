@@ -8,7 +8,7 @@ if (!isset($domain)) {
     $fwd = strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '');
     $isHttps = ($fwd === 'https') || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
     $proto = $isHttps ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'] ?? 'mai.honna-yuzuki.com';
+    $host = $_SERVER['HTTP_HOST'] ?? 'koinoyamai.love';
     $domain = $proto . '://' . $host;
 }
 if (!isset($defaultImage)) {

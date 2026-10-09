@@ -12,6 +12,28 @@ const DISCORD_CLIENT_ID = (process.env.DISCORD_CLIENT_ID || '').replace(/"/g, ''
 const DISCORD_CLIENT_SECRET = (process.env.DISCORD_CLIENT_SECRET || '').replace(/"/g, '').trim();
 const DISCORD_REDIRECT_URI = (process.env.DISCORD_REDIRECT_URI || '').replace(/"/g, '').trim();
 
+// ---- ドメイン移行: リクエストHostからredirect_uriを動的解決 ----
+// PUBLIC_HOSTS: 常に https を使う公開ドメイン（デュアルドメイン期間は両方許可）
+// DEV_HOSTS: http を使うローカル開発ホスト
+const PUBLIC_HOSTS = new Set([
+  'mai.honna-yuzuki.com',
+  'koinoyamai.love',
+]);
+const DEV_HOSTS = new Set(['localhost', '127.0.0.1']);
+
+/**
+ * リクエストのHostからOAuth redirect_uriを構築する。
+ * 許可リスト外のホストは null を返す（呼び出し側は .env の既定値へフォールバック）。
+ */
+function resolveRedirectUri(req, callbackPath) {
+  const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').trim().toLowerCase();
+  if (!rawHost) return null;
+  const hostname = rawHost.replace(/:\d+$/, '');
+  if (PUBLIC_HOSTS.has(hostname)) return `https://${hostname}${callbackPath}`;
+  if (DEV_HOSTS.has(hostname)) return `http://${rawHost}${callbackPath}`;
+  return null;
+}
+
 console.log(`[auth] Discord Config: ID=${DISCORD_CLIENT_ID.slice(0, 4)}...${DISCORD_CLIENT_ID.slice(-4)} (len=${DISCORD_CLIENT_ID.length}), URI=${DISCORD_REDIRECT_URI}`);
 
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
@@ -89,21 +111,28 @@ function optionalAuth(req, res, next) {
 
 /**
  * Googleの認証URLを生成する
+ * @param state OAuth state
+ * @param redirectUri リクエストHostから解決したredirect_uri（省略時は.env既定）
  */
-function getAuthUrl(state) {
+function getAuthUrl(state, redirectUri) {
   return oauthClient.generateAuthUrl({
     access_type: 'offline',
     scope: ['profile', 'email'],
     prompt: 'select_account',
     state: state || undefined,
+    redirect_uri: redirectUri || GOOGLE_REDIRECT_URI,
   });
 }
 
 /**
  * Googleのコードをユーザー情報に交換する
+ * @param redirectUri 認証URL生成時に使用したredirect_uri（省略時は.env既定）
  */
-async function exchangeCodeForUser(code) {
-  const { tokens } = await oauthClient.getToken(code);
+async function exchangeCodeForUser(code, redirectUri) {
+  const { tokens } = await oauthClient.getToken({
+    code,
+    redirect_uri: redirectUri || GOOGLE_REDIRECT_URI,
+  });
   oauthClient.setCredentials(tokens);
 
   const ticket = await oauthClient.verifyIdToken({
@@ -124,12 +153,15 @@ async function exchangeCodeForUser(code) {
 
 /**
  * Discordの認証URLを生成する
+ * @param state OAuth state
+ * @param redirectUri リクエストHostから解決したredirect_uri（省略時は.env既定）
  */
-function getDiscordAuthUrl(state) {
+function getDiscordAuthUrl(state, redirectUri) {
+  const effectiveRedirectUri = redirectUri || DISCORD_REDIRECT_URI;
   const baseUrl = 'https://discord.com/api/oauth2/authorize';
   const query = [
     `client_id=${DISCORD_CLIENT_ID}`,
-    `redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}`,
+    `redirect_uri=${encodeURIComponent(effectiveRedirectUri)}`,
     `response_type=code`,
     `scope=${encodeURIComponent('identify email')}`
   ];
@@ -145,15 +177,16 @@ function getDiscordAuthUrl(state) {
 
 /**
  * Discordのコードをユーザー情報に交換する
+ * @param redirectUri 認証URL生成時に使用したredirect_uri（省略時は.env既定）
  */
-async function exchangeDiscordCodeForUser(code) {
+async function exchangeDiscordCodeForUser(code, redirectUri) {
   // 1. コードをトークンに交換
   const params = new URLSearchParams();
   params.append('client_id', DISCORD_CLIENT_ID);
   params.append('client_secret', DISCORD_CLIENT_SECRET);
   params.append('grant_type', 'authorization_code');
   params.append('code', code);
-  params.append('redirect_uri', DISCORD_REDIRECT_URI);
+  params.append('redirect_uri', redirectUri || DISCORD_REDIRECT_URI);
 
   const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', params, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -186,6 +219,7 @@ module.exports = {
   exchangeCodeForUser,
   getDiscordAuthUrl,
   exchangeDiscordCodeForUser,
+  resolveRedirectUri,
   signToken,
   verifyToken,
   COOKIE_NAME,

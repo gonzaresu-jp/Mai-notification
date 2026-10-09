@@ -3,7 +3,7 @@
 
   <!-- トップ（通知ダッシュボード） -->
   <url>
-    <loc>https://mai.honna-yuzuki.com/</loc>
+    <loc>https://koinoyamai.love/</loc>
     <lastmod>2026-09-10</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
@@ -11,7 +11,7 @@
 
   <!-- 配信アーカイブ検索（独自コンテンツ） -->
   <url>
-    <loc>https://mai.honna-yuzuki.com/archive</loc>
+    <loc>https://koinoyamai.love/archive</loc>
     <lastmod>2026-09-10</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
@@ -19,7 +19,7 @@
 
   <!-- 使い方・対応一覧（SEO用コンテンツページ） -->
   <url>
-    <loc>https://mai.honna-yuzuki.com/guide.php</loc>
+    <loc>https://koinoyamai.love/guide.php</loc>
     <lastmod>2026-09-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -27,7 +27,7 @@
 
   <!-- メディアアーカイブ -->
   <url>
-    <loc>https://mai.honna-yuzuki.com/twitter-media/</loc>
+    <loc>https://koinoyamai.love/twitter-media/</loc>
     <lastmod>2026-09-10</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -35,7 +35,7 @@
 
   <!-- 通知ログ一覧 -->
   <url>
-    <loc>https://mai.honna-yuzuki.com/logs/</loc>
+    <loc>https://koinoyamai.love/logs/</loc>
     <lastmod>2026-09-10</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
@@ -43,7 +43,7 @@
 
   <!-- このサービスについて -->
   <url>
-    <loc>https://mai.honna-yuzuki.com/info/</loc>
+    <loc>https://koinoyamai.love/info/</loc>
     <lastmod>2026-09-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -51,7 +51,7 @@
 
   <!-- 今後の開発予定 -->
   <url>
-    <loc>https://mai.honna-yuzuki.com/future/</loc>
+    <loc>https://koinoyamai.love/future/</loc>
     <lastmod>2026-09-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
@@ -59,7 +59,7 @@
 
   <!-- システム稼働状況 -->
   <url>
-    <loc>https://mai.honna-yuzuki.com/status</loc>
+    <loc>https://koinoyamai.love/status</loc>
     <lastmod>2026-09-10</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.3</priority>
@@ -67,7 +67,7 @@
 
   <!-- Androidアプリダウンロード -->
   <url>
-    <loc>https://mai.honna-yuzuki.com/download/</loc>
+    <loc>https://koinoyamai.love/download/</loc>
     <lastmod>2026-09-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>

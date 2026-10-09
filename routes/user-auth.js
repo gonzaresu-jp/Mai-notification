@@ -46,8 +46,9 @@ function register(app, db, authLimiter) {
   app.get('/auth/google', limiter, (req, res) => {
     const returnTo = req.query.returnTo || '/';
     const clientId = req.query.client_id || '';
-    const state = createOAuthState({ returnTo, clientId });
-    res.redirect(auth.getAuthUrl(state));
+    const redirectUri = auth.resolveRedirectUri(req, '/auth/google/callback');
+    const state = createOAuthState({ returnTo, clientId, redirectUri });
+    res.redirect(auth.getAuthUrl(state, redirectUri));
   });
 
   app.get('/auth/google/callback', limiter, async (req, res) => {
@@ -56,7 +57,7 @@ function register(app, db, authLimiter) {
     const stateData = consume(oauthStates, state);
     if (!stateData) return res.status(400).send('Invalid or expired OAuth state');
     try {
-      const googleUser = await auth.exchangeCodeForUser(code);
+      const googleUser = await auth.exchangeCodeForUser(code, stateData.redirectUri);
       const user = await upsertUser(db, googleUser);
       if (stateData.clientId) await migrateSubscription(db, stateData.clientId, user.id);
       const token = auth.signToken({ userId: user.id, email: user.email || user.google_id || user.discord_id });
@@ -78,8 +79,9 @@ function register(app, db, authLimiter) {
   app.get('/auth/discord', limiter, (req, res) => {
     const returnTo = req.query.returnTo || '/';
     const clientId = req.query.client_id || '';
-    const state = createOAuthState({ returnTo, clientId });
-    const authUrl = auth.getDiscordAuthUrl(state);
+    const redirectUri = auth.resolveRedirectUri(req, '/auth/discord/callback');
+    const state = createOAuthState({ returnTo, clientId, redirectUri });
+    const authUrl = auth.getDiscordAuthUrl(state, redirectUri);
     console.log('[auth/discord] Full Redirect URL:', authUrl);
     res.redirect(authUrl);
   });
@@ -91,7 +93,7 @@ function register(app, db, authLimiter) {
     const stateData = consume(oauthStates, state);
     if (!stateData) return res.status(400).send('Invalid or expired OAuth state');
     try {
-      const discordUser = await auth.exchangeDiscordCodeForUser(code);
+      const discordUser = await auth.exchangeDiscordCodeForUser(code, stateData.redirectUri);
       const user = await upsertDiscordUser(db, discordUser);
       if (stateData.clientId) await migrateSubscription(db, stateData.clientId, user.id);
       const token = auth.signToken({ userId: user.id, email: user.email || user.discord_id || user.google_id });
