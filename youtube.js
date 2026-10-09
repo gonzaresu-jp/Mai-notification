@@ -168,8 +168,11 @@ async function sendInternalUrl(urlToSend, extraPayload = {}) {
 }
 
 // ========= コラボ相手チャンネルの配信終了ポーリング =========
-// 引用ツイートから作られたコラボ予定（events.external_id = 'gemma_*'）を監視し、
+// YouTube URL を持つコラボ予定イベントを監視し、
 // 相手チャンネルの配信が終了したら nassy へ DL 通知を送る（本人チャンネルは既存フローで処理済み）。
+// ※ 引用ツイート由来の予定は platform='twitter'、external_id は 'gemma_<tweetId>' か
+//    空文字（既存イベントの更新時）になる。platform / external_id で絞ると常に0件になるため、
+//    絞り込みは「YouTube URL の有無」と本人ch除外（下の channelId チェック）で行う。
 const COLLAB_POLL_WINDOW_DAYS = 3;
 
 let _collabDb = null;
@@ -201,10 +204,8 @@ async function pollForEndedCollabs() {
     let rows;
     try {
         rows = await dbAllAsync(
-            `SELECT id, title, url, start_time, external_id FROM events
-             WHERE platform = 'youtube'
-               AND external_id LIKE 'gemma_%'
-               AND url IS NOT NULL AND url != ''
+            `SELECT id, title, url, start_time FROM events
+             WHERE url IS NOT NULL AND url != ''
                AND start_time >= datetime('now', ?)
                AND status != 'cancelled'`,
             [`-${COLLAB_POLL_WINDOW_DAYS} day`]
