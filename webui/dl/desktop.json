@@ -1,5 +1,5 @@
 {
-  "version": "1.5.0",
-  "url": "https://koinoyamai.love/MaiPush-1.5.0-win-x64.zip",
-  "notes": "接続先ドメインを koinoyamai.love に移行しました（1.5.0）。"
+  "version": "1.51.0",
+  "url": "https://koinoyamai.love/MaiPush-1.51.0-Setup.exe",
+  "notes": "通知ONの不具合を修正し、UIを改善しました（1.51.0）。"
 }
