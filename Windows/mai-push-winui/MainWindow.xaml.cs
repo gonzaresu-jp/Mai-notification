@@ -434,6 +434,14 @@ public sealed partial class MainWindow : Window
                     });
                 } catch (e) {}
             }
+            // WebView2 の Notification.permission は既定 denied のため、
+            // 'granted' を返すように差し替える（トーストは PermissionRequested ハンドラ経由で表示される）。
+            try {
+                Object.defineProperty(Notification, 'permission', {
+                    get: function () { return 'granted'; }, configurable: true
+                });
+                console.log('[WV2] Notification.permission => granted (overridden)');
+            } catch (e) {}
             const KEY = '__wv2_push_sub__';
             class _FakePushMgr {
                 async subscribe(opts) {
