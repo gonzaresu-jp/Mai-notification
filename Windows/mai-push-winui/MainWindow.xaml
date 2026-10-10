@@ -36,10 +36,7 @@
             </TabView.TabStripFooter>
         </TabView>
 
-        <!-- メイン WebView2（タブ切り替えでナビゲートする） -->
-        <WebView2
-            Grid.Row="1"
-            x:Name="WebView"
-            Loaded="WebView_Loaded"/>
+        <!-- V2: タブごとの WebView2 をここに重ねる（Visibility で表示切り替え） -->
+        <Grid Grid.Row="1" x:Name="ContentGrid"/>
     </Grid>
 </Window>

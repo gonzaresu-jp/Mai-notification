@@ -14,7 +14,6 @@ public sealed partial class MainWindow : Window
 {
     private const string AppUrl = "https://koinoyamai.love";
 
-    // Chrome 131 UA — サイトの UA チェックをパス
     private const string ChromeUA =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
@@ -22,9 +21,8 @@ public sealed partial class MainWindow : Window
     private readonly AppWindow _appWindow;
     private TaskbarIcon? _trayIcon;
 
-    // タブ ID → URL（単一 WebView2 アーキテクチャ）
-    private readonly Dictionary<TabViewItem, string> _tabUrls = new();
-    private bool _webViewReady = false;
+    // V2: タブ → WebView2（1対1）
+    private readonly Dictionary<TabViewItem, WebView2> _tabWebViews = new();
 
     public MainWindow()
     {
@@ -36,13 +34,10 @@ public sealed partial class MainWindow : Window
         if (File.Exists("Assets\\app-icon.ico"))
             _appWindow.SetIcon("Assets\\app-icon.ico");
 
-        // ボーダーレス（タブストリップ = カスタムタイトルバー）
-        // SetTitleBar は Tabs.Loaded で呼ぶ
         ExtendsContentIntoTitleBar = true;
         StyleCaptionButtons();
         _appWindow.Changed += (_, _) => UpdateCaptionPadding();
 
-        // × ボタン → トレイ格納
         _appWindow.Closing += (_, e) =>
         {
             e.Cancel = true;
@@ -74,27 +69,26 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() => CaptionPadding.Width = inset);
     }
 
-    // ---- Tabs.Loaded: タブストリップをタイトルバーとして登録 ----
+    // ---- Tabs.Loaded ----
 
     private void Tabs_Loaded(object sender, RoutedEventArgs e)
     {
         SetTitleBar(Tabs);
         UpdateCaptionPadding();
-        // 初期タブを追加（WebView2 が Ready なら即ナビゲート）
         AddNewTab(AppUrl);
     }
 
-    // ---- WebView2.Loaded: 初期化 ----
+    // ---- V2: タブごとの WebView2 初期化 ----
 
-    private async void WebView_Loaded(object sender, RoutedEventArgs e)
+    private async Task InitWebViewAsync(TabViewItem tab, WebView2 wv, string url)
     {
-        await WebView.EnsureCoreWebView2Async();
-        var core = WebView.CoreWebView2;
+        try { await wv.EnsureCoreWebView2Async(); }
+        catch { return; }
 
+        var core = wv.CoreWebView2;
         core.Settings.UserAgent = ChromeUA;
         core.Settings.AreDevToolsEnabled = true;
 
-        // スクロールバー非表示
         await core.AddScriptToExecuteOnDocumentCreatedAsync("""
             document.addEventListener('DOMContentLoaded', () => {
                 const s = document.createElement('style');
@@ -103,14 +97,11 @@ public sealed partial class MainWindow : Window
             });
             """);
 
-        // PushManager 偽装（Electron の injectPushOverride 相当）
         await core.AddScriptToExecuteOnDocumentCreatedAsync(PushOverrideScript);
 
-        // ホストフラグ
         await core.AddScriptToExecuteOnDocumentCreatedAsync(
             "Object.defineProperty(window,'__WEBVIEW2_HOST__',{value:true,writable:false});");
 
-        // 通知横取り → Windows トースト
         core.NotificationReceived += (_, e2) =>
         {
             e2.Handled = true;
@@ -119,32 +110,26 @@ public sealed partial class MainWindow : Window
             DispatcherQueue.TryEnqueue(() => NotificationHelper.ShowToast(n.Title, n.Body, img));
         };
 
-        // タイトル変更 → 現在タブのヘッダーに反映
         core.DocumentTitleChanged += (_, _) =>
         {
-            if (Tabs.SelectedItem is TabViewItem tab)
-                DispatcherQueue.TryEnqueue(() =>
-                    tab.Header = string.IsNullOrEmpty(core.DocumentTitle)
-                        ? "新しいタブ" : core.DocumentTitle);
+            DispatcherQueue.TryEnqueue(() =>
+                tab.Header = string.IsNullOrEmpty(core.DocumentTitle)
+                    ? "新しいタブ" : core.DocumentTitle);
         };
 
-        // Favicon → 現在タブのアイコンに反映
         core.FaviconChanged += (_, _) =>
         {
-            if (Tabs.SelectedItem is TabViewItem tab &&
-                Uri.TryCreate(core.FaviconUri, UriKind.Absolute, out var uri))
+            if (Uri.TryCreate(core.FaviconUri, UriKind.Absolute, out var uri))
                 DispatcherQueue.TryEnqueue(() =>
                     tab.IconSource = new BitmapIconSource { UriSource = uri, ShowAsMonochrome = false });
         };
 
-        // 新ウィンドウ → 新タブ
         core.NewWindowRequested += (_, e2) =>
         {
             e2.Handled = true;
             DispatcherQueue.TryEnqueue(() => AddNewTab(e2.Uri));
         };
 
-        // キーボードショートカット（JS → WebMessage）
         await core.AddScriptToExecuteOnDocumentCreatedAsync("""
             document.addEventListener('keydown', e => {
                 if (!e.ctrlKey) return;
@@ -169,14 +154,7 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        _webViewReady = true;
-
-        // WebView2 が準備できたら現在タブの URL へナビゲート
-        if (Tabs.SelectedItem is TabViewItem current &&
-            _tabUrls.TryGetValue(current, out var url))
-        {
-            core.Navigate(url);
-        }
+        core.Navigate(url);
     }
 
     // ---- タブ管理 ----
@@ -186,24 +164,36 @@ public sealed partial class MainWindow : Window
         var tab = new TabViewItem
         {
             Header = "新しいタブ",
-            IconSource = new FontIconSource { Glyph = "" },
+            IconSource = new FontIconSource { Glyph = "" },
             IsClosable = true,
         };
-        _tabUrls[tab] = url;
-        Tabs.TabItems.Add(tab);
-        Tabs.SelectedItem = tab;
 
-        if (_webViewReady)
-            WebView.CoreWebView2.Navigate(url);
+        // デフォルト Visible で追加し、Loaded後に SelectionChanged が表示制御する
+        var wv = new WebView2();
+        wv.Loaded += async (s, e) => await InitWebViewAsync(tab, wv, url);
+        _tabWebViews[tab] = wv;
+        ContentGrid.Children.Add(wv);
+
+        Tabs.TabItems.Add(tab);
+        Tabs.SelectedItem = tab;  // → SelectionChanged が wv を Visible にする
     }
 
     private void CloseTab(TabViewItem tab)
     {
-        _tabUrls.Remove(tab);
+        if (_tabWebViews.TryGetValue(tab, out var wv))
+        {
+            ContentGrid.Children.Remove(wv);
+            _tabWebViews.Remove(tab);
+        }
         Tabs.TabItems.Remove(tab);
-
         if (Tabs.TabItems.Count == 0)
             AddNewTab(AppUrl);
+    }
+
+    private void ReloadActive()
+    {
+        if (Tabs.SelectedItem is TabViewItem t && _tabWebViews.TryGetValue(t, out var wv))
+            try { wv.CoreWebView2?.Reload(); } catch { }
     }
 
     // ---- TabView イベント ----
@@ -215,12 +205,11 @@ public sealed partial class MainWindow : Window
 
     private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs args)
     {
-        if (Tabs.SelectedItem is TabViewItem tab &&
-            _tabUrls.TryGetValue(tab, out var url) &&
-            _webViewReady)
-        {
-            WebView.CoreWebView2.Navigate(url);
-        }
+        foreach (var (_, webView) in _tabWebViews)
+            webView.Visibility = Visibility.Collapsed;
+
+        if (Tabs.SelectedItem is TabViewItem tab && _tabWebViews.TryGetValue(tab, out var active))
+            active.Visibility = Visibility.Visible;
     }
 
     private void Tabs_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e) { }
@@ -284,7 +273,7 @@ public sealed partial class MainWindow : Window
                 menu.Items.Add(item);
             }
             AddItem("開く", BringToFront);
-            AddItem("再読み込み", () => { if (_webViewReady) WebView.CoreWebView2.Reload(); });
+            AddItem("再読み込み", () => ReloadActive());
             AddItem("新しいタブ", () => { BringToFront(); AddNewTab(AppUrl); });
             menu.Items.Add(new MenuFlyoutSeparator());
             AddItem("終了", ExitApp);
