@@ -7,6 +7,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Windows.AppNotifications;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Windows.Graphics;
 using Windows.UI;
 
@@ -23,10 +25,8 @@ public sealed partial class MainWindow : Window
     private readonly AppWindow _appWindow;
     private TaskbarIcon? _trayIcon;
 
-    // V2: タブ → WebView2（1対1）
     private readonly Dictionary<TabViewItem, WebView2> _tabWebViews = new();
 
-    // タブ色: VSM が {ThemeResource} で上書きするため DispatcherQueue.Low で強制再適用する
     private static readonly SolidColorBrush TabActive   = new(Color.FromArgb(0xFF, 0xFD, 0x2A, 0xB1));
     private static readonly SolidColorBrush TabInactive = new(Color.FromArgb(0xFF, 0x7D, 0x14, 0x57));
 
@@ -51,6 +51,7 @@ public sealed partial class MainWindow : Window
         };
 
         SetupTrayIcon();
+        InstallWndProcSubclass();
         _ = Task.Delay(3000).ContinueWith(_ => UpdateChecker.CheckAsync());
     }
 
@@ -75,6 +76,129 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() => CaptionPadding.Width = inset);
     }
 
+    // ---- Win32 WndProc（カーソル + 上辺リサイズボーダー排除）----
+    // タイトルバー域では WM_SETCURSOR を WinUI が上書きできないため Win32 で制御する。
+    // HTTOP/HTTOPLEFT/HTTOPRIGHT を HTCLIENT に変換してリサイズグリップをタブ域から排除。
+
+    private const int WM_NCHITTEST  = 0x0084;
+    private const int WM_SETCURSOR  = 0x0020;
+    private const int WM_SYSCOMMAND = 0x0112;
+    private const int SC_MINIMIZE   = 0xF020;
+    private const int HTCLIENT      = 1;
+    private const int HTCAPTION     = 2;
+    private const int HTTOP         = 12;
+    private const int HTTOPLEFT     = 13;
+    private const int HTTOPRIGHT    = 14;
+    private static readonly IntPtr IDC_HAND = (IntPtr)32649; // OCR_HAND
+
+    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    private WndProcDelegate? _wndProcKeepAlive;
+    private IntPtr _prevWndProc;
+    private IntPtr _hwnd;
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+    [DllImport("user32.dll", EntryPoint = "CallWindowProcW")]
+    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll", EntryPoint = "LoadCursorW")]
+    private static extern IntPtr LoadCursor(IntPtr hInstance, IntPtr lpCursorName);
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetCursor(IntPtr hCursor);
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT pt);
+    [DllImport("user32.dll")]
+    private static extern bool ScreenToClient(IntPtr hWnd, ref POINT pt);
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X, Y; }
+
+    private void InstallWndProcSubclass()
+    {
+        _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        _wndProcKeepAlive = WndProc;
+        _prevWndProc = SetWindowLongPtr(_hwnd, -4,
+            Marshal.GetFunctionPointerForDelegate(_wndProcKeepAlive));
+    }
+
+    private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        if (msg == WM_SYSCOMMAND && (wParam.ToInt32() & 0xFFF0) == SC_MINIMIZE)
+        {
+            // 最小化ボタン → タスクバーに残さずトレイへ格納
+            DispatcherQueue.TryEnqueue(HideToTray);
+            return IntPtr.Zero;
+        }
+        if (msg == WM_NCHITTEST)
+        {
+            var result = CallWindowProc(_prevWndProc, hWnd, msg, wParam, lParam).ToInt32();
+            // 上辺リサイズゾーンだけをクライアントエリアに変換する。
+            // タブ/空白の HTCAPTION 判定は SetTitleBar + InputNonClientPointerSource に委ねる。
+            if (result is HTTOP or HTTOPLEFT or HTTOPRIGHT)
+                return (IntPtr)HTCLIENT;
+            return (IntPtr)result;
+        }
+        if (msg == WM_SETCURSOR && IsPointerInTabStrip() && IsPointerOverInteractiveElement())
+        {
+            SetCursor(LoadCursor(IntPtr.Zero, IDC_HAND));
+            return (IntPtr)1;
+        }
+        return CallWindowProc(_prevWndProc, hWnd, msg, wParam, lParam);
+    }
+
+    private bool IsPointerInTabStrip()
+    {
+        if (!GetCursorPos(out var pt)) return false;
+        ScreenToClient(_hwnd, ref pt);
+        double dpi = GetDpiForWindow(_hwnd) / 96.0;
+        return pt.Y >= 0 && pt.Y < (int)(40 * dpi);
+    }
+
+    // タブアイテムまたはボタンの上にいるときのみ true（空白ストリップ背景では false）
+    // FindElementsInHostCoordinates は座標系が不安定なため TransformToVisual で代替
+    private bool IsPointerOverInteractiveElement()
+    {
+        if (Tabs is not { IsLoaded: true }) return false;
+        if (!GetCursorPos(out var pt)) return false;
+        ScreenToClient(_hwnd, ref pt);
+        double dpi = GetDpiForWindow(_hwnd) / 96.0;
+        var logicalPt = new Windows.Foundation.Point(pt.X / dpi, pt.Y / dpi);
+        try
+        {
+            // 各 TabViewItem の視覚コンテナ（TabContainer Grid）のバウンドで判定
+            // tab.ActualWidth は ListView の内部コンテナ幅（ストリップ全幅）になる場合があるため
+            // TabContainer を使う。取得できなければ tab 自身で MaxWidth キャップを掛けて代替
+            foreach (var obj in Tabs.TabItems)
+            {
+                if (obj is not TabViewItem tab || !tab.IsLoaded) continue;
+                var container = FindChild<Grid>(tab, "TabContainer");
+                FrameworkElement visual = container is not null ? (FrameworkElement)container : tab;
+                double w = visual == tab
+                    ? Math.Min(tab.ActualWidth, tab.MaxWidth)
+                    : visual.ActualWidth;
+                var xform = visual.TransformToVisual(null);
+                var bounds = xform.TransformBounds(
+                    new Windows.Foundation.Rect(0, 0, w, visual.ActualHeight));
+                if (bounds.Contains(logicalPt)) return true;
+            }
+            // 左ヘッダー: スペーサー 8px + リロードボタン 40px = 48px
+            if (logicalPt.X < 48) return true;
+            // 追加 (+) ボタン（TabView テンプレート内 "AddButton"）
+            var addBtn = FindChild<Button>(Tabs, "AddButton");
+            if (addBtn?.IsLoaded == true)
+            {
+                var xform = addBtn.TransformToVisual(null);
+                var bounds = xform.TransformBounds(
+                    new Windows.Foundation.Rect(0, 0, addBtn.ActualWidth, addBtn.ActualHeight));
+                if (bounds.Contains(logicalPt)) return true;
+            }
+        }
+        catch { return false; }
+        return false;
+    }
+
+
     // ---- Tabs.Loaded ----
 
     private void Tabs_Loaded(object sender, RoutedEventArgs e)
@@ -91,14 +215,20 @@ public sealed partial class MainWindow : Window
         try { await wv.EnsureCoreWebView2Async(); }
         catch (Exception ex)
         {
-            // タブ名にエラー内容を表示して原因を診断しやすくする
-            DispatcherQueue.TryEnqueue(() => tab.Header = $"ERR:{ex.GetType().Name}");
+            DispatcherQueue.TryEnqueue(() => SetTabTitle(tab, $"ERR:{ex.GetType().Name}"));
             return;
         }
 
         var core = wv.CoreWebView2;
         core.Settings.UserAgent = ChromeUA;
-        core.Settings.AreDevToolsEnabled = true;
+        core.Settings.AreDevToolsEnabled = true;  // F12 でDevTools起動
+
+        // Notification.requestPermission() を自動許可
+        core.PermissionRequested += (_, e2) =>
+        {
+            if (e2.PermissionKind == CoreWebView2PermissionKind.Notifications)
+                e2.State = CoreWebView2PermissionState.Allow;
+        };
 
         await core.AddScriptToExecuteOnDocumentCreatedAsync("""
             document.addEventListener('DOMContentLoaded', () => {
@@ -109,6 +239,10 @@ public sealed partial class MainWindow : Window
             """);
 
         await core.AddScriptToExecuteOnDocumentCreatedAsync(PushOverrideScript);
+
+        // テスト通知はサーバー送信に頼らずローカルで Notification を出す
+        // （旧 Electron 版 preload.js と同等。webview2:// 偽 endpoint はサーバーから到達不能のため）
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(SendTestInterceptScript);
 
         await core.AddScriptToExecuteOnDocumentCreatedAsync(
             "Object.defineProperty(window,'__WEBVIEW2_HOST__',{value:true,writable:false});");
@@ -124,8 +258,8 @@ public sealed partial class MainWindow : Window
         core.DocumentTitleChanged += (_, _) =>
         {
             DispatcherQueue.TryEnqueue(() =>
-                tab.Header = string.IsNullOrEmpty(core.DocumentTitle)
-                    ? "新しいタブ" : core.DocumentTitle);
+                SetTabTitle(tab, string.IsNullOrEmpty(core.DocumentTitle)
+                    ? "新しいタブ" : core.DocumentTitle));
         };
 
         core.FaviconChanged += (_, _) =>
@@ -172,41 +306,67 @@ public sealed partial class MainWindow : Window
 
     private void AddNewTab(string url)
     {
+        var headerText = new TextBlock
+        {
+            Text = "新しいタブ",
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 140,  // アイコン・閉じるボタン分を除いた本文幅
+        };
         var tab = new TabViewItem
         {
-            Header = "新しいタブ",
+            Header = headerText,
             IconSource = new FontIconSource { Glyph = "" },
             IsClosable = true,
+            MaxWidth = 200,
+            MinWidth = 80,
         };
 
-        // テンプレート適用後に一度色を設定
         tab.Loaded += (_, _) =>
+        {
+            // VSM が TabContainer.Background を上書きするたびに即座に打ち消す
+            var container = FindChild<Grid>(tab, "TabContainer");
+            if (container is not null)
+            {
+                bool setting = false;
+                container.RegisterPropertyChangedCallback(Panel.BackgroundProperty, (s, _) =>
+                {
+                    if (setting || s is not Panel p) return;
+                    bool isActive = ReferenceEquals(tab, Tabs.SelectedItem);
+                    var expected = isActive ? TabActive : TabInactive;
+                    if (ReferenceEquals(p.Background, expected)) return;
+                    setting = true;
+                    try { p.Background = expected; }
+                    finally { setting = false; }
+                });
+            }
             DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, UpdateTabColors);
+        };
 
-        // デフォルト Visible で追加し、Loaded後に SelectionChanged が表示制御する
         var wv = new WebView2();
         wv.Loaded += async (s, e) => await InitWebViewAsync(tab, wv, url);
         _tabWebViews[tab] = wv;
         ContentGrid.Children.Add(wv);
 
         Tabs.TabItems.Add(tab);
-        Tabs.SelectedItem = tab;  // → SelectionChanged が wv を Visible にする
+        Tabs.SelectedItem = tab;
     }
 
-    // VSM が TabContainer.Background を {ThemeResource} で上書きするため、
-    // DispatcherQueue.Low（現フレーム完了後）に実行して強制上書きする。
     private void UpdateTabColors()
     {
         foreach (var item in Tabs.TabItems.OfType<TabViewItem>())
         {
             bool active = ReferenceEquals(item, Tabs.SelectedItem);
-            // 内部 TabContainer Border を探して直接設定（TemplateBinding 外なので有効）
-            var container = FindChild<Border>(item, "TabContainer");
-            if (container is not null)
-                container.Background = active ? TabActive : TabInactive;
-            else
-                item.Background = active ? TabActive : TabInactive;
+            var brush = active ? TabActive : TabInactive;
+            var grid = FindChild<Grid>(item, "TabContainer");
+            if (grid is not null) { grid.Background = brush; continue; }
+            item.Background = brush;
         }
+    }
+
+    private static void SetTabTitle(TabViewItem tab, string title)
+    {
+        if (tab.Header is TextBlock tb) tb.Text = title;
+        else tab.Header = title;
     }
 
     private static T? FindChild<T>(DependencyObject parent, string? name = null) where T : FrameworkElement
@@ -255,11 +415,12 @@ public sealed partial class MainWindow : Window
         if (Tabs.SelectedItem is TabViewItem tab && _tabWebViews.TryGetValue(tab, out var active))
             active.Visibility = Visibility.Visible;
 
-        // VSM が TabContainer.Background を上書きした後に色を再適用
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, UpdateTabColors);
     }
 
     private void Tabs_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e) { }
+
+    private void ReloadButton_Click(object sender, RoutedEventArgs e) => ReloadActive();
 
     // ---- PushManager 偽装 ----
 
@@ -300,6 +461,72 @@ public sealed partial class MainWindow : Window
         })();
         """;
 
+    private const string SendTestInterceptScript = """
+        (function () {
+            const origFetch = window.fetch.bind(window);
+            window.fetch = function (input, init) {
+                let url = '';
+                try { url = typeof input === 'string' ? input : (input && input.url) || ''; } catch (e) {}
+                const method = ((init && init.method) || (input && input.method) || 'GET') + '';
+                if (url.indexOf('/api/send-test') !== -1 && method.toUpperCase() === 'POST') {
+                    const show = () => {
+                        try {
+                            new Notification('テスト通知', {
+                                body: 'ここをクリックしてURL飛べるか確認！',
+                                icon: '/icon.webp'
+                            });
+                        } catch (e) {}
+                    };
+                    try {
+                        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') show();
+                        else if (typeof Notification !== 'undefined' && Notification.requestPermission)
+                            Notification.requestPermission().then(p => { if (p === 'granted') show(); }).catch(() => {});
+                        else show();
+                    } catch (e) {}
+                    return Promise.resolve(new Response(
+                        JSON.stringify({ success: true, sent: true, local: true }),
+                        { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return origFetch(input, init);
+            };
+        })();
+        """;
+
+    // ---- Windows 自動起動（レジストリ）----
+
+    private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string RunValueName = "MaiPush";
+
+    private static bool IsAutoStartEnabled()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey);
+            return key?.GetValue(RunValueName) is not null;
+        }
+        catch { return false; }
+    }
+
+    private static void SetAutoStart(bool enable)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            if (key is null) return;
+            if (enable)
+            {
+                // 実行ファイルのパスに --hidden を付けて登録（起動時はトレイに格納）
+                var exe = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule!.FileName;
+                key.SetValue(RunValueName, $"\"{exe}\" --hidden");
+            }
+            else
+            {
+                key.DeleteValue(RunValueName, throwOnMissingValue: false);
+            }
+        }
+        catch { }
+    }
+
     // ---- システムトレイ ----
 
     private void SetupTrayIcon()
@@ -323,6 +550,17 @@ public sealed partial class MainWindow : Window
             AddItem("再読み込み", () => ReloadActive());
             AddItem("新しいタブ", () => { BringToFront(); AddNewTab(AppUrl); });
             menu.Items.Add(new MenuFlyoutSeparator());
+
+            // Windows 起動時に自動起動（--hidden でトレイ起動）
+            var autoStartItem = new ToggleMenuFlyoutItem
+            {
+                Text = "Windows 起動時に自動起動",
+                IsChecked = IsAutoStartEnabled(),
+            };
+            autoStartItem.Click += (_, _) => SetAutoStart(autoStartItem.IsChecked);
+            menu.Items.Add(autoStartItem);
+
+            menu.Items.Add(new MenuFlyoutSeparator());
             AddItem("終了", ExitApp);
             _trayIcon.ContextFlyout = menu;
             _trayIcon.ForceCreate(enablesEfficiencyMode: false);
@@ -335,8 +573,10 @@ public sealed partial class MainWindow : Window
 
     public void BringToFront()
     {
+        // HideToTray で隠したウィンドウを Show してから最前面に
         _appWindow.Show();
         _appWindow.MoveInZOrderAtTop();
+        // 念のため Minimized 状態（通常は SC_MINIMIZE 横取りで起きない）も復元
         if (_appWindow.Presenter is OverlappedPresenter p &&
             p.State == OverlappedPresenterState.Minimized)
             p.Restore();
@@ -350,6 +590,13 @@ public sealed partial class MainWindow : Window
         try { AppNotificationManager.Default.Unregister(); } catch { }
         Application.Current.Exit();
     }
+}
+
+// タブストリップ全体（タブ・追加ボタン含む）に手カーソルを設定
+// DefaultStyleKey を明示しないとサブクラス用テンプレートが存在せずタブが空白になる
+public sealed class HandTabView : TabView
+{
+    public HandTabView() => DefaultStyleKey = typeof(TabView);
 }
 
 internal sealed class SimpleCommand(Action execute) : System.Windows.Input.ICommand

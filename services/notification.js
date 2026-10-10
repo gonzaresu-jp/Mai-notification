@@ -54,6 +54,13 @@ const PERMANENT_SUBSCRIPTION_ERROR = /not valid for specified curve|must have 'a
 
 async function sendPushNotification(subscription, payload, isTest = false) {
   if (!subscription?.endpoint) { console.error("sendPushNotification: invalid subscription"); return false; }
+  // デスクトップアプリ(WebView2/Electron)の偽エンドポイント等、http(s) 以外は
+  // web-push が鍵検証エラー→恒久エラー判定で DB 行を消してしまうため、送信自体を避ける。
+  // （デスクトップ側は send-test をクライアントで傍受してローカル通知を出す）
+  if (!/^https?:\/\//i.test(subscription.endpoint)) {
+    console.log("Skip non-http endpoint (desktop app):", subscription.endpoint);
+    return false;
+  }
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload), isTest ? { TTL: 60 } : {});
     return true;
