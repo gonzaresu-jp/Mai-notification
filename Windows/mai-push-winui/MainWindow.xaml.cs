@@ -426,6 +426,14 @@ public sealed partial class MainWindow : Window
 
     private const string PushOverrideScript = """
         (function () {
+            // WebView2 は Push API 非対応で window.PushManager が無い。ガード通過用のダミー。
+            if (!('PushManager' in window)) {
+                try {
+                    Object.defineProperty(window, 'PushManager', {
+                        value: function PushManager() {}, configurable: true, writable: true
+                    });
+                } catch (e) {}
+            }
             const KEY = '__wv2_push_sub__';
             class _FakePushMgr {
                 async subscribe(opts) {
@@ -452,11 +460,17 @@ public sealed partial class MainWindow : Window
                 }
                 async permissionState(opts) { return 'granted'; }
             }
+            function installFake(reg) {
+                const mgr = new _FakePushMgr();
+                let proto = false, inst = false;
+                // ready が毎回異なる JS ラッパーを返す環境でも効くようプロトタイプ優先で貼る
+                try { Object.defineProperty(Object.getPrototypeOf(reg), 'pushManager', { get: () => mgr, configurable: true }); proto = true; } catch (e) {}
+                try { Object.defineProperty(reg, 'pushManager', { get: () => mgr, configurable: true }); inst = true; } catch (e) {}
+                console.log('[WV2] fake pushManager installed proto=' + proto + ' inst=' + inst);
+            }
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.ready.then(reg => {
-                    Object.defineProperty(reg, 'pushManager',
-                        { get: () => new _FakePushMgr(), configurable: true });
-                }).catch(() => {});
+                navigator.serviceWorker.ready.then(installFake).catch(() => {});
+                navigator.serviceWorker.getRegistration().then(r => { if (r) installFake(r); }).catch(() => {});
             }
         })();
         """;
