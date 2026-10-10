@@ -21,7 +21,7 @@
 #
 # 環境変数で上書き可:
 #   ORIGIN_BASE  (既定 http://127.0.0.1:1700)  … Cloudflare を経由しない配信元
-#   PUBLIC_BASE  (既定 https://mai.honna-yuzuki.com)
+#   PUBLIC_BASE  (既定 https://koinoyamai.love — 2026-10-11 フェーズ2反映)
 #   RETRIES      (既定 3)  … 切詰め検出時の再試行回数
 #   RETRY_WAIT   (既定 12) … 再試行までの秒数（nginx open_file_cache_valid の 10s + 余裕）
 set -uo pipefail
@@ -30,7 +30,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 ORIGIN_BASE="${ORIGIN_BASE:-http://127.0.0.1:1700}"
-PUBLIC_BASE="${PUBLIC_BASE:-https://mai.honna-yuzuki.com}"
+PUBLIC_BASE="${PUBLIC_BASE:-https://koinoyamai.love}"
 RETRIES="${RETRIES:-3}"
 RETRY_WAIT="${RETRY_WAIT:-12}"
 
