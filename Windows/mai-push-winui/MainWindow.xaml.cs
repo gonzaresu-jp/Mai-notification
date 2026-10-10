@@ -89,7 +89,12 @@ public sealed partial class MainWindow : Window
     private async Task InitWebViewAsync(TabViewItem tab, WebView2 wv, string url)
     {
         try { await wv.EnsureCoreWebView2Async(); }
-        catch { return; }
+        catch (Exception ex)
+        {
+            // タブ名にエラー内容を表示して原因を診断しやすくする
+            DispatcherQueue.TryEnqueue(() => tab.Header = $"ERR:{ex.GetType().Name}");
+            return;
+        }
 
         var core = wv.CoreWebView2;
         core.Settings.UserAgent = ChromeUA;

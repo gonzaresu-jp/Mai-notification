@@ -10,6 +10,14 @@ public partial class App : Application
 
     public App()
     {
+        // WebView2 ユーザーデータをローカル AppData に固定
+        // Q: など UNC/ネットワークドライブ起動時でも EnsureCoreWebView2Async が失敗しなくなる
+        System.Environment.SetEnvironmentVariable(
+            "WEBVIEW2_USER_DATA_FOLDER",
+            System.IO.Path.Combine(
+                System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+                "MaiPush", "WebView2"));
+
         // シングルインスタンスガード（Electron の app.requestSingleInstanceLock() 相当）
         _mutex = new Mutex(true, "MaiPushWinUI_v2_Instance", out bool createdNew);
         if (!createdNew)
