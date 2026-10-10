@@ -1,8 +1,10 @@
 using H.NotifyIcon;
 using Microsoft.UI;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Windows.AppNotifications;
 using Windows.Graphics;
@@ -23,6 +25,10 @@ public sealed partial class MainWindow : Window
 
     // V2: タブ → WebView2（1対1）
     private readonly Dictionary<TabViewItem, WebView2> _tabWebViews = new();
+
+    // タブ色: VSM が {ThemeResource} で上書きするため DispatcherQueue.Low で強制再適用する
+    private static readonly SolidColorBrush TabActive   = new(Color.FromArgb(0xFF, 0xFD, 0x2A, 0xB1));
+    private static readonly SolidColorBrush TabInactive = new(Color.FromArgb(0xFF, 0x7D, 0x14, 0x57));
 
     public MainWindow()
     {
@@ -168,6 +174,10 @@ public sealed partial class MainWindow : Window
             IsClosable = true,
         };
 
+        // テンプレート適用後に一度色を設定
+        tab.Loaded += (_, _) =>
+            DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, UpdateTabColors);
+
         // デフォルト Visible で追加し、Loaded後に SelectionChanged が表示制御する
         var wv = new WebView2();
         wv.Loaded += async (s, e) => await InitWebViewAsync(tab, wv, url);
@@ -176,6 +186,35 @@ public sealed partial class MainWindow : Window
 
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;  // → SelectionChanged が wv を Visible にする
+    }
+
+    // VSM が TabContainer.Background を {ThemeResource} で上書きするため、
+    // DispatcherQueue.Low（現フレーム完了後）に実行して強制上書きする。
+    private void UpdateTabColors()
+    {
+        foreach (var item in Tabs.TabItems.OfType<TabViewItem>())
+        {
+            bool active = ReferenceEquals(item, Tabs.SelectedItem);
+            // 内部 TabContainer Border を探して直接設定（TemplateBinding 外なので有効）
+            var container = FindChild<Border>(item, "TabContainer");
+            if (container is not null)
+                container.Background = active ? TabActive : TabInactive;
+            else
+                item.Background = active ? TabActive : TabInactive;
+        }
+    }
+
+    private static T? FindChild<T>(DependencyObject parent, string? name = null) where T : FrameworkElement
+    {
+        int n = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < n; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T fe && (name is null || fe.Name == name)) return fe;
+            var found = FindChild<T>(child, name);
+            if (found is not null) return found;
+        }
+        return null;
     }
 
     private void CloseTab(TabViewItem tab)
@@ -210,6 +249,9 @@ public sealed partial class MainWindow : Window
 
         if (Tabs.SelectedItem is TabViewItem tab && _tabWebViews.TryGetValue(tab, out var active))
             active.Visibility = Visibility.Visible;
+
+        // VSM が TabContainer.Background を上書きした後に色を再適用
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, UpdateTabColors);
     }
 
     private void Tabs_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e) { }

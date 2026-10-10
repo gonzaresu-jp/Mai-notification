@@ -8,7 +8,11 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- TabView カラーテーマ: #b11e7c ストリップ / #1a1a2e アクティブタブ -->
+            <!--
+                ストリップ背景はメイン dict に置く。
+                TabViewItemHeader* は VSM が {ThemeResource} で引くため
+                ThemeDictionaries にも同じ値を置く（二重保険）。
+            -->
             <SolidColorBrush x:Key="TabViewBackground"                              Color="#b11e7c"/>
             <SolidColorBrush x:Key="TabViewItemHeaderBackground"                    Color="#7d1457"/>
             <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver"         Color="#9a1a6c"/>
@@ -30,6 +34,78 @@
             <SolidColorBrush x:Key="TabViewButtonBackground"              Color="Transparent"/>
             <SolidColorBrush x:Key="TabViewButtonBackgroundPointerOver"   Color="#c42589"/>
             <SolidColorBrush x:Key="TabViewButtonBackgroundPressed"       Color="#9a1a6c"/>
+
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Default">
+                    <SolidColorBrush x:Key="TabViewBackground"                              Color="#b11e7c"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackground"                    Color="#7d1457"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver"         Color="#9a1a6c"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed"             Color="#6a1048"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected"            Color="#fd2ab1"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelectedPointerOver" Color="#fe4fbe"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForeground"                    Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundPointerOver"         Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundPressed"             Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundSelected"            Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundSelectedPointerOver" Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForeground"                    Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForegroundPointerOver"         Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForegroundSelected"            Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForegroundSelectedPointerOver" Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonForeground"              Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonForegroundPointerOver"   Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonForegroundPressed"       Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonBackground"              Color="Transparent"/>
+                    <SolidColorBrush x:Key="TabViewButtonBackgroundPointerOver"   Color="#c42589"/>
+                    <SolidColorBrush x:Key="TabViewButtonBackgroundPressed"       Color="#9a1a6c"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="TabViewBackground"                              Color="#b11e7c"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackground"                    Color="#7d1457"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver"         Color="#9a1a6c"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed"             Color="#6a1048"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected"            Color="#fd2ab1"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelectedPointerOver" Color="#fe4fbe"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForeground"                    Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundPointerOver"         Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundPressed"             Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundSelected"            Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundSelectedPointerOver" Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForeground"                    Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForegroundPointerOver"         Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForegroundSelected"            Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForegroundSelectedPointerOver" Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonForeground"              Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonForegroundPointerOver"   Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonForegroundPressed"       Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonBackground"              Color="Transparent"/>
+                    <SolidColorBrush x:Key="TabViewButtonBackgroundPointerOver"   Color="#c42589"/>
+                    <SolidColorBrush x:Key="TabViewButtonBackgroundPressed"       Color="#9a1a6c"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="TabViewBackground"                              Color="#b11e7c"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackground"                    Color="#7d1457"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver"         Color="#9a1a6c"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed"             Color="#6a1048"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected"            Color="#fd2ab1"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelectedPointerOver" Color="#fe4fbe"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForeground"                    Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundPointerOver"         Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundPressed"             Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundSelected"            Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderForegroundSelectedPointerOver" Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForeground"                    Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForegroundPointerOver"         Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForegroundSelected"            Color="White"/>
+                    <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForegroundSelectedPointerOver" Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonForeground"              Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonForegroundPointerOver"   Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonForegroundPressed"       Color="White"/>
+                    <SolidColorBrush x:Key="TabViewButtonBackground"              Color="Transparent"/>
+                    <SolidColorBrush x:Key="TabViewButtonBackgroundPointerOver"   Color="#c42589"/>
+                    <SolidColorBrush x:Key="TabViewButtonBackgroundPressed"       Color="#9a1a6c"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
