@@ -14,7 +14,7 @@ export async function initPush() {
     if (p !== 'granted') {
       throw new Error('ユーザーが通知を許可しませんでした');
     }
-  } else if (Notification.permission === 'denied') {
+  } else if (Notification.permission === 'denied' && !window.__WEBVIEW2_HOST__) {
     throw new Error('通知が拒否されています(ブラウザ設定をご確認ください)');
   }
 
